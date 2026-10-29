@@ -20,9 +20,17 @@ pre-final tree stated 0 warnings; that figure came from
 incremental builds and was an artifact of them. A
 from-scratch build of that tree showed two
 nullable-reference warnings in the home node suite,
-both remedied with null-forgiving markers before this
-commit was finalized. The figure stated here is the
-from-scratch result on this exact tree.
+both on dereferences of one queued delivery value.
+They were remedied with null-forgiving markers at three
+dereference sites in that block (the third site had not
+itself warned; each marked value was verified non-null,
+by the queue code's own chain and by the suite passing
+on the unmarked build) before this commit was
+finalized, together with a one-line fix letting the
+protocol checks driver create its own evidence
+directory. The figure stated here is the from-scratch
+result on this exact tree, measured at its final
+verification.
 
 ## Suites
 
@@ -62,15 +70,18 @@ carries (final verification October 29, 2026):
   sealed relay, and both stand-in assistants booted as
   services from empty state, then the demonstration run
   against them): 15 of 15 checks, in three consecutive
-  runs at the batch verification and two further
-  consecutive runs after the second review round.
+  runs at the batch verification, two further
+  consecutive runs after the second review round, and
+  two consecutive runs on this exact tree at its final
+  verification.
 - Fresh deployment journey (the same four services
   booted in fresh deploy mode, driven through the full
   operator sequence of DEPLOY.md on fresh values, then
   the demonstration run against them): 21 of 21 checks,
-  in three consecutive runs at the batch verification
-  and two further consecutive runs after the second
-  review round.
+  in three consecutive runs at the batch verification,
+  two further consecutive runs after the second review
+  round, and two consecutive runs on this exact tree at
+  its final verification.
 - Live door ceremony (both stand-ins join through the
   real door, sessions open on the challenge proof, a
   house proposal is disposed by acknowledgement): 30 of
@@ -134,13 +145,14 @@ same machine, so the written stop-first instruction
 remains the protection when the services run in
 separate containers; and one driver, the stand-in
 protocol checks, is not reliably green in its session
-timing: in the final verification session it recorded
-36 of 36 once and 33 of 36 in five further runs across
-every tree tested, including trees that predate these
-fixes, the three failures always the same session
-exchange timing checks, with the house's own record
-showing the packets delivered and the rejections
-logged. The two service journeys above, which exercise
+timing: across the verification sessions recorded for
+this follow-up it recorded 36 of 36 once and 33 of 36
+in six further runs across every tree tested,
+including trees that predate these fixes and this
+exact tree at its final verification, the three
+failures always the same session exchange timing
+checks, with the house's own record showing the
+packets delivered and the rejections logged. The two service journeys above, which exercise
 the same session exchange in the deployed shape, are
 green in every run recorded here. One further blemish,
 stated rather than smoothed over: the home node demo
