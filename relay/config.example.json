@@ -1,0 +1,26 @@
+{
+  "comment": "Operator supplied standing registry. token_sha256 is the SHA-256 hash of a connection token; raw tokens, keys of any kind and content never belong in this file. Replace each placeholder with a real hash before use. role is node for the household node connection and member for member connections, used only for the forwarding rule in CONTRACT.md.",
+  "connections": [
+    {
+      "connection_id": "node-inbox-1",
+      "household_endpoint": "household-demo",
+      "standing": "good",
+      "role": "node",
+      "token_sha256": "PLACEHOLDER_REPLACE_WITH_SHA256_OF_TOKEN"
+    },
+    {
+      "connection_id": "member-lisa-1",
+      "household_endpoint": "household-demo",
+      "standing": "good",
+      "role": "member",
+      "token_sha256": "PLACEHOLDER_REPLACE_WITH_SHA256_OF_TOKEN"
+    },
+    {
+      "connection_id": "member-daniel-1",
+      "household_endpoint": "household-demo",
+      "standing": "good",
+      "role": "member",
+      "token_sha256": "PLACEHOLDER_REPLACE_WITH_SHA256_OF_TOKEN"
+    }
+  ]
+}

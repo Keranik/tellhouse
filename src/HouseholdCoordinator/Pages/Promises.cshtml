@@ -1,0 +1,93 @@
+@page "/Promises"
+@model HouseholdCoordinator.Pages.PromisesModel
+@{
+    ViewData["Title"] = "Promises";
+}
+
+<h1>Promises</h1>
+<p>What a person who needs support has asked for or been promised, kept
+   as first-class records. A promise closes only when a person says so,
+   in words that join the record.</p>
+
+@if (Model.Note is not null)
+{
+    <p><strong>@Model.Note</strong></p>
+}
+
+@if (Model.Promises.Count == 0)
+{
+    <p>No promises on the record yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Who promised</th>
+                <th>Promised</th>
+                <th>To whom</th>
+                <th>When</th>
+                <th>Standing</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var promise in Model.Promises)
+            {
+                <tr>
+                    <td>@(promise.PromisorPerson?.DisplayName ?? "")</td>
+                    <td>@promise.CommitmentText</td>
+                    <td>@(promise.PromiseePerson?.DisplayName ?? "The house")</td>
+                    <td>@(promise.DueText ?? "")</td>
+                    <td>
+                        @switch (promise.State)
+                        {
+                            case HouseholdCoordinator.Data.PromiseState.Made:
+                                <text>Still open</text>
+                                break;
+                            case HouseholdCoordinator.Data.PromiseState.Kept:
+                                <text>Kept, closed by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                break;
+                            case HouseholdCoordinator.Data.PromiseState.Broken:
+                                <text>Closed as broken by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                break;
+                            case HouseholdCoordinator.Data.PromiseState.Released:
+                                <text>Released by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                break;
+                        }
+                    </td>
+                    <td>
+                        @if (promise.State == HouseholdCoordinator.Data.PromiseState.Made)
+                        {
+                            <form method="post" asp-page-handler="Close">
+                                <input type="hidden" name="promiseId" value="@promise.Id" />
+                                <label>
+                                    Closed by
+                                    <select name="closerPersonId">
+                                        @foreach (var person in Model.People)
+                                        {
+                                            <option value="@person.Id">@person.DisplayName</option>
+                                        }
+                                    </select>
+                                </label>
+                                <label>
+                                    Outcome
+                                    <select name="outcome">
+                                        <option value="Kept">Kept</option>
+                                        <option value="Broken">Broken</option>
+                                        <option value="Released">Released</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    The closing words
+                                    <input type="text" name="closingWords" placeholder="What the person said" />
+                                </label>
+                                <button type="submit">Close this promise</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

@@ -1,0 +1,148 @@
+{
+  "contract": "tellhouse-protocol",
+  "contract_version": "1.0",
+  "generated_by": "tools/Tellhouse.Protocol.VectorGen",
+  "notes": [
+    "Test key material only. Private keys are published here so anyone can reproduce the vectors. They protect nothing and must never protect a real household.",
+    "Signatures are verification only: verify them, never compare bytes. Every other byte must reproduce exactly.",
+    "The envelope object in each vector is the complete relay visible metadata. There are no other relay visible fields."
+  ],
+  "household": {
+    "household_endpoint": "hh-demo-01",
+    "node_party_id": "household-node",
+    "node_public_key": "BOK8r-B0z-tXUwimt_G6cuioaI1pxMjtEYiHvmh6ZSUPTcS5jDTLPisZZQLs5UHL439_jWTLa0Ld1KyR1ZB3XJQ",
+    "node_private_key_test_only": "NnT7WsF0tYeM290P7B2HzhoA3-aX_iSGa7t87bvkGL4",
+    "node_fingerprint": "14b319b2f20033dcf69b8998dfb02736bd1a06b6ef1717c129620bcca13beff1"
+  },
+  "members": [
+    {
+      "party_id": "member-lisa",
+      "connection_id": "conn-lisa-01",
+      "public_key": "BEXZq5CscZ644XbKQ2meN3dceRvgTxyfVMNm7zALAul9kdI22stjIwRVWkaDJps1IwwsLaq3fza0bXa9miQcxno",
+      "private_key_test_only": "bABx451A95BIl5heaSyB2tMWJrqkE1Ad3oktWZ7VCfo",
+      "fingerprint": "2575f815b7e8febd4a8265c460e27a29fc49f04c9102e1680fc864c701597a0d"
+    },
+    {
+      "party_id": "member-daniel",
+      "connection_id": "conn-daniel-01",
+      "public_key": "BJRTyrbuMz4NovPQABYryhdctd24AlyZNmEpxiYqHo45FssnCn6Ept4ZyTQxYMJv8rxbxhFTv-WneeM5K0E9Sek",
+      "private_key_test_only": "_BiNIvZmyhZsIGtMKO7Patbco3Fhj4B_SqHe4aDzJoI",
+      "fingerprint": "6670fa1f3e92de14abce19b61ddaa29a514f4eb95747fa5f84e83e81d958cd59"
+    }
+  ],
+  "vectors": [
+    {
+      "name": "telling_lisa_to_node",
+      "envelope": {
+        "ciphertext_hash": "zz815uBs0_eI0ESq9L34A-aS_NptsuCiY0Ls7b8CPpw",
+        "ciphertext_length": 384,
+        "connection_id": "conn-lisa-01",
+        "delivery_mode": "session",
+        "envelope_class": "session",
+        "household_endpoint": "hh-demo-01",
+        "issued_at": 1793275200,
+        "packet_id": "pkt-0001"
+      },
+      "envelope_canonical": "{\u0022ciphertext_hash\u0022:\u0022zz815uBs0_eI0ESq9L34A-aS_NptsuCiY0Ls7b8CPpw\u0022,\u0022ciphertext_length\u0022:384,\u0022connection_id\u0022:\u0022conn-lisa-01\u0022,\u0022delivery_mode\u0022:\u0022session\u0022,\u0022envelope_class\u0022:\u0022session\u0022,\u0022household_endpoint\u0022:\u0022hh-demo-01\u0022,\u0022issued_at\u0022:1793275200,\u0022packet_id\u0022:\u0022pkt-0001\u0022}",
+      "ciphertext": "BFsECVaVkskh0965Iam2DWbF9a1ghrBXDQAKc-3jIILD4jof98iYSedFH-urWlM9158hDzXPlJZwPJQB5YdjloagoaKjpKWmp6ipqquSvxsN_rCyQk5Lu-ZUvDKx2xlSRYEK3vArAbjpGRFmE8xzXX9JY9byaVZzI6DRcYusQJF2KCKqOdpzo1W4WeC8eWMzG-DercS6Z4H7gVxzrbt7yWeKiWkGjSSH7Z6tE2iMSmQ-OHpod2bES6VlRtSz6rJ26O2W625oSvSWrz9ImZOCf-Ls3uW02K5yUmvUFleO1EN7ifDHDVeoFuZsJ5Imq4obeqAA2WZPo6xepGubGqQGxgJM94icQLIceGqoJxlClrV-R7KgQXKHxah0z1trXrX7mYUoOJT_fKfmow2i_vdYqHWxc4BP8InYP74TzM0UAuJHGdIEjaARb-QMexFqqM8qrxE-pklNVNer3i316XzlhhyoNYBSYa-HkOGEegaHSizd082iAq9pjMUf7lnoEahs",
+      "ciphertext_sha256_hex": "cf3f35e6e06cd3f788d044aaf4bdf803e692fcda6db2e0a26342ecedbf023e9c",
+      "signature": "DKrle6H9Rthqklp5RG6mr2fsNIDkhN06b-xm6nItrJlJImhiGeYo7qve0M7tMct_p8fo1NrikptSc5pRpG226A",
+      "signature_verification_only": true,
+      "plaintext_canonical": "{\u0022body\u0022:{\u0022kind\u0022:\u0022raw_telling\u0022,\u0022text\u0022:\u0022Lisa here. We are out of gauze for the first aid kit.\u0022},\u0022connection_id\u0022:\u0022conn-lisa-01\u0022,\u0022packet_id\u0022:\u0022pkt-0001\u0022,\u0022packet_nonce\u0022:\u0022EBESExQVFhcYGRobHB0eHw\u0022,\u0022packet_type\u0022:\u0022telling\u0022,\u0022recipient_id\u0022:\u0022household-node\u0022,\u0022sender_id\u0022:\u0022member-lisa\u0022,\u0022told_at\u0022:1793275200}",
+      "packet_canonical": "{\u0022ciphertext\u0022:\u0022BFsECVaVkskh0965Iam2DWbF9a1ghrBXDQAKc-3jIILD4jof98iYSedFH-urWlM9158hDzXPlJZwPJQB5YdjloagoaKjpKWmp6ipqquSvxsN_rCyQk5Lu-ZUvDKx2xlSRYEK3vArAbjpGRFmE8xzXX9JY9byaVZzI6DRcYusQJF2KCKqOdpzo1W4WeC8eWMzG-DercS6Z4H7gVxzrbt7yWeKiWkGjSSH7Z6tE2iMSmQ-OHpod2bES6VlRtSz6rJ26O2W625oSvSWrz9ImZOCf-Ls3uW02K5yUmvUFleO1EN7ifDHDVeoFuZsJ5Imq4obeqAA2WZPo6xepGubGqQGxgJM94icQLIceGqoJxlClrV-R7KgQXKHxah0z1trXrX7mYUoOJT_fKfmow2i_vdYqHWxc4BP8InYP74TzM0UAuJHGdIEjaARb-QMexFqqM8qrxE-pklNVNer3i316XzlhhyoNYBSYa-HkOGEegaHSizd082iAq9pjMUf7lnoEahs\u0022,\u0022envelope\u0022:{\u0022ciphertext_hash\u0022:\u0022zz815uBs0_eI0ESq9L34A-aS_NptsuCiY0Ls7b8CPpw\u0022,\u0022ciphertext_length\u0022:384,\u0022connection_id\u0022:\u0022conn-lisa-01\u0022,\u0022delivery_mode\u0022:\u0022session\u0022,\u0022envelope_class\u0022:\u0022session\u0022,\u0022household_endpoint\u0022:\u0022hh-demo-01\u0022,\u0022issued_at\u0022:1793275200,\u0022packet_id\u0022:\u0022pkt-0001\u0022},\u0022signature\u0022:\u0022DKrle6H9Rthqklp5RG6mr2fsNIDkhN06b-xm6nItrJlJImhiGeYo7qve0M7tMct_p8fo1NrikptSc5pRpG226A\u0022}",
+      "seal": {
+        "ephemeral_public_key": "BFsECVaVkskh0965Iam2DWbF9a1ghrBXDQAKc-3jIILD4jof98iYSedFH-urWlM9158hDzXPlJZwPJQB5YdjloY",
+        "ephemeral_private_key_test_only": "WO0NZLuQpZyasZ2uIr9DfjlfvphRml2mO52Lx6lIUeE",
+        "nonce": "oKGio6Slpqeoqaqr"
+      }
+    },
+    {
+      "name": "delivery_node_to_daniel",
+      "envelope": {
+        "ciphertext_hash": "_RIi_3Nrsp0dcXciyvxEXtyvyCTudWE7I1WQ1KZRZyc",
+        "ciphertext_length": 373,
+        "connection_id": "conn-daniel-01",
+        "delivery_mode": "session",
+        "envelope_class": "session",
+        "household_endpoint": "hh-demo-01",
+        "issued_at": 1793275260,
+        "packet_id": "pkt-0002"
+      },
+      "envelope_canonical": "{\u0022ciphertext_hash\u0022:\u0022_RIi_3Nrsp0dcXciyvxEXtyvyCTudWE7I1WQ1KZRZyc\u0022,\u0022ciphertext_length\u0022:373,\u0022connection_id\u0022:\u0022conn-daniel-01\u0022,\u0022delivery_mode\u0022:\u0022session\u0022,\u0022envelope_class\u0022:\u0022session\u0022,\u0022household_endpoint\u0022:\u0022hh-demo-01\u0022,\u0022issued_at\u0022:1793275260,\u0022packet_id\u0022:\u0022pkt-0002\u0022}",
+      "ciphertext": "BIdkreQkO7SBI0FKajIlDN8Uzin1jvDJ0hFdlSlPL-Dg1j_36SjQ6V6itH7BKJJ4ODE5ddwlu6Ya2Z7dyawky6iwsbKztLW2t7i5urvHPN5WQfVB74ceV0KP0wx7GcpeBy0lonngveTJqHVGsVVNsFTlxgruK9ZMdHy4AM2bpxueTzSx7O5O_eTsr_X7pnyNouFSO3vH1B5VgJaerFo6NKTrqhhf2PYfdU6wzJMKjmuDWeYTcKWyPUS72GXOtYoI64qrT6IF1djRMrNW24vvdKqNbk3qijIyspdAeswjWYzXch8e25RKgWJxKUmZgNO6ZDUEsV8y7NniPjH8P67bZZ1xHUqpLPz41LU3xjfevqkf1CbFOIOjPCP18hD1PwSIyzF9jH7h7K8Jxn__l3BefhYTgsYw6pOpzUcB4qfiVBcQGioJdOdCvOnmaQXfAY-KORPGM7PMpdYsK6LgH6DDLvvUr7mEvCXWHruM5P66QkP3tHqBaw",
+      "ciphertext_sha256_hex": "fd1222ff736bb29d1d717722cafc445edcafc824ee75613b235590d4a6516727",
+      "signature": "UKhktv0I_F42368OevsPel393bphgxwV6oFOySXoxLp_28gO2-yoLF0jSqS9n8fQiPkOObo_qyWB9JthjQ8RWw",
+      "signature_verification_only": true,
+      "plaintext_canonical": "{\u0022body\u0022:{\u0022kind\u0022:\u0022delivery\u0022,\u0022text\u0022:\u0022Daniel, your plan for Saturday is ready.\u0022},\u0022connection_id\u0022:\u0022conn-daniel-01\u0022,\u0022packet_id\u0022:\u0022pkt-0002\u0022,\u0022packet_nonce\u0022:\u0022ICEiIyQlJicoKSorLC0uLw\u0022,\u0022packet_type\u0022:\u0022delivery\u0022,\u0022recipient_id\u0022:\u0022member-daniel\u0022,\u0022sender_id\u0022:\u0022household-node\u0022,\u0022told_at\u0022:1793275260}",
+      "packet_canonical": "{\u0022ciphertext\u0022:\u0022BIdkreQkO7SBI0FKajIlDN8Uzin1jvDJ0hFdlSlPL-Dg1j_36SjQ6V6itH7BKJJ4ODE5ddwlu6Ya2Z7dyawky6iwsbKztLW2t7i5urvHPN5WQfVB74ceV0KP0wx7GcpeBy0lonngveTJqHVGsVVNsFTlxgruK9ZMdHy4AM2bpxueTzSx7O5O_eTsr_X7pnyNouFSO3vH1B5VgJaerFo6NKTrqhhf2PYfdU6wzJMKjmuDWeYTcKWyPUS72GXOtYoI64qrT6IF1djRMrNW24vvdKqNbk3qijIyspdAeswjWYzXch8e25RKgWJxKUmZgNO6ZDUEsV8y7NniPjH8P67bZZ1xHUqpLPz41LU3xjfevqkf1CbFOIOjPCP18hD1PwSIyzF9jH7h7K8Jxn__l3BefhYTgsYw6pOpzUcB4qfiVBcQGioJdOdCvOnmaQXfAY-KORPGM7PMpdYsK6LgH6DDLvvUr7mEvCXWHruM5P66QkP3tHqBaw\u0022,\u0022envelope\u0022:{\u0022ciphertext_hash\u0022:\u0022_RIi_3Nrsp0dcXciyvxEXtyvyCTudWE7I1WQ1KZRZyc\u0022,\u0022ciphertext_length\u0022:373,\u0022connection_id\u0022:\u0022conn-daniel-01\u0022,\u0022delivery_mode\u0022:\u0022session\u0022,\u0022envelope_class\u0022:\u0022session\u0022,\u0022household_endpoint\u0022:\u0022hh-demo-01\u0022,\u0022issued_at\u0022:1793275260,\u0022packet_id\u0022:\u0022pkt-0002\u0022},\u0022signature\u0022:\u0022UKhktv0I_F42368OevsPel393bphgxwV6oFOySXoxLp_28gO2-yoLF0jSqS9n8fQiPkOObo_qyWB9JthjQ8RWw\u0022}",
+      "seal": {
+        "ephemeral_public_key": "BIdkreQkO7SBI0FKajIlDN8Uzin1jvDJ0hFdlSlPL-Dg1j_36SjQ6V6itH7BKJJ4ODE5ddwlu6Ya2Z7dyawky6g",
+        "ephemeral_private_key_test_only": "ApRRv9HQ7-B_fVyJ4Iyr4jHFFZdihpvyCqvqiUvHEk8",
+        "nonce": "sLGys7S1tre4ubq7"
+      }
+    },
+    {
+      "name": "acknowledgement_daniel_to_node",
+      "envelope": {
+        "ciphertext_hash": "LqAKfCp9UQ4yy63Lit48xOGSbOfU_RK24nO-Q6obIUU",
+        "ciphertext_length": 367,
+        "connection_id": "conn-daniel-01",
+        "delivery_mode": "session",
+        "envelope_class": "session",
+        "household_endpoint": "hh-demo-01",
+        "issued_at": 1793275320,
+        "packet_id": "pkt-0003"
+      },
+      "envelope_canonical": "{\u0022ciphertext_hash\u0022:\u0022LqAKfCp9UQ4yy63Lit48xOGSbOfU_RK24nO-Q6obIUU\u0022,\u0022ciphertext_length\u0022:367,\u0022connection_id\u0022:\u0022conn-daniel-01\u0022,\u0022delivery_mode\u0022:\u0022session\u0022,\u0022envelope_class\u0022:\u0022session\u0022,\u0022household_endpoint\u0022:\u0022hh-demo-01\u0022,\u0022issued_at\u0022:1793275320,\u0022packet_id\u0022:\u0022pkt-0003\u0022}",
+      "ciphertext": "BOOvrGFCWGnZwaKtnCICNGH1TxsEw23XsS5JAYSCt3-3bLND8U2iLrq1mRHQOnwQlCY6ZRL8mE7xUqnVCsQfmanAwcLDxMXGx8jJystOWqsGre0UTwNpm0pMX92NvdB5AM-4Mxd7yu8oxy1at_cqaruoSx_CX5HmHgf--679OQJnxCi37xLdvhfnckLF6I63TlM5Z6UZKULeLRPFE7FAmOZM2A_aDC6nqkJvI4WrmTAC5gn3uqjolZ597KIDSP4DDuQJy0Z2hj1X7plxIGmMGcCc0Jyi3xqPzjceNgdhTcz_-Dof26lkXgsCRr0kPvWnZESyX79jQsKS6kvzDagEx_98IkobqEEqo4mzLwRpvuEBLdfv5KnvGIsZWdtm5wmKwz8dHEcoVdR3e_DCVpCZVfEdo2R6yjhYkJ9vXv31TqhZd9X2pAMJfMOcFHGxIuZAmXtgo-pwLtmILS3xQyuEXyMDY0Eaan54N1uKoXualA",
+      "ciphertext_sha256_hex": "2ea00a7c2a7d510e32cbadcb8ade3cc4e1926ce7d4fd12b6e273be43aa1b2145",
+      "signature": "2FDwU53W_sCcrC_GPC1SHTov9gsQpXx5-emwfh2_VKQbqQhOHaEGtemcd6m5DlfgxTO5zqKonEUDfL84ASoCSw",
+      "signature_verification_only": true,
+      "plaintext_canonical": "{\u0022body\u0022:{\u0022acked_packet_id\u0022:\u0022pkt-0002\u0022,\u0022disposition\u0022:\u0022confirmed\u0022},\u0022connection_id\u0022:\u0022conn-daniel-01\u0022,\u0022packet_id\u0022:\u0022pkt-0003\u0022,\u0022packet_nonce\u0022:\u0022MDEyMzQ1Njc4OTo7PD0-Pw\u0022,\u0022packet_type\u0022:\u0022acknowledgement\u0022,\u0022recipient_id\u0022:\u0022household-node\u0022,\u0022sender_id\u0022:\u0022member-daniel\u0022,\u0022told_at\u0022:1793275320}",
+      "packet_canonical": "{\u0022ciphertext\u0022:\u0022BOOvrGFCWGnZwaKtnCICNGH1TxsEw23XsS5JAYSCt3-3bLND8U2iLrq1mRHQOnwQlCY6ZRL8mE7xUqnVCsQfmanAwcLDxMXGx8jJystOWqsGre0UTwNpm0pMX92NvdB5AM-4Mxd7yu8oxy1at_cqaruoSx_CX5HmHgf--679OQJnxCi37xLdvhfnckLF6I63TlM5Z6UZKULeLRPFE7FAmOZM2A_aDC6nqkJvI4WrmTAC5gn3uqjolZ597KIDSP4DDuQJy0Z2hj1X7plxIGmMGcCc0Jyi3xqPzjceNgdhTcz_-Dof26lkXgsCRr0kPvWnZESyX79jQsKS6kvzDagEx_98IkobqEEqo4mzLwRpvuEBLdfv5KnvGIsZWdtm5wmKwz8dHEcoVdR3e_DCVpCZVfEdo2R6yjhYkJ9vXv31TqhZd9X2pAMJfMOcFHGxIuZAmXtgo-pwLtmILS3xQyuEXyMDY0Eaan54N1uKoXualA\u0022,\u0022envelope\u0022:{\u0022ciphertext_hash\u0022:\u0022LqAKfCp9UQ4yy63Lit48xOGSbOfU_RK24nO-Q6obIUU\u0022,\u0022ciphertext_length\u0022:367,\u0022connection_id\u0022:\u0022conn-daniel-01\u0022,\u0022delivery_mode\u0022:\u0022session\u0022,\u0022envelope_class\u0022:\u0022session\u0022,\u0022household_endpoint\u0022:\u0022hh-demo-01\u0022,\u0022issued_at\u0022:1793275320,\u0022packet_id\u0022:\u0022pkt-0003\u0022},\u0022signature\u0022:\u00222FDwU53W_sCcrC_GPC1SHTov9gsQpXx5-emwfh2_VKQbqQhOHaEGtemcd6m5DlfgxTO5zqKonEUDfL84ASoCSw\u0022}",
+      "seal": {
+        "ephemeral_public_key": "BOOvrGFCWGnZwaKtnCICNGH1TxsEw23XsS5JAYSCt3-3bLND8U2iLrq1mRHQOnwQlCY6ZRL8mE7xUqnVCsQfmak",
+        "ephemeral_private_key_test_only": "6wdGr2AhjQ2afikVzIEOzEW0FXHE1u8dL9udFkG5-E4",
+        "nonce": "wMHCw8TFxsfIycrL"
+      }
+    },
+    {
+      "name": "delivery_node_to_lisa",
+      "envelope": {
+        "ciphertext_hash": "pQTZ2nDXyGWWq1QvKHtSazSxTGP3jaHsNPTMFw1l6vc",
+        "ciphertext_length": 364,
+        "connection_id": "conn-lisa-01",
+        "delivery_mode": "store_and_forward",
+        "envelope_class": "store_and_forward",
+        "household_endpoint": "hh-demo-01",
+        "issued_at": 1793275380,
+        "packet_id": "pkt-0004"
+      },
+      "envelope_canonical": "{\u0022ciphertext_hash\u0022:\u0022pQTZ2nDXyGWWq1QvKHtSazSxTGP3jaHsNPTMFw1l6vc\u0022,\u0022ciphertext_length\u0022:364,\u0022connection_id\u0022:\u0022conn-lisa-01\u0022,\u0022delivery_mode\u0022:\u0022store_and_forward\u0022,\u0022envelope_class\u0022:\u0022store_and_forward\u0022,\u0022household_endpoint\u0022:\u0022hh-demo-01\u0022,\u0022issued_at\u0022:1793275380,\u0022packet_id\u0022:\u0022pkt-0004\u0022}",
+      "ciphertext": "BPyxH5Rz-Kx5NOuVur7OO4MfB6uB7lwOoZVgpk5sAYnkfgASdwCP5302ANaJn0JWfHBAvD4xbYOtN_J7CBNZIejQ0dLT1NXW19jZ2ts1OwQJquh6MHO300UEgoNxxBRDmvzoZvfZ2YGLB1oq2xWXq42_fX7RsLp0xDV5JzPFyJoRRERpKg5pysd6cZqiaLOCxcG7zqPVJRUCr2f6Ax0yywcH6N-lYJVD8OIl8Trh-9UVl0dg9Y0WFQIyxdlx0Fto5xQeXmbilfbFOhjNpR1g2teZdDMq-5gf3dbyW6N_gw_GnnYriXZVFXlY8fPxDC3Z8nkIjAD2ZonvoV4Ok8XEFxGA4R8thkM7GMCgU6F3U3guvFiBMmDJfia8pU0iPaWLiQMX7Hqpro99hZ8BWlAiq8ZFmaGiGdCtvPEYzNJTPAVHnPSnQDmCVeuPyWZYx6XiAhRll2kXP__qBZ1FDxwkj9uKNxgFOGggleMI_Q",
+      "ciphertext_sha256_hex": "a504d9da70d7c86596ab542f287b526b34b14c63f78da1ec34f4cc170d65eaf7",
+      "signature": "aHAAjOSiHjgfLu6l2E79RoIhnlE0rq_HAatN-L3nZ9vdDhwka-b_hJgHN4Ug07ok1G3Hr21CB31B_JuHDF87tA",
+      "signature_verification_only": true,
+      "plaintext_canonical": "{\u0022body\u0022:{\u0022kind\u0022:\u0022delivery\u0022,\u0022text\u0022:\u0022Lisa, got it. Gauze is on the list.\u0022},\u0022connection_id\u0022:\u0022conn-lisa-01\u0022,\u0022packet_id\u0022:\u0022pkt-0004\u0022,\u0022packet_nonce\u0022:\u0022QEFCQ0RFRkdISUpLTE1OTw\u0022,\u0022packet_type\u0022:\u0022delivery\u0022,\u0022recipient_id\u0022:\u0022member-lisa\u0022,\u0022sender_id\u0022:\u0022household-node\u0022,\u0022told_at\u0022:1793275380}",
+      "packet_canonical": "{\u0022ciphertext\u0022:\u0022BPyxH5Rz-Kx5NOuVur7OO4MfB6uB7lwOoZVgpk5sAYnkfgASdwCP5302ANaJn0JWfHBAvD4xbYOtN_J7CBNZIejQ0dLT1NXW19jZ2ts1OwQJquh6MHO300UEgoNxxBRDmvzoZvfZ2YGLB1oq2xWXq42_fX7RsLp0xDV5JzPFyJoRRERpKg5pysd6cZqiaLOCxcG7zqPVJRUCr2f6Ax0yywcH6N-lYJVD8OIl8Trh-9UVl0dg9Y0WFQIyxdlx0Fto5xQeXmbilfbFOhjNpR1g2teZdDMq-5gf3dbyW6N_gw_GnnYriXZVFXlY8fPxDC3Z8nkIjAD2ZonvoV4Ok8XEFxGA4R8thkM7GMCgU6F3U3guvFiBMmDJfia8pU0iPaWLiQMX7Hqpro99hZ8BWlAiq8ZFmaGiGdCtvPEYzNJTPAVHnPSnQDmCVeuPyWZYx6XiAhRll2kXP__qBZ1FDxwkj9uKNxgFOGggleMI_Q\u0022,\u0022envelope\u0022:{\u0022ciphertext_hash\u0022:\u0022pQTZ2nDXyGWWq1QvKHtSazSxTGP3jaHsNPTMFw1l6vc\u0022,\u0022ciphertext_length\u0022:364,\u0022connection_id\u0022:\u0022conn-lisa-01\u0022,\u0022delivery_mode\u0022:\u0022store_and_forward\u0022,\u0022envelope_class\u0022:\u0022store_and_forward\u0022,\u0022household_endpoint\u0022:\u0022hh-demo-01\u0022,\u0022issued_at\u0022:1793275380,\u0022packet_id\u0022:\u0022pkt-0004\u0022},\u0022signature\u0022:\u0022aHAAjOSiHjgfLu6l2E79RoIhnlE0rq_HAatN-L3nZ9vdDhwka-b_hJgHN4Ug07ok1G3Hr21CB31B_JuHDF87tA\u0022}",
+      "seal": {
+        "ephemeral_public_key": "BPyxH5Rz-Kx5NOuVur7OO4MfB6uB7lwOoZVgpk5sAYnkfgASdwCP5302ANaJn0JWfHBAvD4xbYOtN_J7CBNZIeg",
+        "ephemeral_private_key_test_only": "--GxQQdz36yYugbOc46PynSi4T5FxicDDucXaa-AUsM",
+        "nonce": "0NHS09TV1tfY2drb"
+      }
+    }
+  ],
+  "session_challenge": {
+    "connection_id": "conn-daniel-01",
+    "client_nonce": "UFFSU1RVVldYWVpbXF1eXw",
+    "server_nonce": "YGFiY2RlZmdoaWprbG1ubw",
+    "transcript_hex": "74656c6c686f7573652f73657373696f6e2f76310a636f6e6e2d64616e69656c2d30310a505152535455565758595a5b5c5d5e5f0a606162636465666768696a6b6c6d6e6f",
+    "proof": {
+      "client_nonce": "UFFSU1RVVldYWVpbXF1eXw",
+      "server_nonce": "YGFiY2RlZmdoaWprbG1ubw",
+      "proof_signature": "BmxKFnkKJzgf6eWYx-FAT3KgCqcXsqje-5gm2KzlvsxduaNDah_1QwefA898hI4ZcZzn82_X1S0Sva--ExImow"
+    },
+    "proof_signature_verification_only": true,
+    "challenge_lifetime_seconds": 120
+  }
+}

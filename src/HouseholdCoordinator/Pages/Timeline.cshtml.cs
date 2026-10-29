@@ -1,0 +1,97 @@
+using HouseholdCoordinator.Data;
+using HouseholdCoordinator.Services;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+
+namespace HouseholdCoordinator.Pages;
+
+// The family timeline: the shared record, listed plainly, newest first,
+// as the person acting here may read it. The list honors the audience
+// stored on each entry at write time, exactly as the brief does: an
+// entry written for named people appears only to them, and a delivery
+// appears only to the person it was delivered to. This page is also
+// where a person answers a proposal or closes an entry nobody signed:
+// every button here goes through the one confirmation dispatcher, so
+// the audit trail names the person who acted.
+public class TimelineModel : PageModel
+{
+    private readonly AppDbContext _db;
+    private readonly ConfirmationService _confirmations;
+
+    public TimelineModel(AppDbContext db, ConfirmationService confirmations)
+    {
+        _db = db;
+        _confirmations = confirmations;
+    }
+
+    public List<Event> Events { get; private set; } = new();
+    public List<SupplyItem> Supplies { get; private set; } = new();
+    public List<Person> People { get; private set; } = new();
+    public List<AlertDelivery> Deliveries { get; private set; } = new();
+
+    [BindProperty(SupportsGet = true)]
+    public int? ActorId { get; set; }
+
+    public string? Note => TempData["TimelineNote"] as string;
+
+    public async Task OnGetAsync()
+    {
+        await LoadAsync();
+    }
+
+    public async Task<IActionResult> OnPostConfirmAsync(int eventId, int actorId)
+    {
+        await _confirmations.ConfirmAsync(eventId, actorId, "tap");
+        TempData["TimelineNote"] = "Confirmed. The record shows who confirmed it.";
+        return RedirectToPage(new { ActorId = actorId });
+    }
+
+    public async Task<IActionResult> OnPostDeclineAsync(int eventId, int actorId)
+    {
+        await _confirmations.DeclineAsync(eventId, actorId, "tap");
+        TempData["TimelineNote"] = "Declined. Nothing was sent, and the record says so.";
+        return RedirectToPage(new { ActorId = actorId });
+    }
+
+    public async Task<IActionResult> OnPostCloseAsync(int eventId, int actorId)
+    {
+        await _confirmations.CloseRecordPendingAsync(eventId, actorId, "tap");
+        TempData["TimelineNote"] = "Closed. The audit trail names the person who closed it.";
+        return RedirectToPage(new { ActorId = actorId });
+    }
+
+    private async Task LoadAsync()
+    {
+        People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
+        if (ActorId is null && People.Count > 0)
+        {
+            ActorId = People[0].Id;
+        }
+
+        var allEvents = await _db.Events
+            .Include(e => e.AuthorPerson)
+            .Include(e => e.SubjectPerson)
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .Take(100)
+            .ToListAsync();
+        Events = ActorId is int actor
+            ? allEvents.Where(e => BriefService.IsVisibleTo(e, actor)).ToList()
+            : allEvents.Where(e => e.SensitivityClass is SensitivityClass.Open or SensitivityClass.Household).ToList();
+
+        Supplies = await _db.SupplyItems
+            .Include(s => s.AssignedPerson)
+            .OrderBy(s => s.Name)
+            .ToListAsync();
+
+        Deliveries = ActorId is int deliveryViewer
+            ? await _db.AlertDeliveries
+                .Include(d => d.ToPerson)
+                .Include(d => d.Event)
+                .Where(d => d.ToPersonId == deliveryViewer)
+                .OrderByDescending(d => d.DeliveredAtUtc)
+                .Take(20)
+                .ToListAsync()
+            : new List<AlertDelivery>();
+    }
+}

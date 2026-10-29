@@ -1,0 +1,5 @@
+{
+  "acts": {},
+  "proposal_disposition": "confirmed",
+  "note": "Daniel's scripted acts are receiving and disposing. Plain deliveries are acknowledged with disposition received, from the actual receipt. A proposal delivery (kind proposal) is disposed by his acknowledgement carrying the disposition named here, per the home node mapping: a ProposalResponse rides the acknowledgement packet, and a counter cannot ride an acknowledgement; a counter would be sent as a telling. He sends no telling in the scripted acts, so this file holds no telling text."
+}

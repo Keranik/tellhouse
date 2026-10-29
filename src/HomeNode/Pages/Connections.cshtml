@@ -1,0 +1,112 @@
+@page
+@model HomeNode.Pages.ConnectionsModel
+@{
+    ViewData["Title"] = "Connections";
+}
+
+<h1>Connections</h1>
+<p>Who is connected to this house, through which assistant, at what level. An invite grants nothing by itself; the named inviter confirms every join.</p>
+
+@if (Model.Note is not null)
+{
+    <p><strong>@Model.Note</strong></p>
+}
+@if (Model.NewInviteCode is not null)
+{
+    <p>New invite code (shown once, share it with the person joining): <code>@Model.NewInviteCode</code></p>
+}
+
+<h2>Invite someone</h2>
+<form method="post" asp-page-handler="Invite">
+    <label>Inviter
+        <select name="inviterPersonId">
+            @foreach (var person in Model.People)
+            {
+                <option value="@person.Id">@person.DisplayName</option>
+            }
+        </select>
+    </label>
+    <label>Level
+        <select name="level">
+            <option value="Standard">Standard</option>
+            <option value="KnockOnly">KnockOnly</option>
+        </select>
+    </label>
+    <button type="submit">Create invite</button>
+</form>
+
+<h2>Waiting at the door</h2>
+@if (Model.PendingRequests.Count == 0)
+{
+    <p>Nobody is waiting. Doing nothing means no.</p>
+}
+@foreach (var request in Model.PendingRequests)
+{
+    var card = Model.Cards[request.Id];
+    <section>
+        <h3>@card.ClaimedName, through @card.ProviderClaim (@card.ProviderClaimLabel)</h3>
+        <p>Level: @card.Level. @card.LevelConsequences</p>
+        <p>Check phrase: <strong>@card.CheckPhrase</strong>. Ask the person, through a channel you already trust, what words they see. If the words do not match, this is not their request.</p>
+        <p>Party id claimed: @card.ClaimedPartyId<br />
+        Key fingerprint (SHA-256 of the public point): <code>@card.Fingerprint</code></p>
+        <p>Invited by @card.InviterName, request made @card.CreatedAtUtc.ToString("g") UTC.</p>
+        <form method="post" asp-page-handler="Confirm">
+            <input type="hidden" name="joinRequestId" value="@request.Id" />
+            <label>Confirming inviter
+                <select name="inviterPersonId">
+                    @foreach (var person in Model.People)
+                    {
+                        <option value="@person.Id">@person.DisplayName</option>
+                    }
+                </select>
+            </label>
+            <label>This connection speaks for
+                <select name="personId">
+                    @foreach (var person in Model.People)
+                    {
+                        <option value="@person.Id">@person.DisplayName</option>
+                    }
+                </select>
+            </label>
+            <label>Check phrase you heard
+                <input type="text" name="checkPhrase" />
+            </label>
+            <button type="submit">Confirm this join</button>
+        </form>
+        <form method="post" asp-page-handler="Decline">
+            <input type="hidden" name="joinRequestId" value="@request.Id" />
+            <label>Declining inviter
+                <select name="inviterPersonId">
+                    @foreach (var person in Model.People)
+                    {
+                        <option value="@person.Id">@person.DisplayName</option>
+                    }
+                </select>
+            </label>
+            <button type="submit">Decline this join</button>
+        </form>
+    </section>
+}
+
+<h2>Connected</h2>
+@if (Model.Connections.Count == 0)
+{
+    <p>No connections yet.</p>
+}
+<ul>
+    @foreach (var connection in Model.Connections)
+    {
+        <li>
+            <div>@connection.Person?.DisplayName, through @connection.ProviderClaim (self-asserted), level @connection.Level, standing @connection.Standing</div>
+            <div>Connection @connection.ConnectionId &middot; enrolled by @connection.EnrollingInviterPerson?.DisplayName</div>
+            <div>Party @connection.PartyId &middot; key fingerprint: <code>@connection.Fingerprint</code></div>
+            @if (connection.Standing == HomeNode.Data.ConnectionStanding.Active)
+            {
+                <form method="post" asp-page-handler="Revoke">
+                    <input type="hidden" name="connectionId" value="@connection.ConnectionId" />
+                    <button type="submit">Revoke this connection</button>
+                </form>
+            }
+        </li>
+    }
+</ul>

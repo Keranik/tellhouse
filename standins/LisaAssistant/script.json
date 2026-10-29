@@ -1,0 +1,14 @@
+{
+  "acts": {
+    "lisa-canary": {
+      "telling": "Lisa here. Note for the house: velvet cactus lantern 417 goes on the hall shelf."
+    },
+    "lisa-telling-1": {
+      "telling": "Lisa here. We are out of gauze pads for Margaret, and Daniel is the one picking up groceries on Thursday."
+    },
+    "lisa-valve": {
+      "telling": "Lisa here. The porch light bulb burned out, adding it to the house list."
+    }
+  },
+  "note": "Scripted acts only. The telling words live here, in Lisa's own project, never in a trigger request."
+}

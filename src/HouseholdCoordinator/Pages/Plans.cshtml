@@ -1,0 +1,250 @@
+@page "/Plans"
+@model HouseholdCoordinator.Pages.PlansModel
+@{
+    ViewData["Title"] = "Plans";
+}
+
+<h1>Plans</h1>
+<p>The house proposes; people dispose. An element settles only when
+   everyone it names has agreed, in the same round, and the runner's
+   acknowledgement is a separate act that never counts as agreement.</p>
+
+@if (Model.Note is not null)
+{
+    <p><strong>@Model.Note</strong></p>
+}
+
+<h2>Start a plan</h2>
+<form method="post" asp-page-handler="CreatePlan">
+    <label>Plan name <input type="text" name="label" placeholder="Tonight" /></label>
+    <label>Anchored at <input type="time" name="anchorTime" /></label>
+    <button type="submit">Start the plan</button>
+</form>
+
+@if (Model.OpenDecisions.Count > 0)
+{
+    <h2>Open decisions the record is holding</h2>
+    <ul>
+        @foreach (var decision in Model.OpenDecisions)
+        {
+            <li>@decision.Body</li>
+        }
+    </ul>
+}
+
+<h2>Dinner, from what the house was told</h2>
+<p>The house proposes dinner only from what people stated: the usual
+   meals they named and the fridge contents they reported. Each item
+   below is a telling on the record, with who said it and when. A
+   dinner with no telling behind it is never proposed and never
+   shown.</p>
+@if (Model.ProvenanceItems.Count == 0)
+{
+    <p>No usual meals or fridge contents have been stated yet.</p>
+}
+else
+{
+    <ul>
+        @foreach (var item in Model.ProvenanceItems)
+        {
+            <li>
+                <strong>@item.ItemName</strong>
+                (@(item.Kind == "UsualMeal" ? "a stated usual meal" : "stated fridge contents"))
+                <br />Told by @item.AuthorName on @item.ToldOn.ToString("dddd, MMM d"): &ldquo;@item.Body&rdquo;
+            </li>
+        }
+    </ul>
+}
+
+@foreach (var plan in Model.Plans)
+{
+    <h2>@plan.Label</h2>
+    <p>
+        Standing: @plan.State
+        @if (plan.AnchorAtLocal is { } anchor)
+        {
+            <text> &middot; anchored at @anchor.ToString("h:mm tt")</text>
+        }
+        @if (plan.RunnerPerson is not null)
+        {
+            <text> &middot; runner: @plan.RunnerPerson.DisplayName</text>
+        }
+    </p>
+
+    @foreach (var element in plan.Elements)
+    {
+        var required = HouseholdCoordinator.Services.PlanAssemblyService.RequiredDisposers(element);
+        var isMeal = element.Kind == HouseholdCoordinator.Data.PlanElementKind.MealProposal;
+        var mealProvenance = isMeal && Model.ElementProvenance.TryGetValue(element.Id, out var found) ? found : null;
+        var hiddenMeal = isMeal && mealProvenance is null;
+        if (hiddenMeal)
+        {
+            <h3>MealProposal</h3>
+            <p>A proposal with no telling behind it is not shown.</p>
+        }
+        else
+        {
+            <h3>@element.Kind: @element.BodyText</h3>
+        }
+        <p>Standing: @element.State</p>
+        @if (mealProvenance is not null)
+        {
+            <ul>
+                @foreach (var telling in mealProvenance)
+                {
+                    <li>From a telling by @telling.AuthorName on @telling.ToldOn.ToString("dddd, MMM d"): &ldquo;@telling.Body&rdquo;</li>
+                }
+            </ul>
+        }
+        @if (required.Count > 0 && !hiddenMeal)
+        {
+            <ul>
+                @foreach (var agreement in element.Agreements.OrderBy(a => a.Round).ThenBy(a => a.AtUtc))
+                {
+                    <li>
+                        Round @agreement.Round: @(agreement.Person?.DisplayName ?? "") said @agreement.Disposal
+                        @if (agreement.CounterText is not null)
+                        {
+                            <text> &middot; in their words: &ldquo;@agreement.CounterText&rdquo;</text>
+                        }
+                    </li>
+                }
+            </ul>
+            <form method="post" asp-page-handler="Dispose">
+                <input type="hidden" name="elementId" value="@element.Id" />
+                <label>
+                    Answering as
+                    <select name="personId">
+                        @foreach (var personId in required)
+                        {
+                            var person = Model.People.FirstOrDefault(p => p.Id == personId);
+                            <option value="@personId">@(person?.DisplayName ?? "")</option>
+                        }
+                    </select>
+                </label>
+                <label>
+                    Answer
+                    <select name="disposal">
+                        <option value="Agreed">Agreed</option>
+                        <option value="Declined">Declined</option>
+                        <option value="Countered">Countered</option>
+                    </select>
+                </label>
+                <label>
+                    A counter, in your own words (only when countering)
+                    <input type="text" name="counterText" placeholder="What you propose instead, word for word" />
+                </label>
+                <button type="submit">Record the answer</button>
+            </form>
+        }
+        @if (!hiddenMeal)
+        {
+            <form method="post" asp-page-handler="Retime">
+                <input type="hidden" name="elementId" value="@element.Id" />
+                <label>
+                    Re-time this entry, in the new words
+                    <input type="text" name="newText" value="@element.BodyText" />
+                </label>
+                <label>
+                    Changed by
+                    <select name="actorPersonId">
+                        @foreach (var person in Model.People)
+                        {
+                            <option value="@person.Id">@person.DisplayName</option>
+                        }
+                    </select>
+                </label>
+                <button type="submit">Record the new time</button>
+            </form>
+        }
+    }
+
+    <h3>Add to this plan</h3>
+    <form method="post" asp-page-handler="AddDinner">
+        <input type="hidden" name="planId" value="@plan.Id" />
+        @if (Model.OpenDecisions.Count > 0)
+        {
+            <label>
+                From the open decision
+                <select name="sourceEventId">
+                    <option value="">None</option>
+                    @foreach (var decision in Model.OpenDecisions)
+                    {
+                        <option value="@decision.Id">@decision.Body</option>
+                    }
+                </select>
+            </label>
+        }
+        <label>Dinner proposed <input type="text" name="mealText" placeholder="What is proposed, in plain words" /></label>
+        <fieldset>
+            <legend>Who must agree</legend>
+            @foreach (var person in Model.People)
+            {
+                <label>
+                    <input type="checkbox" name="disposerIds" value="@person.Id" />
+                    @person.DisplayName
+                </label>
+            }
+        </fieldset>
+        <button type="submit">Propose dinner</button>
+    </form>
+    <form method="post" asp-page-handler="ProposeFromProvenance">
+        <input type="hidden" name="planId" value="@plan.Id" />
+        <fieldset>
+            <legend>Propose from the tellings (one usual meal, plus any fridge contents it draws on)</legend>
+            @foreach (var item in Model.ProvenanceItems)
+            {
+                <label>
+                    <input type="checkbox" name="sourceEventIds" value="@item.SourceEventId" />
+                    @item.ItemName, told by @item.AuthorName on @item.ToldOn.ToString("MMM d")
+                </label>
+            }
+        </fieldset>
+        <fieldset>
+            <legend>Who must agree</legend>
+            @foreach (var person in Model.People)
+            {
+                <label>
+                    <input type="checkbox" name="disposerIds" value="@person.Id" />
+                    @person.DisplayName
+                </label>
+            }
+        </fieldset>
+        <button type="submit">Propose from these tellings</button>
+    </form>
+    <form method="post" asp-page-handler="AddList">
+        <input type="hidden" name="planId" value="@plan.Id" />
+        <label>The list <input type="text" name="listText" placeholder="What the runner picks up" /></label>
+        <label>
+            Runner
+            <select name="runnerPersonId">
+                @foreach (var person in Model.People)
+                {
+                    <option value="@person.Id">@person.DisplayName</option>
+                }
+            </select>
+        </label>
+        <button type="submit">Add the list</button>
+    </form>
+    <form method="post" asp-page-handler="AddLeaveBy">
+        <input type="hidden" name="planId" value="@plan.Id" />
+        <label>
+            Stated durations, one per line as: name, minutes
+            <textarea name="durationsText" rows="3" placeholder="drive to the store, 25"></textarea>
+        </label>
+        <button type="submit">Work out the leave-by</button>
+    </form>
+    <form method="post" asp-page-handler="Acknowledge">
+        <input type="hidden" name="planId" value="@plan.Id" />
+        <label>
+            Runner acknowledging
+            <select name="runnerPersonId">
+                @foreach (var person in Model.People)
+                {
+                    <option value="@person.Id">@person.DisplayName</option>
+                }
+            </select>
+        </label>
+        <button type="submit">Acknowledge the plan</button>
+    </form>
+}

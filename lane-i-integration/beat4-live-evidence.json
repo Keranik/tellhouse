@@ -1,0 +1,29 @@
+{
+  "batch": "Beat 4 live batch, integrated node, Live mode, Contributor tier",
+  "model": "muse-spark-1.3-contributor",
+  "live_api_calls_counted": 1,
+  "checks": [
+    {
+      "name": "live-mode node seeds the integrated day (16 events)",
+      "passed": true,
+      "detail": "[(16,)]"
+    },
+    {
+      "name": "Beat 4 live: trash turn through the real front door in Live mode lands as the Proposed Task with its NotifyPerson and stored Named route to Daniel",
+      "passed": true,
+      "detail": "(200, [(17, 'Task', 'Proposed', '{\"TaskKind\":\"General\",\"TaskText\":\"take the trash out\",\"TurnPersonId\":2,\"TurnItem\":\"trash\",\"DueText\":\"seven\"}', '{\"Class\":\"Named\",\"RoutePersonId\":2,\"SubjectPersonId\":2,\"AuthorPersonId\":1}')], [('NotifyPerson', 2)])"
+    },
+    {
+      "name": "Beat 4 live batch: one plain telling extracted by the live model on the Contributor tier lands on the record",
+      "passed": true,
+      "detail": "(200, [(18, 'HouseholdNote')])"
+    },
+    {
+      "name": "Beat 4 live: confirmed turn is delivered to Daniel only, body verbatim, event Done",
+      "passed": true,
+      "detail": "(200, [('Done',)], [(2, \"Tonight is Daniel's turn to take the trash out, the truck comes at seven.\")])"
+    }
+  ],
+  "passed": 4,
+  "total": 4
+}

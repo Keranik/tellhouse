@@ -1,0 +1,66 @@
+@page "/Member"
+@model HomeNode.Pages.MemberModel
+@{
+    ViewData["Title"] = "What landed with you";
+}
+
+<h1>What landed with you</h1>
+<p>This is one person's view of the house: what the house has
+   delivered to them, and nothing that was delivered to anyone else.
+   On the record pages, a delivery appears
+   only in the view of the person it was delivered to, and an entry
+   written for named people appears only to them.</p>
+<p><em>Demo note: on this one computer, this view stands in for
+   delivery. In the product design, a routed telling reaches a person
+   through their own assistant, in their own channel; that delivery
+   is not part of this demo.</em></p>
+
+<form method="get">
+    <label>
+        Looking as
+        <select name="personId">
+            @foreach (var person in Model.People)
+            {
+                <option value="@person.Id" selected="@(Model.Member?.Id == person.Id)">@person.DisplayName</option>
+            }
+        </select>
+    </label>
+    <button type="submit">Show</button>
+</form>
+
+@if (Model.Member is not null)
+{
+    <h2>Landed with @Model.Member.DisplayName</h2>
+    @if (Model.Received.Count == 0)
+    {
+        <p>Nothing has landed here yet.</p>
+    }
+    <ul>
+        @foreach (var item in Model.Received)
+        {
+            <li>
+                <strong>@item.Source:</strong> @item.Text
+                <br />@item.Note
+                @if (item.Provenance is not null)
+                {
+                    <br />@item.Provenance
+                }
+                @if (item.AlertDeliveryId is int deliveryId)
+                {
+                    if (item.ClosedAtUtc is DateTime closedAt)
+                    {
+                        <br /><span>Acknowledged @closedAt.ToString("yyyy-MM-dd HH:mm") UTC.</span>
+                    }
+                    else
+                    {
+                        <form method="post" asp-page-handler="Acknowledge">
+                            <input type="hidden" name="deliveryId" value="@deliveryId" />
+                            <input type="hidden" name="personId" value="@Model.Member.Id" />
+                            <button type="submit">Acknowledge</button>
+                        </form>
+                    }
+                }
+            </li>
+        }
+    </ul>
+}

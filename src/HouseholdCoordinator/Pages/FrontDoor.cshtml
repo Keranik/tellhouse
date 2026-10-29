@@ -1,0 +1,159 @@
+@page "/"
+@model HouseholdCoordinator.Pages.FrontDoorModel
+@{
+    ViewData["Title"] = "Your front door";
+}
+
+<style>
+    .front-door { font-size: 1.5rem; line-height: 1.5; }
+    .front-door h1 { font-size: 2.6rem; }
+    .front-door .say-box {
+        border: 2px solid #444; border-radius: 12px; padding: 1.2rem;
+        margin: 1.2rem 0; background: #fafafa;
+    }
+    .front-door .reply {
+        border: 2px solid #2c5f2d; border-radius: 12px; padding: 1.2rem;
+        margin: 1.2rem 0; background: #f2f8f2;
+    }
+    .front-door li { margin-bottom: 1rem; }
+    .front-door .state { font-weight: 600; }
+    .front-door select, .front-door textarea, .front-door button {
+        font-size: 1.3rem; margin-top: 0.5rem;
+    }
+    .front-door textarea { width: 100%; }
+</style>
+
+<div class="front-door">
+    <h1>Your front door</h1>
+
+    @if (Model.Household is not null)
+    {
+        <p>@Model.Household.Name. Tell the house.</p>
+    }
+
+    <p><em>Demo: the people in this house are invented, it runs on one
+       computer, and no real family's data is in it.</em></p>
+
+    <p>Talk here. Say what you need, ask a question, or add a note for the house.
+       What you say is recorded in the shared record. An entry meant for
+       named people is shown only to them; the rest is the house's shared
+       day, here for everyone in the circle to read and add to.</p>
+
+    @if (Model.HouseReply is not null)
+    {
+        <div class="reply">
+            <p><strong>The house says:</strong> @Model.HouseReply</p>
+            @if (Model.PipelineNote is not null)
+            {
+                <p>@Model.PipelineNote</p>
+            }
+            @if (Model.ProposedEventId is int proposedId)
+            {
+                <form method="post">
+                    @Html.AntiForgeryToken()
+                    <label>
+                        Answering as
+                        <select name="actorPersonId">
+                            @foreach (var person in Model.People)
+                            {
+                                if (Model.ProposedAuthorId == person.Id)
+                                {
+                                    <option value="@person.Id" selected>@person.DisplayName</option>
+                                }
+                                else
+                                {
+                                    <option value="@person.Id">@person.DisplayName</option>
+                                }
+                            }
+                        </select>
+                    </label>
+                    <input type="hidden" name="eventId" value="@proposedId" />
+                    <button type="submit" formaction="?handler=Confirm">Yes, do it</button>
+                    <button type="submit" formaction="?handler=Decline">No, don't</button>
+                </form>
+            }
+        </div>
+    }
+
+    <div class="say-box">
+        <p><strong>Say a thing, or ask a question.</strong></p>
+        <p>Type what you would say. Voice capture is a later step; a typed
+           telling travels the same road a spoken one will.</p>
+        <form method="post" asp-page-handler="Tell">
+            <label>
+                Who is telling the house?
+                <select name="speakerId">
+                    @foreach (var person in Model.People)
+                    {
+                        <option value="@person.Id">@person.DisplayName</option>
+                    }
+                    <option value="">Someone in passing (no name)</option>
+                </select>
+            </label>
+            <br />
+            <label>
+                Tell the house
+                <textarea name="telling" rows="3" placeholder="Say it the way you would say it out loud."></textarea>
+            </label>
+            <br />
+            <button type="submit">Tell the house</button>
+        </form>
+    </div>
+
+    <h2>Most recent in the shared record</h2>
+    <form method="get">
+        <label>
+            Reading as
+            <select name="viewerId" onchange="this.form.submit()">
+                <option value="">Anyone standing here</option>
+                @foreach (var person in Model.People)
+                {
+                    if (Model.ViewerId == person.Id)
+                    {
+                        <option value="@person.Id" selected>@person.DisplayName</option>
+                    }
+                    else
+                    {
+                        <option value="@person.Id">@person.DisplayName</option>
+                    }
+                }
+            </select>
+        </label>
+    </form>
+    <p>An entry meant for named people appears only to them. With no one
+       named above, only the house's shared entries show.</p>
+    @if (Model.RecentEvents.Count == 0)
+    {
+        <p>Nothing shows here for this reader yet.</p>
+    }
+    else
+    {
+        <ul>
+            @foreach (var item in Model.RecentEvents)
+            {
+                <li>
+                    <div>@item.Body</div>
+                    <div>
+                        @if (item.AuthorPerson is not null)
+                        {
+                            <text>Added by @item.AuthorPerson.DisplayName</text>
+                        }
+                        else
+                        {
+                            <text>Told to the house</text>
+                        }
+                        &middot; <span class="state">@HouseholdCoordinator.Data.ConfirmationWording.For(item.ConfirmationState)</span>
+                        @if (item.RecordPending)
+                        {
+                            <text> &middot; waiting for someone in the circle to close it</text>
+                        }
+                        @if (HouseholdCoordinator.Services.ProvenanceRendering.Describe(item) is { } provenance)
+                        {
+                            <div>@provenance</div>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</div>

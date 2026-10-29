@@ -1,0 +1,5 @@
+bin/
+obj/
+household-coordinator.db
+Dockerfile
+.dockerignore

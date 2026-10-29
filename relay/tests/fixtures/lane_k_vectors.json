@@ -1,0 +1,74 @@
+{
+ "source": "Test vectors copied from src/Tellhouse.Protocol/vectors/test-vectors.json in this tree. Wire packets only (ciphertext, envelope, signature), copied from each vector packet_canonical field. Test vector material only; it protects no real household.",
+ "household_endpoint": "hh-demo-01",
+ "packets": [
+  {
+   "name": "telling_lisa_to_node",
+   "packet": {
+    "ciphertext": "BFsECVaVkskh0965Iam2DWbF9a1ghrBXDQAKc-3jIILD4jof98iYSedFH-urWlM9158hDzXPlJZwPJQB5YdjloagoaKjpKWmp6ipqquSvxsN_rCyQk5Lu-ZUvDKx2xlSRYEK3vArAbjpGRFmE8xzXX9JY9byaVZzI6DRcYusQJF2KCKqOdpzo1W4WeC8eWMzG-DercS6Z4H7gVxzrbt7yWeKiWkGjSSH7Z6tE2iMSmQ-OHpod2bES6VlRtSz6rJ26O2W625oSvSWrz9ImZOCf-Ls3uW02K5yUmvUFleO1EN7ifDHDVeoFuZsJ5Imq4obeqAA2WZPo6xepGubGqQGxgJM94icQLIceGqoJxlClrV-R7KgQXKHxah0z1trXrX7mYUoOJT_fKfmow2i_vdYqHWxc4BP8InYP74TzM0UAuJHGdIEjaARb-QMexFqqM8qrxE-pklNVNer3i316XzlhhyoNYBSYa-HkOGEegaHSizd082iAq9pjMUf7lnoEahs",
+    "envelope": {
+     "ciphertext_hash": "zz815uBs0_eI0ESq9L34A-aS_NptsuCiY0Ls7b8CPpw",
+     "ciphertext_length": 384,
+     "connection_id": "conn-lisa-01",
+     "delivery_mode": "session",
+     "envelope_class": "session",
+     "household_endpoint": "hh-demo-01",
+     "issued_at": 1793275200,
+     "packet_id": "pkt-0001"
+    },
+    "signature": "DKrle6H9Rthqklp5RG6mr2fsNIDkhN06b-xm6nItrJlJImhiGeYo7qve0M7tMct_p8fo1NrikptSc5pRpG226A"
+   }
+  },
+  {
+   "name": "delivery_node_to_daniel",
+   "packet": {
+    "ciphertext": "BIdkreQkO7SBI0FKajIlDN8Uzin1jvDJ0hFdlSlPL-Dg1j_36SjQ6V6itH7BKJJ4ODE5ddwlu6Ya2Z7dyawky6iwsbKztLW2t7i5urvHPN5WQfVB74ceV0KP0wx7GcpeBy0lonngveTJqHVGsVVNsFTlxgruK9ZMdHy4AM2bpxueTzSx7O5O_eTsr_X7pnyNouFSO3vH1B5VgJaerFo6NKTrqhhf2PYfdU6wzJMKjmuDWeYTcKWyPUS72GXOtYoI64qrT6IF1djRMrNW24vvdKqNbk3qijIyspdAeswjWYzXch8e25RKgWJxKUmZgNO6ZDUEsV8y7NniPjH8P67bZZ1xHUqpLPz41LU3xjfevqkf1CbFOIOjPCP18hD1PwSIyzF9jH7h7K8Jxn__l3BefhYTgsYw6pOpzUcB4qfiVBcQGioJdOdCvOnmaQXfAY-KORPGM7PMpdYsK6LgH6DDLvvUr7mEvCXWHruM5P66QkP3tHqBaw",
+    "envelope": {
+     "ciphertext_hash": "_RIi_3Nrsp0dcXciyvxEXtyvyCTudWE7I1WQ1KZRZyc",
+     "ciphertext_length": 373,
+     "connection_id": "conn-daniel-01",
+     "delivery_mode": "session",
+     "envelope_class": "session",
+     "household_endpoint": "hh-demo-01",
+     "issued_at": 1793275260,
+     "packet_id": "pkt-0002"
+    },
+    "signature": "UKhktv0I_F42368OevsPel393bphgxwV6oFOySXoxLp_28gO2-yoLF0jSqS9n8fQiPkOObo_qyWB9JthjQ8RWw"
+   }
+  },
+  {
+   "name": "acknowledgement_daniel_to_node",
+   "packet": {
+    "ciphertext": "BOOvrGFCWGnZwaKtnCICNGH1TxsEw23XsS5JAYSCt3-3bLND8U2iLrq1mRHQOnwQlCY6ZRL8mE7xUqnVCsQfmanAwcLDxMXGx8jJystOWqsGre0UTwNpm0pMX92NvdB5AM-4Mxd7yu8oxy1at_cqaruoSx_CX5HmHgf--679OQJnxCi37xLdvhfnckLF6I63TlM5Z6UZKULeLRPFE7FAmOZM2A_aDC6nqkJvI4WrmTAC5gn3uqjolZ597KIDSP4DDuQJy0Z2hj1X7plxIGmMGcCc0Jyi3xqPzjceNgdhTcz_-Dof26lkXgsCRr0kPvWnZESyX79jQsKS6kvzDagEx_98IkobqEEqo4mzLwRpvuEBLdfv5KnvGIsZWdtm5wmKwz8dHEcoVdR3e_DCVpCZVfEdo2R6yjhYkJ9vXv31TqhZd9X2pAMJfMOcFHGxIuZAmXtgo-pwLtmILS3xQyuEXyMDY0Eaan54N1uKoXualA",
+    "envelope": {
+     "ciphertext_hash": "LqAKfCp9UQ4yy63Lit48xOGSbOfU_RK24nO-Q6obIUU",
+     "ciphertext_length": 367,
+     "connection_id": "conn-daniel-01",
+     "delivery_mode": "session",
+     "envelope_class": "session",
+     "household_endpoint": "hh-demo-01",
+     "issued_at": 1793275320,
+     "packet_id": "pkt-0003"
+    },
+    "signature": "2FDwU53W_sCcrC_GPC1SHTov9gsQpXx5-emwfh2_VKQbqQhOHaEGtemcd6m5DlfgxTO5zqKonEUDfL84ASoCSw"
+   }
+  },
+  {
+   "name": "delivery_node_to_lisa",
+   "packet": {
+    "ciphertext": "BPyxH5Rz-Kx5NOuVur7OO4MfB6uB7lwOoZVgpk5sAYnkfgASdwCP5302ANaJn0JWfHBAvD4xbYOtN_J7CBNZIejQ0dLT1NXW19jZ2ts1OwQJquh6MHO300UEgoNxxBRDmvzoZvfZ2YGLB1oq2xWXq42_fX7RsLp0xDV5JzPFyJoRRERpKg5pysd6cZqiaLOCxcG7zqPVJRUCr2f6Ax0yywcH6N-lYJVD8OIl8Trh-9UVl0dg9Y0WFQIyxdlx0Fto5xQeXmbilfbFOhjNpR1g2teZdDMq-5gf3dbyW6N_gw_GnnYriXZVFXlY8fPxDC3Z8nkIjAD2ZonvoV4Ok8XEFxGA4R8thkM7GMCgU6F3U3guvFiBMmDJfia8pU0iPaWLiQMX7Hqpro99hZ8BWlAiq8ZFmaGiGdCtvPEYzNJTPAVHnPSnQDmCVeuPyWZYx6XiAhRll2kXP__qBZ1FDxwkj9uKNxgFOGggleMI_Q",
+    "envelope": {
+     "ciphertext_hash": "pQTZ2nDXyGWWq1QvKHtSazSxTGP3jaHsNPTMFw1l6vc",
+     "ciphertext_length": 364,
+     "connection_id": "conn-lisa-01",
+     "delivery_mode": "store_and_forward",
+     "envelope_class": "store_and_forward",
+     "household_endpoint": "hh-demo-01",
+     "issued_at": 1793275380,
+     "packet_id": "pkt-0004"
+    },
+    "signature": "aHAAjOSiHjgfLu6l2E79RoIhnlE0rq_HAatN-L3nZ9vdDhwka-b_hJgHN4Ug07ok1G3Hr21CB31B_JuHDF87tA"
+   }
+  }
+ ]
+}

@@ -1,0 +1,27 @@
+# Render blueprint for the Tellhouse home node.
+# One free web service, Docker, built from the home node
+# Dockerfile. The database path is on the service's ephemeral
+# disk: a restart reseeds the same fictional demo day.
+# A custom domain would attach under this service's settings
+# later; none is configured here.
+services:
+  - type: web
+    name: tellhouse
+    env: docker
+    plan: free
+    dockerfilePath: ./src/HomeNode/Dockerfile
+    dockerContext: ./src/HomeNode
+    healthCheckPath: /
+    envVars:
+      - key: ASPNETCORE_URLS
+        value: http://+:10000
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Extraction__Mode
+        value: Live
+      - key: Extraction__Model
+        value: muse-spark-1.3
+      - key: ConnectionStrings__HomeNode
+        value: Data Source=/tmp/home-node.db
+      - key: MODEL_API_KEY
+        sync: false

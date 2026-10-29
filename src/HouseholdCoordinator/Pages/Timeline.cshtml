@@ -1,0 +1,169 @@
+@page "/Timeline"
+@model HouseholdCoordinator.Pages.TimelineModel
+@{
+    ViewData["Title"] = "Family timeline";
+}
+
+<h1>Family timeline</h1>
+<p>The shared record for the house, newest first, as the person you are
+   acting as may read it. An entry written for named people appears only
+   to them, here as on every surface.</p>
+
+<form method="get">
+    <label>
+        Acting as
+        <select name="ActorId" onchange="this.form.submit()">
+            @foreach (var person in Model.People)
+            {
+                if (Model.ActorId == person.Id)
+                {
+                    <option value="@person.Id" selected>@person.DisplayName</option>
+                }
+                else
+                {
+                    <option value="@person.Id">@person.DisplayName</option>
+                }
+            }
+        </select>
+    </label>
+</form>
+
+@if (Model.Note is not null)
+{
+    <p><strong>@Model.Note</strong></p>
+}
+
+@if (Model.Events.Count == 0)
+{
+    <p>Nothing recorded yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>When (UTC)</th>
+                <th>Added by</th>
+                <th>About</th>
+                <th>Kind</th>
+                <th>Words</th>
+                <th>State</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Events)
+            {
+                <tr>
+                    <td>@item.CreatedAtUtc.ToString("MMM d, h:mm tt")</td>
+                    <td>@(item.AuthorPerson?.DisplayName ?? "Told to the house")</td>
+                    <td>@(item.SubjectPerson?.DisplayName ?? "")</td>
+                    <td>@item.Type</td>
+                    <td>
+                        @item.Body
+                        @if (HouseholdCoordinator.Services.ProvenanceRendering.Describe(item) is { } provenance)
+                        {
+                            <br />@provenance
+                        }
+                    </td>
+                    <td>
+                        @HouseholdCoordinator.Data.ConfirmationWording.For(item.ConfirmationState)
+                        @if (item.RecordPending)
+                        {
+                            <text><br />Not yet closed by a person</text>
+                        }
+                    </td>
+                    <td>
+                        @if (item.ConfirmationState == HouseholdCoordinator.Data.ConfirmationState.Proposed && !item.RecordPending)
+                        {
+                            <form method="post" asp-page-handler="Confirm">
+                                <input type="hidden" name="eventId" value="@item.Id" />
+                                <input type="hidden" name="actorId" value="@Model.ActorId" />
+                                <button type="submit">Confirm</button>
+                            </form>
+                            <form method="post" asp-page-handler="Decline">
+                                <input type="hidden" name="eventId" value="@item.Id" />
+                                <input type="hidden" name="actorId" value="@Model.ActorId" />
+                                <button type="submit">Decline</button>
+                            </form>
+                        }
+                        else if (item.RecordPending && item.ConfirmationState == HouseholdCoordinator.Data.ConfirmationState.Proposed)
+                        {
+                            <form method="post" asp-page-handler="Close">
+                                <input type="hidden" name="eventId" value="@item.Id" />
+                                <input type="hidden" name="actorId" value="@Model.ActorId" />
+                                <button type="submit">Close this entry</button>
+                            </form>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (Model.Deliveries.Count > 0)
+{
+    <h2>Passed on by the house</h2>
+    <p>What the house has passed on to the person you are acting as, and
+       to no one else: a delivery shows only to the person it was
+       delivered to, in the words that were confirmed.</p>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>When (UTC)</th>
+                <th>To</th>
+                <th>Words carried</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var delivery in Model.Deliveries)
+            {
+                <tr>
+                    <td>@delivery.DeliveredAtUtc.ToString("MMM d, h:mm tt")</td>
+                    <td>@(delivery.ToPerson?.DisplayName ?? "")</td>
+                    <td>
+                        @delivery.BodyText
+                        @if (delivery.Event is not null && HouseholdCoordinator.Services.ProvenanceRendering.Describe(delivery.Event) is { } deliveryProvenance)
+                        {
+                            <br />@deliveryProvenance
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<h2>Household supplies</h2>
+@if (Model.Supplies.Count == 0)
+{
+    <p>No supplies tracked yet.</p>
+}
+else
+{
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th>On hand</th>
+                <th>Runs out</th>
+                <th>Order by</th>
+                <th>Picks it up</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Supplies)
+            {
+                <tr>
+                    <td>@item.Name</td>
+                    <td>@item.QuantityOnHand @item.Unit</td>
+                    <td>@(item.GetRunOutDate(today) == DateOnly.MaxValue ? "" : item.GetRunOutDate(today).ToString("MMM d"))</td>
+                    <td>@(item.GetOrderByDate(today) == DateOnly.MaxValue ? "" : item.GetOrderByDate(today).ToString("MMM d"))</td>
+                    <td>@(item.AssignedPerson?.DisplayName ?? "")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

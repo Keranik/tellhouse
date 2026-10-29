@@ -1,0 +1,70 @@
+@page "/Brief"
+@model HouseholdCoordinator.Pages.BriefModel
+@{
+    ViewData["Title"] = "Your brief";
+}
+
+<h1>Your brief</h1>
+<p>What the record holds for one person. Entries reach a brief only when
+   the audience written on them at the time includes that person.</p>
+
+<form method="get">
+    <label>
+        Whose brief?
+        <select name="PersonId" onchange="this.form.submit()">
+            @foreach (var person in Model.People)
+            {
+                if (Model.Viewer?.Id == person.Id)
+                {
+                    <option value="@person.Id" selected>@person.DisplayName</option>
+                }
+                else
+                {
+                    <option value="@person.Id">@person.DisplayName</option>
+                }
+            }
+        </select>
+    </label>
+</form>
+
+@if (Model.Viewer is not null)
+{
+    <h2>@Model.Viewer.DisplayName.Split(' ')[0]'s brief</h2>
+    @if (Model.Lines.Count == 0)
+    {
+        <p>Nothing in the record for you right now.</p>
+    }
+    else
+    {
+        var currentSection = "";
+        foreach (var line in Model.Lines)
+        {
+            if (line.Section != currentSection)
+            {
+                currentSection = line.Section;
+                <h3>@currentSection</h3>
+            }
+            <p>@line.Text</p>
+        }
+    }
+
+    <h2>Ask the house</h2>
+    <form method="post" asp-page-handler="Lookup">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="askerPersonId" value="@Model.Viewer.Id" />
+        <label>
+            Where is
+            <select name="subjectPersonId">
+                @foreach (var person in Model.People)
+                {
+                    <option value="@person.Id">@person.DisplayName</option>
+                }
+            </select>
+        </label>
+        <button type="submit">Ask</button>
+    </form>
+    @if (Model.LookupAnswer is not null)
+    {
+        <p><strong>The house says:</strong> @Model.LookupAnswer</p>
+    }
+}
