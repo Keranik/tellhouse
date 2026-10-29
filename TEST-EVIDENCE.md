@@ -147,7 +147,7 @@ separate containers; and one driver, the stand-in
 protocol checks, is not reliably green in its session
 timing: across the verification sessions recorded for
 this follow-up it recorded 36 of 36 once and 33 of 36
-in six further runs across every tree tested,
+in seven further runs across every tree tested,
 including trees that predate these fixes and this
 exact tree at its final verification, the three
 failures always the same session exchange timing
