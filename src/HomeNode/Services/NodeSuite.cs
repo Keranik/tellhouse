@@ -1335,7 +1335,7 @@ public static class NodeSuite
         await RelayLoopService.RunPassAsync(relayClient, intake, db, endpoint);
         var relayDupAfter = await db.SealedOutbox.FirstAsync(o => o.Id == relayDup!.Id);
         var relayFailAfter = await db.SealedOutbox.FirstAsync(o => o.Id == relayFail.Id);
-        var relayGoodAfter = await db.SealedOutbox.FirstAsync(o => o.Id == relayGood.Id);
+        var relayGoodAfter = await db.SealedOutbox.FirstAsync(o => o.Id == relayGood!.Id);
         Check("Relay duplicate: a 409 duplicate answer from the relay counts the item as sent (the relay already holds it)",
             relayDupAfter.Status == "Sent");
         Check("Relay duplicate: one item's 409 and another's failed post do not block the queue; the delivery behind them is posted and marked Sent, the failed one stays Queued",
