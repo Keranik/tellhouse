@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Tellhouse.Protocol;
 
-// Test vector generator for the protocol. Deterministic in every field except
+// Protocol test vector generator. Deterministic in every field except
 // the ECDSA signatures, which are randomized by design in .NET; the
 // vectors mark signatures as verification only, meaning a consumer
 // must verify them and must not compare them byte for byte. Every
@@ -18,7 +18,7 @@ string outputPath = args.Length > 0 ? args[0] : FindDefaultOutput();
 Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
 // Fixed test key material. TEST ONLY. These private keys exist so
-// anyone can reproduce the vectors; they protect nothing and
+// any project can reproduce the vectors; they protect nothing and
 // must never be used for a real household.
 var node = IdentityKeypair.FromExported(
     "NnT7WsF0tYeM290P7B2HzhoA3-aX_iSGa7t87bvkGL4",
@@ -112,7 +112,7 @@ var file = new
     generated_by = "tools/Tellhouse.Protocol.VectorGen",
     notes = new[]
     {
-        "Test key material only. Private keys are published here so anyone can reproduce the vectors. They protect nothing and must never protect a real household.",
+        "Test key material only. Private keys are published here so any project can reproduce the vectors. They protect nothing and must never protect a real household.",
         "Signatures are verification only: verify them, never compare bytes. Every other byte must reproduce exactly.",
         "The envelope object in each vector is the complete relay visible metadata. There are no other relay visible fields.",
     },

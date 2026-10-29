@@ -9,7 +9,7 @@ namespace HomeNode.Protocol;
 /// three keys: ciphertext, envelope, signature.
 ///
 /// The relay visible metadata is the envelope only, exactly the
-/// list (see Envelope). The ciphertext is opaque bytes whose
+/// relay-visible fields (see Envelope). The ciphertext is opaque bytes whose
 /// length and hash the envelope already states. The signature is
 /// authentication material for the endpoints: ECDSA P-256 over
 /// SHA-256, IEEE P1363 form (r concatenated with s, 64 bytes),
@@ -145,14 +145,16 @@ public sealed record Packet(Envelope Envelope, string CiphertextBase64Url, strin
     {
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         var root = doc.RootElement;
+        if (root.ValueKind != System.Text.Json.JsonValueKind.Object)
+            throw new ProtocolException("Wire packet must be a JSON object.");
         var names = new List<string>();
         foreach (var p in root.EnumerateObject()) names.Add(p.Name);
         names.Sort(StringComparer.Ordinal);
         if (!names.SequenceEqual(new[] { "ciphertext", "envelope", "signature" }))
             throw new ProtocolException("Wire packet must have exactly the keys ciphertext, envelope, signature.");
         var envelope = Envelope.Parse(root.GetProperty("envelope").GetRawText());
-        string ciphertext = root.GetProperty("ciphertext").GetString() ?? "";
-        string signature = root.GetProperty("signature").GetString() ?? "";
+        string ciphertext = Envelope.RequireString(root, "ciphertext");
+        string signature = Envelope.RequireString(root, "signature");
         if (Base64Url.Decode(ciphertext).Length == 0) throw new ProtocolException("Empty ciphertext.");
         if (Base64Url.Decode(signature).Length != 64) throw new ProtocolException("Signature must decode to 64 bytes.");
         return new Packet(envelope, ciphertext, signature);

@@ -30,10 +30,17 @@ namespace HomeNode.Services;
 public class ConfirmationService
 {
     private readonly AppDbContext _db;
+    private readonly NodeKeyStore _nodeKeys;
 
-    public ConfirmationService(AppDbContext db)
+    // The node keystore is the configured singleton (Program.cs
+    // resolves Node:KeyStorePath once, through NodeKeyStore). It is
+    // injected, never constructed here: a dispatcher that resolved
+    // its own store would sign with whatever the default path held
+    // whenever a different store was configured.
+    public ConfirmationService(AppDbContext db, NodeKeyStore nodeKeys)
     {
         _db = db;
+        _nodeKeys = nodeKeys;
     }
 
     // A statement-only event is written already Confirmed: the act of
@@ -137,8 +144,8 @@ public class ConfirmationService
     // by the clock and never by inference. The closing event must
     // already be written; this transition links it
     // and moves the promise, with the audit row shaped like the seed's.
-    // Released is narrower than the other outcomes (concept objects
-    // Section 1.3): only the promisee's statement releases a promise,
+    // Released is narrower than the other outcomes: only the
+    // promisee's statement releases a promise,
     // except a promise made to the house (no promisee), which its maker
     // may release. This is the one place promise state changes, so the
     // rule is enforced here and every caller is governed by it. Kept
@@ -218,8 +225,10 @@ public class ConfirmationService
     // this build: a NotifyPerson action writes one AlertDelivery, Body
     // verbatim, addressed from the event's stored AudienceRule: the
     // route person the rule names, or its backup person only when the
-    // route person cannot be delivered to at all. The event then
-    // completes. Guarded by the deliveries table itself: at most one
+    // route person cannot be delivered to at all. A plaintext landing
+    // in the member view completes the event at once; a sealed
+    // delivery completes it only when the member acknowledges the
+    // packet (in SealedIntakeService). Guarded by the deliveries table itself: at most one
     // alert per event, ever. When the stored rule names nobody
     // reachable, no delivery is written; the failure is recorded and
     // the event stays Confirmed, owed and visible. An action type
@@ -259,20 +268,47 @@ public class ConfirmationService
         // connection is a remote member, and their delivery leaves
         // as a sealed packet in the outbox instead of a plaintext
         // row in this database. The guard above (at most one alert
-        // per event) is matched on the outbox for this path.
-        if (await _db.SealedOutbox.AnyAsync(o => o.SourceEventId == ev.Id))
+        // per event) is matched on the outbox for this path, and it
+        // counts alert packets only: a proposal packet
+        // for this same event, queued by /admin/propose or a house
+        // surface, is not an alert, and counting it here stopped
+        // every proposed entry's alert from ever going out.
+        if (await _db.SealedOutbox.AnyAsync(o => o.SourceEventId == ev.Id && o.SourceKind == "Alert"))
         {
             return;
         }
         if (await _db.HouseConnections.AnyAsync(c =>
                 c.PersonId == recipient.Value && c.Standing == ConnectionStanding.Active))
         {
-            var deliveryService = new SealedDeliveryService(_db, new NodeKeyStore());
+            var deliveryService = new SealedDeliveryService(_db, _nodeKeys);
             var queuedItem = await deliveryService.QueueDeliveryAsync(
                 ev.HouseholdId, recipient.Value, ev.Body, "Alert", sourceEventId: ev.Id);
             if (queuedItem is not null)
             {
-                await CompleteAsync(ev.Id);
+                // Queueing is not delivery. The event
+                // stays Confirmed, owed and visible, until the
+                // member's acknowledgement packet comes back and
+                // sealed intake completes it; the relay loop
+                // re-posts the packet while it stays unacknowledged
+                // past the relay's collection window. (The
+                // plaintext path below completes on write because
+                // that landing is written straight into the
+                // recipient's own member view on this machine.)
+                return;
+            }
+        }
+        // Connection level: a recipient whose connection's level blocks
+        // this material (health class to a Standard connection, or
+        // any delivery to a KnockOnly level) gets no plaintext
+        // fallback row either. The member view is a delivery path,
+        // and the level's promise governs every path. The event
+        // stays Confirmed, owed and visible, with the failure on
+        // the audit trail, exactly as when nobody is reachable.
+        {
+            var deliveryService = new SealedDeliveryService(_db, _nodeKeys);
+            if (await deliveryService.IsDeliveryBlockedAsync(recipient.Value, sourceEventId: ev.Id))
+            {
+                await RecordExecutionFailureAsync(ev.Id);
                 return;
             }
         }

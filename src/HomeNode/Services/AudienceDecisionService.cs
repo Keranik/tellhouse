@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace HomeNode.Services;
 
 // The outcome of the audience decision for one event, computed once
-// at write time (spec C.2.1 clause 1). When AskPersonId is set, the
+// at write time (audience decision clause 1). When AskPersonId is set, the
 // event is stored at the interim (narrowest) audience and an ask is
 // owed to that person; BaselineClass and BaselineRule carry the
 // audience the event would have had without the ask, so an answer
@@ -24,7 +24,7 @@ public class AudienceResolution
     public List<int> FinalAudienceIds { get; init; } = new();
 }
 
-// The deterministic half of spec C.2.1, clauses 1 to 10. The model
+// The deterministic half of the audience decision rules, clauses 1 to 10. The model
 // proposes event shapes and, under clause 3, stated audiences quoted
 // from the teller's words; everything in this service is plain code
 // over the record: ceilings, clamping, defaults, the ask, and
@@ -68,7 +68,7 @@ public class AudienceDecisionService
 {
     // The ask's lapse clock: 24 hours from its presentation, the same
     // span the confirmation flow gives an unanswered proposal. The
-    // spec fixes that the clock runs from presentation; the span is
+    // rules fix that the clock runs from presentation; the span is
     // this build's stated choice.
     public static readonly TimeSpan AskLapseSpan = TimeSpan.FromHours(24);
 
@@ -93,12 +93,32 @@ public class AudienceDecisionService
         {
             case "HealthMention":
             {
+                // The route the prompt names is the route this rule
+                // stores, so the words a person confirms and the
+                // dispatch that follows can never disagree.
+                // A health mention goes to the route person, and
+                // when the teller is the route person reporting
+                // their own mention, it goes to the backup instead:
+                // the stored route becomes the backup, and no
+                // fallback to the speaker is stored, because a
+                // mention must never dispatch back to the person
+                // who reported it when the prompt named the backup.
+                var selfReportByRoutePerson =
+                    author is int selfAuthor
+                    && input.Context.DefaultRoutePersonId is int defaultRoute
+                    && selfAuthor == defaultRoute
+                    && (subject is null || subject == selfAuthor);
+                var effectiveRoute = selfReportByRoutePerson
+                    ? input.Context.BackupRoutePersonId
+                    : input.Context.DefaultRoutePersonId;
                 var rule = new JsonObject { ["Class"] = "Restricted" };
-                rule["RoutePersonId"] = input.Context.DefaultRoutePersonId is int route ? JsonValue.Create(route) : null;
-                rule["BackupPersonId"] = input.Context.BackupRoutePersonId is int backup ? JsonValue.Create(backup) : null;
+                rule["RoutePersonId"] = effectiveRoute is int route ? JsonValue.Create(route) : null;
+                rule["BackupPersonId"] = !selfReportByRoutePerson && input.Context.BackupRoutePersonId is int backup
+                    ? JsonValue.Create(backup)
+                    : null;
                 var structural = new HashSet<int>();
                 if (subject is int s) structural.Add(s);
-                if (input.Context.DefaultRoutePersonId is int r) structural.Add(r);
+                if (effectiveRoute is int r) structural.Add(r);
                 return (SensitivityClass.Restricted, rule, structural, new HashSet<int>(structural));
             }
             case "Journal":
@@ -124,9 +144,9 @@ public class AudienceDecisionService
                 }
                 return (SensitivityClass.Named, rule, structural, new HashSet<int>(structural));
             }
-            // A stated turn (the monolith
-            // ExtractionService.ComputeAudience turn case): the
-            // telling names
+            // A stated turn (the stated-turn audience case from the
+            // house layer's extraction, which the audience defaults
+            // did not carry): the telling names
             // its person, and the stored rule routes the reminder to
             // the assigned person and to nobody else, whatever the
             // household's routing says later.

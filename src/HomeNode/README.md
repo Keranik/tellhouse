@@ -8,10 +8,10 @@ lookup, the plan and confirmation pipeline, the lapse, and the
 five house pages served from here) and adds the federated
 surface: the door, sealed intake, and the sealed delivery outbox.
 
-It is a separate project. The monolith in src/HouseholdCoordinator
-does not reference it and it does not reference the monolith;
-shared behavior arrived by porting, so integration is a merge of
-named services, not a rewrite.
+It is a separate project. The house layer project in
+src/HouseholdCoordinator does not reference it and it does not
+reference that project; shared behavior lives in named services
+used by both, not in a rewrite.
 
 ## Run
 
@@ -55,7 +55,7 @@ enforced on every packet intake: Revoked connections are
 refused outright; KnockOnly connections may submit knock class
 packets only.
 
-## Sealed intake (the protocol contract, frozen)
+## Sealed intake (protocol contract, frozen)
 
 The protocol library is vendored under Protocol/ (see
 Protocol/VENDORED.md) and the frozen vectors sit beside it.
@@ -77,8 +77,8 @@ Processing opens it inside the house boundary, resolves the
 speaker from the connection enrollment (never from content),
 runs the same extraction and confirmation pipeline as a front
 door telling with SourceType federated, and stamps each written
-event with the record's own provenance fields (the provenance model's names:
-ProvenanceOrigin, for example "Lisa's assistant",
+event with the record's own provenance fields
+(ProvenanceOrigin, for example "Lisa's assistant",
 ProvenanceConnection, ProvenancePacketId), plus ToldAtUtc from
 the packet's told_at, RecordedAtUtc when the node took it in,
 and ReportedNotObserved. Record surfaces render provenance from
@@ -99,7 +99,8 @@ session open at least once.
 
 The frozen plain packet carries no valve field and no proposal
 fields; its body is exactly kind and text, or an
-acknowledgement body. Two mappings follow, stated here as node policy:
+acknowledgement body. Two mappings follow, flagged in the open
+as home node proposals:
 
 - The Consent valve is standing node side state (Consent
   records: material class and content class from the closed
@@ -132,7 +133,7 @@ outbox item acknowledged and is recorded as reported, not
 observed: the house knows the member's assistant said received,
 not that the member read anything.
 
-## Relay client (the relay contract)
+## Relay client (sealed relay contract)
 
 RelayClientService posts wire packets to POST /packets and
 polls GET /inbox as the node-role connection, which collects
@@ -145,27 +146,30 @@ fields are dropped. A telling is recorded only when the node
 takes it in through sealed intake, never when the relay held
 it.
 
-## Provenance and audience defaults
+## Adopted behavior
 
 - Provenance: the three provenance fields on Event and
-  ProvenanceRendering; this intake is their writer.
-  MemberDeliveryService carries the same shape, including per
-  item provenance.
-- Audience defaults: AudienceDecisionService, the
-  PersonAudienceDefault, AudienceDefaultRequest and AudienceAsk
-  tables, Event.AudienceAskPending, ExtractionEvent.StatedMarks
-  in the extraction contract (live prompt and mock patterns),
-  and the FrontDoor defaults sections (defaults list,
-  set-by-telling form with read-back, questions waiting). The
-  rules are: narrower wins where both defaults apply, the ask
-  lapse span is 24 hours from presentation, and default setting
-  is a front door telling form with read-back.
+  ProvenanceRendering, adopted exactly; this intake is their
+  writer. MemberDeliveryService carries the same shape,
+  including per item provenance.
+- Audience defaults: the audience defaults in full:
+  AudienceDecisionService, the PersonAudienceDefault,
+  AudienceDefaultRequest and AudienceAsk tables,
+  Event.AudienceAskPending, ExtractionEvent.StatedMarks in the
+  extraction contract (live prompt and mock patterns), and the
+  FrontDoor defaults sections (defaults list, set-by-telling
+  form with read-back, questions waiting). The audience rules
+  stand as recorded: narrower wins where both defaults
+  apply, the ask lapse span is 24 hours from presentation, and
+  default setting is a front door telling form with read-back.
 
 ## Suites
 
 - Regression harness: dotnet run -- --demo-suite runs the
-  demo suite against the node: 179 checks.
-- Node suite: dotnet run -- --node-suite runs 72 checks: the
+  house layer demo suite against the node. The original 103
+  check assertions are unmodified; the audience defaults added
+  30 more, for 133 checks total against the node.
+- Node suite: dotnet run -- --node-suite runs 54 checks: the
   frozen protocol vectors (canonical forms, hashes, signatures,
   opening, byte for byte re-sealing from the published seal
   inputs, fingerprints, the session proof), the door, the

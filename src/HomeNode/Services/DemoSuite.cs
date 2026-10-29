@@ -34,9 +34,11 @@ public static class DemoSuite
     public static async Task<int> RunAsync()
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"tellhouse-demo-{Guid.NewGuid():N}.db");
+        var keyDir = Path.Combine(Path.GetTempPath(), $"tellhouse-demo-keys-{Guid.NewGuid():N}");
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddDbContext<AppDbContext>(o => o.UseSqlite($"Data Source={dbPath}"));
+        services.AddSingleton(new NodeKeyStore(keyDir));
         services.AddScoped<ConfirmationService>();
         services.AddScoped<AudienceDecisionService>();
         services.AddSingleton<IExtractionClient>(new MockExtractionClient());
@@ -653,7 +655,7 @@ public static class DemoSuite
         // it, without the telling ever opening to him. The stored
         // audience is checked unchanged after every step.
         var runnerTasks = sp.GetRequiredService<RunnerTaskService>();
-        async Task<bool> ThrowsOnDesignate(Func<Task> act)
+        async Task<bool> ThrowsQ38(Func<Task> act)
         {
             try { await act(); return false; }
             catch (InvalidOperationException) { return true; }
@@ -672,16 +674,16 @@ public static class DemoSuite
             sourceEventIds: new[] { runnerErrand.Id });
 
         Check("Runner rule: a third party cannot bind the runner",
-            await ThrowsOnDesignate(() => plans.DesignateRunnerAsync(runnerPlan.Id, 2, 1)));
+            await ThrowsQ38(() => plans.DesignateRunnerAsync(runnerPlan.Id, 2, 1)));
         Check("Runner rule: the runner cannot bind themselves",
-            await ThrowsOnDesignate(() => plans.DesignateRunnerAsync(runnerPlan.Id, 2, 2)));
+            await ThrowsQ38(() => plans.DesignateRunnerAsync(runnerPlan.Id, 2, 2)));
         Check("Runner rule: the author cannot bind themselves as runner either",
-            await ThrowsOnDesignate(() => plans.DesignateRunnerAsync(runnerPlan.Id, 3, 3)));
+            await ThrowsQ38(() => plans.DesignateRunnerAsync(runnerPlan.Id, 3, 3)));
         await plans.DesignateRunnerAsync(runnerPlan.Id, 2, 3);
         Check("Runner rule: the tasks' author binds the runner at plan confirmation",
             (await db.Plans.FirstAsync(p => p.Id == runnerPlan.Id)).RunnerPersonId == 2);
         Check("Runner rule: only the bound runner can acknowledge the plan",
-            await ThrowsOnDesignate(() => plans.AcknowledgeAsync(runnerPlan.Id, 3)));
+            await ThrowsQ38(() => plans.AcknowledgeAsync(runnerPlan.Id, 3)));
         await plans.AcknowledgeAsync(runnerPlan.Id, 2);
         Check("Runner rule: the audit records the runner delivery for each task in the plan",
             await db.EventAudits.CountAsync(a => a.ObjectKind == "Event"
@@ -713,9 +715,9 @@ public static class DemoSuite
             && !runnerDanielInput.Context.RecentEvents.Any(e => e.Body == runnerPickup.Body));
 
         Check("Runner rule: a person inside the audience who is not the runner cannot complete the task",
-            await ThrowsOnDesignate(() => runnerTasks.CompleteTaskAsync(runnerPickup.Id, 3)));
+            await ThrowsQ38(() => runnerTasks.CompleteTaskAsync(runnerPickup.Id, 3)));
         Check("Runner rule: a person outside the audience who is not the runner cannot complete it either",
-            await ThrowsOnDesignate(() => runnerTasks.CompleteTaskAsync(runnerPickup.Id, 1)));
+            await ThrowsQ38(() => runnerTasks.CompleteTaskAsync(runnerPickup.Id, 1)));
         await runnerTasks.CompleteTaskAsync(runnerPickup.Id, 2);
         var runnerPickupAfter = await db.Events.FirstAsync(e => e.Id == runnerPickup.Id);
         Check("Runner rule: the runner completes the task, and the audit names the runner as the actor",
@@ -724,7 +726,7 @@ public static class DemoSuite
                 && a.ToState == nameof(ConfirmationState.Done) && a.ActorPersonId == 2
                 && a.Channel == "runner") == 1);
         Check("Runner rule: a completed task cannot be completed again",
-            await ThrowsOnDesignate(() => runnerTasks.CompleteTaskAsync(runnerPickup.Id, 2)));
+            await ThrowsQ38(() => runnerTasks.CompleteTaskAsync(runnerPickup.Id, 2)));
         var runnerDanielBriefAfter = await briefs.BuildBriefAsync(2, today);
         Check("Runner rule: a completed task drops out of the runner's brief; the open one stays",
             !runnerDanielBriefAfter.Any(l => l.Section == "Tasks to run" && l.Text.Contains("Timmy"))
@@ -745,7 +747,7 @@ public static class DemoSuite
             await db.EventAudits.CountAsync(a => a.ObjectKind == "Event" && a.EventId == runnerErrand.Id
                 && a.ToState == "RunnerDelivery" && a.ActorPersonId == 6) == 1);
         Check("Runner rule: after reassignment the former runner cannot complete the task",
-            await ThrowsOnDesignate(() => runnerTasks.CompleteTaskAsync(runnerErrand.Id, 2)));
+            await ThrowsQ38(() => runnerTasks.CompleteTaskAsync(runnerErrand.Id, 2)));
         await runnerTasks.CompleteTaskAsync(runnerErrand.Id, 6);
         Check("Runner rule: after reassignment the new runner can complete it",
             (await db.Events.FirstAsync(e => e.Id == runnerErrand.Id)).ConfirmationState == ConfirmationState.Done);
@@ -1026,16 +1028,16 @@ public static class DemoSuite
         householdRow.HealthMentionLevelKey = "now";
         await db.SaveChangesAsync();
 
-        // the audience layer staged exercise: the audience decision layer (spec
-        // C.2.1, clauses 1 to 10), exercised end to end on this same
-        // slice: a seeded holder, a default set by telling with
-        // read-back in the plain lane (the front door page handlers),
+        // Audience defaults, exercised end to end on this same
+        // slice under the audience decision rules (clauses 1 to 10):
+        // a seeded holder, a default set by telling with
+        // read-back on the house's own pages (the front door page handlers),
         // and an Ask holding an event at its narrowest audience.
         // Visibility below is always BriefService.IsVisibleTo against
         // the stored rule, the read the record surfaces perform.
         bool Vis(Event ev, int personId) => BriefService.IsVisibleTo(ev, personId);
 
-        Check("the audience layer: the seeded holder's Private default is in force",
+        Check("Audience defaults: the seeded holder's Private default is in force",
             await audience.GetEffectiveDefaultAsync(householdId, 6) == AudienceDefaultValue.Private
             && await audience.GetDefaultRowAsync(householdId, 6) is { Value: AudienceDefaultValue.Private });
 
@@ -1044,12 +1046,12 @@ public static class DemoSuite
         // house asks nothing. (Lisa holds no default yet at this
         // point in the block.)
         var plainNote = await svc.ProcessAsync(Input("The soup is on the stove.", 3, "18:00"));
-        Check("the audience layer: with no default set, the shape's class decides and no ask is generated",
+        Check("Audience defaults: with no default set, the shape's class decides and no ask is generated",
             plainNote.WrittenEvents.Count == 1
             && plainNote.WrittenEvents[0].SensitivityClass == SensitivityClass.Household
             && plainNote.AsksCreated.Count == 0);
 
-        // Clause 4 in the plain lane: Daniel sets an Ask default by
+        // Clause 4 on the house's own pages: Daniel sets an Ask default by
         // telling, through the front door handlers. The read-back
         // comes first; nothing is applied until he disposes of it.
         var doorPage = new HomeNode.Pages.FrontDoorModel(db, builder, svc, confirmations, audience)
@@ -1060,40 +1062,40 @@ public static class DemoSuite
         };
         await doorPage.OnPostSetDefaultAsync(2, 2, "Ask");
         var pendingDaniel = await db.AudienceDefaultRequests.OrderBy(r => r.Id).LastAsync(r => r.HolderPersonId == 2);
-        Check("the audience layer: a default set by telling waits on its read-back, unapplied",
+        Check("Audience defaults: a default set by telling waits on its read-back, unapplied",
             pendingDaniel.State == AudienceDefaultRequestState.PendingReadBack
             && pendingDaniel.ReadBackText != null && pendingDaniel.ReadBackText.Contains("Ask")
             && await audience.GetDefaultRowAsync(householdId, 2) is null);
         await doorPage.OnPostConfirmDefaultAsync(pendingDaniel.Id, 2);
         var appliedDaniel = await db.AudienceDefaultRequests.FirstAsync(r => r.Id == pendingDaniel.Id);
-        Check("the audience layer: the holder's disposal of the read-back applies the default, recorded",
+        Check("Audience defaults: the holder's disposal of the read-back applies the default, recorded",
             appliedDaniel.State == AudienceDefaultRequestState.Applied
             && appliedDaniel.DisposedByPersonId == 2
             && await audience.GetEffectiveDefaultAsync(householdId, 2) == AudienceDefaultValue.Ask);
         await doorPage.OnGetAsync();
-        Check("the audience layer: the front door shows the holder's default after the read-back",
+        Check("Audience defaults: the front door shows the holder's default after the read-back",
             doorPage.Defaults.Any(d => d.Person.Id == 2 && d.Label == "Ask"));
 
-        // Clause 7, the staged Ask: Daniel's own telling is held at
+        // Clause 7, the Ask: Daniel's own telling is held at
         // its narrowest audience (Daniel alone) until he answers.
         var askTelling = await svc.ProcessAsync(Input("The porch light is on.", 2, "19:00"));
         var askEv = askTelling.WrittenEvents[0];
         var askRow = askTelling.AsksCreated[0];
-        Check("the audience layer: an Ask default holds the event at its narrowest audience",
+        Check("Audience defaults: an Ask default holds the event at its narrowest audience",
             askTelling.AsksCreated.Count == 1
             && askEv.SensitivityClass == SensitivityClass.Personal
             && askEv.AudienceAskPending
             && Vis(askEv, 2) && !Vis(askEv, 3) && !Vis(askEv, 1));
-        Check("the audience layer: the ask is addressed to the speaker for his own telling",
+        Check("Audience defaults: the ask is addressed to the speaker for his own telling",
             askRow.AskedPersonId == 2 && askRow.State == AudienceAskState.Pending);
         var lisaAnswerThrew = false;
         try { await audience.AnswerAskAsync(askRow.Id, 3, "Household", null, DateTime.UtcNow); }
         catch (InvalidOperationException) { lisaAnswerThrew = true; }
-        Check("the audience layer: only the person asked may answer the ask", lisaAnswerThrew);
+        Check("Audience defaults: only the person asked may answer the ask", lisaAnswerThrew);
         await audience.PresentAskAsync(askRow.Id, DateTime.UtcNow);
         await audience.AnswerAskAsync(askRow.Id, 2, "Household", null, DateTime.UtcNow);
         var askEvAfter = await db.Events.FirstAsync(e => e.Id == askEv.Id);
-        Check("the audience layer: answering Household restores exactly the baseline audience",
+        Check("Audience defaults: answering Household restores exactly the baseline audience",
             askEvAfter.SensitivityClass == SensitivityClass.Household && Vis(askEvAfter, 3) && !askEvAfter.AudienceAskPending);
 
         // Clause 7: silence never widens. A second telling's ask is
@@ -1107,7 +1109,7 @@ public static class DemoSuite
         var lapsedCount = await audience.LapseAsksAsync(presentedAt.AddHours(25));
         var silentAfter = await db.Events.FirstAsync(e => e.Id == silentEv.Id);
         var silentAskAfter = await db.AudienceAsks.FirstAsync(a => a.Id == silentAsk.Id);
-        Check("the audience layer: an unanswered ask lapses and silence never widens",
+        Check("Audience defaults: an unanswered ask lapses and silence never widens",
             lapsedCount >= 1 && silentAskAfter.State == AudienceAskState.Lapsed
             && silentAfter.SensitivityClass == SensitivityClass.Personal
             && !Vis(silentAfter, 3) && !silentAfter.AudienceAskPending);
@@ -1117,7 +1119,7 @@ public static class DemoSuite
         // and the event is held to Mia and its author meanwhile.
         var miaTelling = await svc.ProcessAsync(Input("Mia is at the library.", 3, "19:10"));
         var miaEv = miaTelling.WrittenEvents[0];
-        Check("the audience layer: a telling about a person whose default says Ask asks that person, held narrow",
+        Check("Audience defaults: a telling about a person whose default says Ask asks that person, held narrow",
             miaTelling.AsksCreated.Count == 1
             && miaTelling.AsksCreated[0].AskedPersonId == 5
             && Vis(miaEv, 5) && Vis(miaEv, 3) && !Vis(miaEv, 2));
@@ -1126,11 +1128,11 @@ public static class DemoSuite
         // can lapse it. The clock runs from presentation.
         await audience.LapseAsksAsync(DateTime.UtcNow.AddDays(7));
         var miaAskBeforePresentation = await db.AudienceAsks.FirstAsync(a => a.Id == miaTelling.AsksCreated[0].Id);
-        Check("the audience layer: an ask's lapse clock starts at its presentation, not at its writing",
+        Check("Audience defaults: an ask's lapse clock starts at its presentation, not at its writing",
             miaAskBeforePresentation.State == AudienceAskState.Pending);
         await audience.AnswerAskAsync(miaTelling.AsksCreated[0].Id, 5, "Private", null, DateTime.UtcNow);
         var miaAfter = await db.Events.FirstAsync(e => e.Id == miaEv.Id);
-        Check("the audience layer: the subject's own answer keeps the event at its narrowest set",
+        Check("Audience defaults: the subject's own answer keeps the event at its narrowest set",
             !Vis(miaAfter, 2) && Vis(miaAfter, 5) && !miaAfter.AudienceAskPending);
 
         // Clause 5: where both defaults apply, the narrower governs.
@@ -1144,7 +1146,7 @@ public static class DemoSuite
         var depotTelling = await svc.ProcessAsync(Input("Daniel is at the depot.", 3, "19:15"));
         var depotEv = depotTelling.WrittenEvents[0];
         var depotRuleStored = depotEv.AudienceRule;
-        Check("the audience layer: the subject's Private default governs over the speaker's Household default (narrower wins)",
+        Check("Audience defaults: the subject's Private default governs over the speaker's Household default (narrower wins)",
             depotEv.SensitivityClass == SensitivityClass.Named
             && Vis(depotEv, 2) && Vis(depotEv, 3) && !Vis(depotEv, 1) && !Vis(depotEv, 6));
 
@@ -1153,7 +1155,7 @@ public static class DemoSuite
         // ceiling past Daniel and herself.
         var pickupTelling = await svc.ProcessAsync(Input("Daniel needs picking up from the depot at five. Share this with the household.", 3, "19:20"));
         var pickupEv = pickupTelling.WrittenEvents[0];
-        Check("the audience layer: a stated Household mark about another person cannot widen the Named ceiling",
+        Check("Audience defaults: a stated Household mark about another person cannot widen the Named ceiling",
             pickupEv.Type == EventType.Task
             && pickupEv.SensitivityClass == SensitivityClass.Named
             && Vis(pickupEv, 2) && !Vis(pickupEv, 1));
@@ -1162,14 +1164,14 @@ public static class DemoSuite
         // Daniel and herself.
         var namedTelling = await svc.ProcessAsync(Input("The letter from the school came today, just for Daniel.", 3, "19:25"));
         var namedEv = namedTelling.WrittenEvents[0];
-        Check("the audience layer: a stated Named mark narrows the telling to the named person and the speaker",
+        Check("Audience defaults: a stated Named mark narrows the telling to the named person and the speaker",
             namedEv.SensitivityClass == SensitivityClass.Named
             && Vis(namedEv, 2) && Vis(namedEv, 3) && !Vis(namedEv, 4) && !Vis(namedEv, 1));
 
         // Clause 3: conflicting stated marks in one telling cancel.
         var conflictTelling = await svc.ProcessAsync(Input("The porch light is on, just for Daniel, share this with the household.", 3, "19:30"));
         var conflictEv = conflictTelling.WrittenEvents[0];
-        Check("the audience layer: conflicting stated marks in one telling cancel and the step yields nothing",
+        Check("Audience defaults: conflicting stated marks in one telling cancel and the step yields nothing",
             conflictEv.SensitivityClass == SensitivityClass.Household && Vis(conflictEv, 1));
 
         // Clause 3's fences at the decision seam itself: a mark
@@ -1179,7 +1181,7 @@ public static class DemoSuite
         var ctxD = await builder.BuildAsync(householdId);
         ExtractionInput DirectInput() => new()
         {
-            UtteranceId = "audience-direct",
+            UtteranceId = "audience-defaults-direct",
             Transcript = "The porch light is on.",
             SourceType = "tap",
             OccurredAtLocal = DateTimeOffset.Parse("2026-10-27T19:35:00-05:00"),
@@ -1201,9 +1203,9 @@ public static class DemoSuite
             new ProposedStatedAudience { Kind = "Named", PersonIds = new List<int> { 2 }, Clause = "words nobody said" }));
         var cleanMark = await audience.DecideAsync(DirectInput(), DirectEvent(
             new ProposedStatedAudience { Kind = "Named", PersonIds = new List<int> { 2 }, Clause = "The porch light is on." }));
-        Check("the audience layer: a stated mark naming a non-member or quoting words never said yields nothing",
+        Check("Audience defaults: a stated mark naming a non-member or quoting words never said yields nothing",
             fencedMember.Class == SensitivityClass.Household && fencedQuote.Class == SensitivityClass.Household);
-        Check("the audience layer: a clean stated mark decides, as a proposal fenced by deterministic validation",
+        Check("Audience defaults: a clean stated mark decides, as a proposal fenced by deterministic validation",
             cleanMark.Class == SensitivityClass.Named
             && cleanMark.FinalAudienceIds.SequenceEqual(new[] { 2, 3 }));
 
@@ -1212,7 +1214,7 @@ public static class DemoSuite
         var margaretReq = await audience.ProposeByTellingAsync(householdId, 1, 1, AudienceDefaultValue.Household, "Set the audience default to Household.", "tap", DateTime.UtcNow);
         await audience.ConfirmReadBackAsync(margaretReq.Id, 1, DateTime.UtcNow);
         var journalFree = await svc.ProcessAsync(Input("For my journal: the garden was quiet today.", 1, "20:00"));
-        Check("the audience layer: a Household default does not lift a journal entry out of Personal",
+        Check("Audience defaults: a Household default does not lift a journal entry out of Personal",
             journalFree.WrittenEvents.Count == 1
             && journalFree.WrittenEvents[0].SensitivityClass == SensitivityClass.Personal
             && Vis(journalFree.WrittenEvents[0], 1) && !Vis(journalFree.WrittenEvents[0], 2));
@@ -1225,7 +1227,7 @@ public static class DemoSuite
         // Hand-set open prompt, as at Ex6 above (no surface offers one).
         ctxJ.OpenPrompt = new ExtractionOpenPrompt { Kind = "Journal", PromptId = "jp-03", Text = "What are you thankful for today?" };
         var journalPrompted = await svc.ProcessAsync(Input("I am thankful for the quiet house.", 1, "20:05", ctxJ));
-        Check("the audience layer: no ask is generated about material already resolved to its narrowest state",
+        Check("Audience defaults: no ask is generated about material already resolved to its narrowest state",
             journalPrompted.WrittenEvents.Count == 1
             && journalPrompted.AsksCreated.Count == 0
             && journalPrompted.WrittenEvents[0].SensitivityClass == SensitivityClass.Personal);
@@ -1234,7 +1236,7 @@ public static class DemoSuite
         // Ask default: the mention takes no default and no ask; its
         // audience is its class rule and its route.
         var healthTelling = await svc.ProcessAsync(Input("My knee hurts today.", 1, "20:10"));
-        Check("the audience layer: a default never applies to a health mention (Ask holder, still Restricted by its class rule)",
+        Check("Audience defaults: a default never applies to a health mention (Ask holder, still Restricted by its class rule)",
             healthTelling.WrittenEvents.Count == 1
             && healthTelling.WrittenEvents[0].SensitivityClass == SensitivityClass.Restricted
             && (healthTelling.WrittenEvents[0].AudienceRule ?? "").Contains("\"RoutePersonId\":2")
@@ -1243,24 +1245,24 @@ public static class DemoSuite
         // Clause 8, minors: Timmy holds no row, so he is Ask until
         // set; Daniel narrows him to Private at once; Daniel's later
         // proposal to widen waits until Timmy's own act applies it.
-        Check("the audience layer: a minor with no default set holds Ask until set",
+        Check("Audience defaults: a minor with no default set holds Ask until set",
             await audience.GetDefaultRowAsync(householdId, 4) is null
             && await audience.GetEffectiveDefaultAsync(householdId, 4) == AudienceDefaultValue.Ask);
         await audience.NarrowMinorDefaultAsync(householdId, 2, 4, AudienceDefaultValue.Private, DateTime.UtcNow);
-        Check("the audience layer: a circle adult may narrow a minor's default at any time",
+        Check("Audience defaults: a circle adult may narrow a minor's default at any time",
             await audience.GetEffectiveDefaultAsync(householdId, 4) == AudienceDefaultValue.Private);
         var widenProposal = await audience.ProposeByTellingAsync(householdId, 4, 2, AudienceDefaultValue.Household, "Set the audience default to Household.", "tap", DateTime.UtcNow);
-        Check("the audience layer: an adult's proposal to widen a minor's default is recorded and waits, unapplied",
+        Check("Audience defaults: an adult's proposal to widen a minor's default is recorded and waits, unapplied",
             widenProposal.State == AudienceDefaultRequestState.ProposalWaiting
             && await audience.GetEffectiveDefaultAsync(householdId, 4) == AudienceDefaultValue.Private);
         await audience.AcceptProposalAsync(widenProposal.Id, 4, DateTime.UtcNow);
-        Check("the audience layer: only the minor may widen their own default, by their own act",
+        Check("Audience defaults: only the minor may widen their own default, by their own act",
             await audience.GetEffectiveDefaultAsync(householdId, 4) == AudienceDefaultValue.Household);
 
         // Clause 4, holder-only, for an adult: Lisa's instruction
         // about Daniel's default is a proposal and changes nothing.
         var outsiderProposal = await audience.ProposeByTellingAsync(householdId, 2, 3, AudienceDefaultValue.Household, "Set the audience default to Household.", "tap", DateTime.UtcNow);
-        Check("the audience layer: anyone else's instruction about a person's default is a proposal, never applied",
+        Check("Audience defaults: anyone else's instruction about a person's default is a proposal, never applied",
             outsiderProposal.State == AudienceDefaultRequestState.ProposalWaiting
             && await audience.GetEffectiveDefaultAsync(householdId, 2) == AudienceDefaultValue.Private);
 
@@ -1268,7 +1270,7 @@ public static class DemoSuite
         // alone, with defaults in force all around it: no default
         // applies and no ask is generated.
         var personFree = await svc.ProcessAsync(Input("Toilet paper is low.", null, "20:15"));
-        Check("the audience layer: a person-free telling resolves by the ceiling alone, no default, no ask",
+        Check("Audience defaults: a person-free telling resolves by the ceiling alone, no default, no ask",
             personFree.WrittenEvents.Count == 1
             && personFree.WrittenEvents[0].SensitivityClass == SensitivityClass.Household
             && personFree.WrittenEvents[0].RecordPending
@@ -1284,18 +1286,18 @@ public static class DemoSuite
         await audience.ConfirmReadBackAsync(danielHouseReq.Id, 2, DateTime.UtcNow);
         var depotAfter = await db.Events.FirstAsync(e => e.Id == depotEv.Id);
         var margaretBriefD = await briefs.BuildBriefAsync(1, today);
-        Check("the audience layer: a default change is forward-looking only; a stored audience is never recomputed",
+        Check("Audience defaults: a default change is forward-looking only; a stored audience is never recomputed",
             depotAfter.AudienceRule == depotRuleStored
             && !Vis(depotAfter, 1)
             && !margaretBriefD.Any(l => l.Text.Contains("Daniel is at the depot.")));
         var depotForLisa = await lookup.AnswerWhereaboutsAsync(3, 2);
         var depotForMargaret = await lookup.AnswerWhereaboutsAsync(1, 2);
-        Check("the audience layer: at read time the stored audience decides, with no model in the path",
+        Check("Audience defaults: at read time the stored audience decides, with no model in the path",
             depotForLisa.Contains("at the depot")
             && !depotForMargaret.Contains("at the depot")
             && depotForMargaret.Contains("Domino's"));
 
-        // Promise closing discipline (concept objects Section 1.3):
+        // Promise closing discipline:
         // every closing is the closer's own words on the record, and
         // Released is set by the promisee's statement only, except a
         // promise to the house, which its maker may release. The
@@ -1443,8 +1445,8 @@ public static class DemoSuite
         // and "What did X say about Tuesday?". Lisa (3) is outside
         // the Restricted audience; Margaret (1) and Daniel (2) are
         // inside it.
-        var r14Rule = """{"Class":"Restricted","RoutePersonId":2,"BackupPersonId":3}""";
-        var r14Where = new Event
+        var fenceRule = """{"Class":"Restricted","RoutePersonId":2,"BackupPersonId":3}""";
+        var fenceWhere = new Event
         {
             HouseholdId = householdId,
             Type = EventType.Whereabouts,
@@ -1453,10 +1455,10 @@ public static class DemoSuite
             AuthorPersonId = 1,
             CreatedAtUtc = DateTime.UtcNow,
             SensitivityClass = SensitivityClass.Restricted,
-            AudienceRule = r14Rule
+            AudienceRule = fenceRule
         };
-        await confirmations.WriteStatementAsync(r14Where, "tap");
-        var r14Note = new Event
+        await confirmations.WriteStatementAsync(fenceWhere, "tap");
+        var fenceNote = new Event
         {
             HouseholdId = householdId,
             Type = EventType.HouseholdNote,
@@ -1465,10 +1467,10 @@ public static class DemoSuite
             AuthorPersonId = 1,
             CreatedAtUtc = DateTime.UtcNow,
             SensitivityClass = SensitivityClass.Restricted,
-            AudienceRule = r14Rule
+            AudienceRule = fenceRule
         };
-        await confirmations.WriteStatementAsync(r14Note, "tap");
-        var r14Personal = new Event
+        await confirmations.WriteStatementAsync(fenceNote, "tap");
+        var fencePersonal = new Event
         {
             HouseholdId = householdId,
             Type = EventType.Journal,
@@ -1479,8 +1481,8 @@ public static class DemoSuite
             SensitivityClass = SensitivityClass.Personal,
             AudienceRule = """{"Class":"Personal"}"""
         };
-        await confirmations.WriteStatementAsync(r14Personal, "tap");
-        var r14Named = new Event
+        await confirmations.WriteStatementAsync(fencePersonal, "tap");
+        var fenceNamed = new Event
         {
             HouseholdId = householdId,
             Type = EventType.HouseholdNote,
@@ -1491,69 +1493,69 @@ public static class DemoSuite
             SensitivityClass = SensitivityClass.Named,
             AudienceRule = """{"Class":"Named","AudiencePersonIds":[2,3]}"""
         };
-        await confirmations.WriteStatementAsync(r14Named, "tap");
+        await confirmations.WriteStatementAsync(fenceNamed, "tap");
 
-        var r14Slice = await builder.BuildAsync(householdId);
-        var r14SliceNote = r14Slice.RecentEvents.FirstOrDefault(e => e.Body == r14Note.Body);
+        var fenceSlice = await builder.BuildAsync(householdId);
+        var fenceSliceNote = fenceSlice.RecentEvents.FirstOrDefault(e => e.Body == fenceNote.Body);
         Check("Audience fence: the extraction slice carries each recent event's stored sensitivity class and audience rule",
-            r14SliceNote is not null
-            && r14SliceNote.SensitivityClass == "Restricted"
-            && (r14SliceNote.AudienceRule ?? "").Contains("\"RoutePersonId\":2"));
+            fenceSliceNote is not null
+            && fenceSliceNote.SensitivityClass == "Restricted"
+            && (fenceSliceNote.AudienceRule ?? "").Contains("\"RoutePersonId\":2"));
 
         // The fence at the ExtractionService level: the context on
         // the processed input is the context the client received,
         // so what it holds after ProcessAsync is what the client
         // was handed.
-        var r14LisaInput = Input("Where's Margaret?", 3, "21:00");
-        await svc.ProcessAsync(r14LisaInput);
+        var fenceLisaInput = Input("Where's Margaret?", 3, "21:00");
+        await svc.ProcessAsync(fenceLisaInput);
         Check("Audience fence: the context the client receives for a person outside the audience holds no Restricted event bodies",
-            r14LisaInput.Context.RecentEvents.All(e => BriefService.IsVisibleTo(e, 3))
-            && !r14LisaInput.Context.RecentEvents.Any(e => e.Body.Contains("clinic annex"))
-            && !r14LisaInput.Context.RecentEvents.Any(e => e.Body.Contains("ankle appointment")));
+            fenceLisaInput.Context.RecentEvents.All(e => BriefService.IsVisibleTo(e, 3))
+            && !fenceLisaInput.Context.RecentEvents.Any(e => e.Body.Contains("clinic annex"))
+            && !fenceLisaInput.Context.RecentEvents.Any(e => e.Body.Contains("ankle appointment")));
         Check("Audience fence: the fenced slice still carries the events that person may see",
-            r14LisaInput.Context.RecentEvents.Any(e => e.SensitivityClass == "Household"));
+            fenceLisaInput.Context.RecentEvents.Any(e => e.SensitivityClass == "Household"));
 
-        var r14LisaWhere = await svc.ProcessAsync(Input("Where's Margaret?", 3, "21:05"));
+        var fenceLisaWhere = await svc.ProcessAsync(Input("Where's Margaret?", 3, "21:05"));
         Check("Audience fence: a person outside the audience asking where Margaret is hears none of the Restricted record",
-            r14LisaWhere.WrittenEvents.Count == 0
-            && r14LisaWhere.HouseReply == SpokenTemplates.DoNotKnow);
-        var r14LisaWhat = await svc.ProcessAsync(Input("What did Margaret say about Tuesday?", 3, "21:06"));
+            fenceLisaWhere.WrittenEvents.Count == 0
+            && fenceLisaWhere.HouseReply == SpokenTemplates.DoNotKnow);
+        var fenceLisaWhat = await svc.ProcessAsync(Input("What did Margaret say about Tuesday?", 3, "21:06"));
         Check("Audience fence: a person outside the audience asking what Margaret said about Tuesday gets none of the Restricted body text",
-            r14LisaWhat.HouseReply is not null
-            && !r14LisaWhat.HouseReply.Contains("clinic annex")
-            && !r14LisaWhat.HouseReply.Contains("ankle appointment")
-            && !r14LisaWhat.HouseReply.Contains(r14Note.Body)
-            && !r14LisaWhat.HouseReply.Contains(r14Where.Body));
+            fenceLisaWhat.HouseReply is not null
+            && !fenceLisaWhat.HouseReply.Contains("clinic annex")
+            && !fenceLisaWhat.HouseReply.Contains("ankle appointment")
+            && !fenceLisaWhat.HouseReply.Contains(fenceNote.Body)
+            && !fenceLisaWhat.HouseReply.Contains(fenceWhere.Body));
 
-        var r14DanielWhere = await svc.ProcessAsync(Input("Where's Margaret?", 2, "21:10"));
+        var fenceDanielWhere = await svc.ProcessAsync(Input("Where's Margaret?", 2, "21:10"));
         Check("Audience fence: the route person inside the audience still gets the Restricted whereabouts from the record",
-            r14DanielWhere.HouseReply is not null
-            && r14DanielWhere.HouseReply.Contains("clinic annex"));
-        var r14DanielWhat = await svc.ProcessAsync(Input("What did Margaret say about Tuesday?", 2, "21:11"));
-        var r14MargaretWhat = await svc.ProcessAsync(Input("What did Margaret say about Tuesday?", 1, "21:12"));
+            fenceDanielWhere.HouseReply is not null
+            && fenceDanielWhere.HouseReply.Contains("clinic annex"));
+        var fenceDanielWhat = await svc.ProcessAsync(Input("What did Margaret say about Tuesday?", 2, "21:11"));
+        var fenceMargaretWhat = await svc.ProcessAsync(Input("What did Margaret say about Tuesday?", 1, "21:12"));
         Check("Audience fence: a person inside the audience (route person and subject) still gets what Margaret said about Tuesday",
-            r14DanielWhat.HouseReply is not null && r14DanielWhat.HouseReply.Contains("ankle appointment")
-            && r14MargaretWhat.HouseReply is not null && r14MargaretWhat.HouseReply.Contains("ankle appointment"));
+            fenceDanielWhat.HouseReply is not null && fenceDanielWhat.HouseReply.Contains("ankle appointment")
+            && fenceMargaretWhat.HouseReply is not null && fenceMargaretWhat.HouseReply.Contains("ankle appointment"));
 
         // A speakerless input: the unfenced slice demonstrably
         // holds Personal, Named, and Restricted events before the
         // pipeline runs, so the fenced result is not vacuous.
-        var r14AnonInput = Input("What did Margaret say about Tuesday?", null, "21:15");
-        var r14AnonHadNarrow = r14AnonInput.Context.RecentEvents.Any(e => e.SensitivityClass == "Restricted")
-            && r14AnonInput.Context.RecentEvents.Any(e => e.SensitivityClass == "Personal")
-            && r14AnonInput.Context.RecentEvents.Any(e => e.SensitivityClass == "Named");
-        var r14Anon = await svc.ProcessAsync(r14AnonInput);
+        var fenceAnonInput = Input("What did Margaret say about Tuesday?", null, "21:15");
+        var fenceAnonHadNarrow = fenceAnonInput.Context.RecentEvents.Any(e => e.SensitivityClass == "Restricted")
+            && fenceAnonInput.Context.RecentEvents.Any(e => e.SensitivityClass == "Personal")
+            && fenceAnonInput.Context.RecentEvents.Any(e => e.SensitivityClass == "Named");
+        var fenceAnon = await svc.ProcessAsync(fenceAnonInput);
         Check("Audience fence: a speakerless input's context holds no Personal, Named, or Restricted event bodies",
-            r14AnonHadNarrow
-            && r14AnonInput.Context.RecentEvents.All(e => e.SensitivityClass is "Open" or "Household")
-            && !r14AnonInput.Context.RecentEvents.Any(e => e.Body.Contains("clinic annex"))
-            && !r14AnonInput.Context.RecentEvents.Any(e => e.Body.Contains("Audience fence marker")));
+            fenceAnonHadNarrow
+            && fenceAnonInput.Context.RecentEvents.All(e => e.SensitivityClass is "Open" or "Household")
+            && !fenceAnonInput.Context.RecentEvents.Any(e => e.Body.Contains("clinic annex"))
+            && !fenceAnonInput.Context.RecentEvents.Any(e => e.Body.Contains("Audience fence marker")));
         Check("Audience fence: a speakerless question is answered only from the shared record",
-            r14Anon.HouseReply is not null
-            && !r14Anon.HouseReply.Contains("clinic annex")
-            && !r14Anon.HouseReply.Contains("ankle appointment"));
+            fenceAnon.HouseReply is not null
+            && !fenceAnon.HouseReply.Contains("clinic annex")
+            && !fenceAnon.HouseReply.Contains("ankle appointment"));
 
-        // Dispatch: dispatch silence and the raw refusal text. An
+        // Dispatch: silence and the raw refusal text. An
         // unwired action confirmed by a person records its failure
         // and stays owed; a wired NotifyPerson is untouched; a
         // decline is not an execution and records no failure. A
@@ -1632,6 +1634,147 @@ public static class DemoSuite
             refusalNote == "The house could not write that down as stated, so nothing was recorded."
             && await db.Events.CountAsync() == eventsBeforeRefusal
             && refusalLogger.Messages.Any(m => m.Contains("speaker 1") && m.Contains("NotARealType")));
+
+        // Health mention routing: the route person
+        // reports his own health mention. Daniel (2) is the default
+        // route and Lisa (3) is the backup, per the seed above. The
+        // confirmation prompt names Lisa, so the words Daniel
+        // confirms must be the words dispatch acts on: the stored
+        // rule must name Lisa as its route, and confirming must
+        // deliver to Lisa only, never back to Daniel himself.
+        var selfReport = await svc.ProcessAsync(Input("My knee hurts today.", 2, "21:40"));
+        var selfEvent = selfReport.WrittenEvents.FirstOrDefault();
+        Check("Health mention routing: the route person's own health mention confirms with the backup named",
+            selfReport.WrittenEvents.Count == 1
+            && selfEvent is not null && selfEvent.Type == EventType.HealthMention
+            && selfReport.HouseReply == "I've written that down. Do you want me to tell Lisa?"
+            && selfReport.Output.AlertDecision is { RouteToPersonId: 3, BackupPersonId: 2 });
+        Check("Health mention routing: the stored audience rule for that mention names the backup as its route, not the speaker",
+            selfEvent is not null
+            && (selfEvent.AudienceRule ?? "").Contains("\"RoutePersonId\":3")
+            && !(selfEvent.AudienceRule ?? "").Contains("\"RoutePersonId\":2")
+            && !(selfEvent.AudienceRule ?? "").Contains("\"BackupPersonId\":2"));
+        if (selfEvent is not null)
+        {
+            await confirmations.ConfirmAsync(selfEvent.Id, 2, "tap");
+        }
+        var selfAfter = selfEvent is null ? null : await db.Events.FirstAsync(e => e.Id == selfEvent.Id);
+        Check("Health mention routing: confirming delivers the mention to the backup only; the speaker receives nothing",
+            selfEvent is not null
+            && selfAfter is not null && selfAfter.ConfirmationState == ConfirmationState.Done
+            && await db.AlertDeliveries.CountAsync(d => d.EventId == selfEvent.Id && d.ToPersonId == 3) == 1
+            && await db.AlertDeliveries.CountAsync(d => d.EventId == selfEvent.Id && d.ToPersonId == 2) == 0
+            && await db.AlertDeliveries.CountAsync(d => d.EventId == selfEvent.Id) == 1);
+        // ---------- Promises and open decisions follow the stored audience ----------
+        async Task<Promise> StoredAudiencePromise(string text, SensitivityClass cls, string rule, int? promiseeId)
+        {
+            var src = new Event
+            {
+                HouseholdId = householdId,
+                Type = EventType.Commitment,
+                Body = text,
+                SubjectPersonId = 2,
+                AuthorPersonId = 2,
+                CreatedAtUtc = DateTime.UtcNow,
+                SensitivityClass = cls,
+                AudienceRule = rule
+            };
+            await confirmations.WriteStatementAsync(src, "tap");
+            var promise = new Promise
+            {
+                HouseholdId = householdId,
+                PromisorPersonId = 2,
+                PromiseePersonId = promiseeId,
+                CommitmentText = text,
+                SourceEventId = src.Id,
+                State = PromiseState.Made
+            };
+            db.Promises.Add(promise);
+            await db.SaveChangesAsync();
+            return promise;
+        }
+
+        var makerOnlyPromise = await StoredAudiencePromise("Stored audience maker-only promise canary.",
+            SensitivityClass.Named, """{"Class":"Named","MakerPersonId":2,"AudiencePersonIds":[2]}""", null);
+        var makerBriefC = await briefs.BuildBriefAsync(2, today);
+        var lisaBriefC = await briefs.BuildBriefAsync(3, today);
+        var margaretBriefC = await briefs.BuildBriefAsync(1, today);
+        Check("Stored audience: the brief shows a no-promisee promise stored maker-only to its maker only, never to everyone",
+            makerBriefC.Any(l => l.Text.Contains("maker-only promise canary"))
+            && !lisaBriefC.Any(l => l.Text.Contains("maker-only promise canary"))
+            && !margaretBriefC.Any(l => l.Text.Contains("maker-only promise canary")));
+
+        var namedPromiseC = await StoredAudiencePromise("Stored audience named promise canary.",
+            SensitivityClass.Named, """{"Class":"Named","MakerPersonId":2,"PromiseePersonId":3,"AudiencePersonIds":[2,3]}""", 3);
+        var lisaBriefNamed = await briefs.BuildBriefAsync(3, today);
+        var margaretBriefNamed = await briefs.BuildBriefAsync(1, today);
+        Check("Stored audience: the brief shows a named promise to its maker and promisee only",
+            lisaBriefNamed.Any(l => l.Text.Contains("named promise canary"))
+            && !margaretBriefNamed.Any(l => l.Text.Contains("named promise canary")));
+
+        var housePromiseC = await StoredAudiencePromise("Stored audience house promise canary.",
+            SensitivityClass.Household, """{"Class":"Household"}""", null);
+        var margaretBriefHouse = await briefs.BuildBriefAsync(1, today);
+        Check("Stored audience: a no-promisee promise whose stored rule is Household still reaches the house in the brief (the stored rule decides, not a blanket)",
+            margaretBriefHouse.Any(l => l.Text.Contains("house promise canary")));
+
+        var promisesPageC = new HomeNode.Pages.PromisesModel(db, confirmations)
+        {
+            TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+                new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+                new PassthroughTempDataProvider())
+        };
+        promisesPageC.ViewerId = 3;
+        await promisesPageC.OnGetAsync();
+        Check("Stored audience: /Promises for Lisa lists the promise named to her but not the maker-only promise",
+            promisesPageC.Promises.Any(p => p.Id == namedPromiseC.Id)
+            && !promisesPageC.Promises.Any(p => p.Id == makerOnlyPromise.Id));
+        promisesPageC.ViewerId = 2;
+        await promisesPageC.OnGetAsync();
+        Check("Stored audience: /Promises for the maker lists both the maker-only and the named promise",
+            promisesPageC.Promises.Any(p => p.Id == makerOnlyPromise.Id)
+            && promisesPageC.Promises.Any(p => p.Id == namedPromiseC.Id));
+        promisesPageC.ViewerId = null;
+        await promisesPageC.OnGetAsync();
+        Check("Stored audience: /Promises with no reader named shows the Household promise and neither narrowed promise",
+            promisesPageC.Promises.Any(p => p.Id == housePromiseC.Id)
+            && !promisesPageC.Promises.Any(p => p.Id == makerOnlyPromise.Id)
+            && !promisesPageC.Promises.Any(p => p.Id == namedPromiseC.Id));
+
+        // A Private dinner question (Lisa's, stored Personal
+        // under her seeded default shape) under Open decisions.
+        var privateDecision = new Event
+        {
+            HouseholdId = householdId,
+            Type = EventType.HouseholdNote,
+            Body = "Stored audience private dinner question canary?",
+            SubjectPersonId = 3,
+            AuthorPersonId = 3,
+            CreatedAtUtc = DateTime.UtcNow,
+            SensitivityClass = SensitivityClass.Personal,
+            AudienceRule = """{"Class":"Personal","AudiencePersonIds":[3]}""",
+            Details = """{"DecisionTopic":"dinner","DecisionState":"Undecided"}"""
+        };
+        await confirmations.WriteStatementAsync(privateDecision, "tap");
+        var plansPageC = new HomeNode.Pages.PlansModel(db, plans)
+        {
+            TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+                new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+                new PassthroughTempDataProvider())
+        };
+        plansPageC.ViewerId = 2;
+        await plansPageC.OnGetAsync();
+        Check("Stored audience: /Plans open decisions do not show a Private note to another reader",
+            !plansPageC.OpenDecisions.Any(e => e.Id == privateDecision.Id));
+        plansPageC.ViewerId = 3;
+        await plansPageC.OnGetAsync();
+        Check("Stored audience: /Plans open decisions still show a Private note to its author",
+            plansPageC.OpenDecisions.Any(e => e.Id == privateDecision.Id));
+        plansPageC.ViewerId = null;
+        await plansPageC.OnGetAsync();
+        Check("Stored audience: /Plans with no reader named shows Household open decisions and never the Private note",
+            plansPageC.OpenDecisions.Any(e => e.SensitivityClass == SensitivityClass.Household)
+            && !plansPageC.OpenDecisions.Any(e => e.Id == privateDecision.Id));
 
         Console.WriteLine();
         Console.WriteLine($"Demo suite: {_passed} passed, {_failed} failed.");
@@ -1764,11 +1907,11 @@ public static class DemoSuite
             new SupplyItem { Id = 14, HouseholdId = household.Id, Name = "Evening pills (bottle)", Unit = "bottle", QuantityOnHand = 9m, SeededDailyUsageRate = 0m, ReorderLeadDays = 7, AssignedPersonId = 1, Aliases = """["evening ones","evening pills"]""" });
         db.SaveChanges();
 
-        // The seeded holder for the audience layer staged exercise (spec
-        // C.2.1): June holds a Private audience default, seeded the
+        // The seeded holder for the audience defaults exercise:
+        // June holds a Private audience default, seeded the
         // way the demo seed seeds Lisa's. She authors and is the
         // subject of nothing in the corpus above, so the row is inert
-        // until the staged block reads it.
+        // until the exercise block reads it.
         db.PersonAudienceDefaults.Add(new PersonAudienceDefault
         {
             HouseholdId = household.Id,

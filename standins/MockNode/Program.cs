@@ -5,10 +5,12 @@ using System.Text.Json.Nodes;
 using MockNode;
 
 // TEST DOUBLE for the home node, written for the stand-in checks
-// only. This node double stands in for the home node's door
-// registry and sealed ingress during the stand-in protocol
-// checks. It is not the home node deliverable: extraction, the
-// record pipeline, and the house pages are the home node's work.
+// only. The home node had not landed when the stand-ins were
+// built and reconciled, so this node double stands in for the
+// home node's door registry and sealed ingress during the
+// stand-in protocol checks. It is not the home node deliverable:
+// extraction, the record pipeline, and the house pages are home
+// node work.
 //
 // What this double does implement for real, because the stand-in
 // checks depend on it, all against the frozen protocol contract
@@ -248,7 +250,7 @@ async Task ProcessPacket(JsonObject wire)
             SaveArr(AcksPath, acks);
         }
         Trail(packetId, "acknowledgement recorded", "reported, not observed");
-        // Proposal disposal (the home node mapping): if this
+        // Proposal disposal (home node mapping): if this
         // acknowledgement answers a proposal delivery, a confirmed
         // or declined disposition disposes the proposal. A receipt
         // disposition disposes nothing.
@@ -289,7 +291,7 @@ async Task ProcessPacket(JsonObject wire)
     { Reject("session not open for this connection"); return; }
 
     // The Consent valve is standing node state, mapped by packet
-    // kind (the home node mapping): a raw telling maps to the OneLiner
+    // kind (home node mapping): a raw telling maps to the OneLiner
     // class. No Consent in force for the class means the valve is
     // closed and the packet is rejected whole: one trail line, no
     // record event, no partial intake.
@@ -323,9 +325,9 @@ async Task ProcessPacket(JsonObject wire)
     Trail(packetId, "recorded", "telling admitted, Consent in force for class OneLiner on this connection");
 
     // Sealed delivery outbox: this double routes a verbatim
-    // delivery of Lisa's telling text to Daniel's connection. The home
-    // node owns the real pipeline decision; the delivery mechanics
-    // here are the stand-ins' exercise.
+    // delivery of Lisa's telling text to Daniel's connection. The
+    // home node owns the real pipeline decision; the delivery
+    // mechanics here are the stand-in exercise.
     if (conn["person"]!.GetValue<string>() == "Lisa")
     {
         JsonObject? daniel = null;
@@ -434,8 +436,8 @@ app.MapPost("/door/knock", (JsonObject body) =>
         Trail("knock", "rejected", "fingerprint did not match the presented public key");
         return Results.Json(new { error = "fingerprint mismatch" }, statusCode: 403);
     }
-    // Connection ids are the contract's frozen scope ids. the home node
-    // owns the real registry; this double assigns the same ids.
+    // Connection ids are the contract's frozen scope ids. The home
+    // node owns the real registry; this double assigns the same ids.
     var partyId = body["party_id"]!.GetValue<string>();
     var connId = partyId switch
     {

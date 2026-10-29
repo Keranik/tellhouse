@@ -5,7 +5,7 @@ using HomeNode.Protocol;
 
 namespace HomeNode.Services;
 
-// The node's side of the sealed relay (see relay/CONTRACT.md).
+// The node's side of the sealed relay (the relay contract).
 // The relay is a dumb store-and-forward: POST /packets
 // accepts a protocol wire packet, GET /inbox polls a destination
 // bucket. Auth is the relay's own standing check: the connection
@@ -46,6 +46,12 @@ public class RelayClientService
 
     public record RelayPacket(string WireJson, long ReceivedAt, long ExpiresAt);
 
+    // Poll entries dropped as malformed by the most recent poll
+    // The relay drops every packet it forwards, so
+    // a malformed entry must be counted and surfaced here, never
+    // allowed to throw away the valid entries polled with it.
+    public int LastPollDroppedMalformed { get; private set; }
+
     public async Task<RelayPosted> PostPacketAsync(string wireJson, CancellationToken ct = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/packets");
@@ -54,6 +60,24 @@ public class RelayClientService
         request.Content = new StringContent(wireJson, Encoding.UTF8, "application/json");
         using var response = await _http.SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
+        if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // 409 duplicate: the relay already holds a
+            // packet with this id, which is what a successful post
+            // leaves behind when its response is lost. The packet
+            // IS at the relay, so the post counts as sent; the
+            // caller marks the outbox item Sent and moves on to
+            // the next one instead of re-posting forever.
+            string packetId = "";
+            try
+            {
+                using var wire = JsonDocument.Parse(wireJson);
+                packetId = wire.RootElement.GetProperty("envelope")
+                    .GetProperty("packet_id").GetString() ?? "";
+            }
+            catch (JsonException) { }
+            return new RelayPosted(packetId, 0);
+        }
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException($"Relay refused the packet: {(int)response.StatusCode} {body}");
@@ -78,12 +102,26 @@ public class RelayClientService
         }
         using var doc = JsonDocument.Parse(body);
         var packets = new List<RelayPacket>();
+        LastPollDroppedMalformed = 0;
         foreach (var entry in doc.RootElement.GetProperty("packets").EnumerateArray())
         {
-            packets.Add(new RelayPacket(
-                RebuildWireJson(entry),
-                entry.GetProperty("received_at").GetInt64(),
-                entry.GetProperty("expires_at").GetInt64()));
+            // Per-packet isolation: the relay has
+            // already dropped every entry in this response, so an
+            // entry that cannot be rebuilt (a type-confused field
+            // is the case in point) is skipped and counted, and
+            // the valid entries are still returned for intake.
+            try
+            {
+                packets.Add(new RelayPacket(
+                    RebuildWireJson(entry),
+                    Envelope.RequireInt64(entry, "received_at"),
+                    Envelope.RequireInt64(entry, "expires_at")));
+            }
+            catch (Exception ex) when (ex is ProtocolException or JsonException
+                    or FormatException or InvalidOperationException or KeyNotFoundException)
+            {
+                LastPollDroppedMalformed++;
+            }
         }
         return packets;
     }
@@ -99,19 +137,19 @@ public class RelayClientService
         // the relay's flat field order does not survive into the
         // wire packet. Relay timing fields are dropped.
         var envelope = new Envelope(
-            flatEntry.GetProperty("packet_id").GetString() ?? "",
-            flatEntry.GetProperty("household_endpoint").GetString() ?? "",
-            flatEntry.GetProperty("connection_id").GetString() ?? "",
-            EnvelopeClassNames.FromWire(flatEntry.GetProperty("envelope_class").GetString() ?? ""),
-            flatEntry.GetProperty("delivery_mode").GetString() ?? "",
-            flatEntry.GetProperty("ciphertext_length").GetInt64(),
-            flatEntry.GetProperty("issued_at").GetInt64(),
-            flatEntry.GetProperty("ciphertext_hash").GetString() ?? "");
+            Envelope.RequireString(flatEntry, "packet_id"),
+            Envelope.RequireString(flatEntry, "household_endpoint"),
+            Envelope.RequireString(flatEntry, "connection_id"),
+            EnvelopeClassNames.FromWire(Envelope.RequireString(flatEntry, "envelope_class")),
+            Envelope.RequireString(flatEntry, "delivery_mode"),
+            Envelope.RequireInt64(flatEntry, "ciphertext_length"),
+            Envelope.RequireInt64(flatEntry, "issued_at"),
+            Envelope.RequireString(flatEntry, "ciphertext_hash"));
         var wire = new JsonObject
         {
-            ["ciphertext"] = flatEntry.GetProperty("ciphertext").GetString(),
+            ["ciphertext"] = Envelope.RequireString(flatEntry, "ciphertext"),
             ["envelope"] = JsonNode.Parse(envelope.ToCanonicalJson()),
-            ["signature"] = flatEntry.GetProperty("signature").GetString()
+            ["signature"] = Envelope.RequireString(flatEntry, "signature")
         };
         return wire.ToJsonString();
     }

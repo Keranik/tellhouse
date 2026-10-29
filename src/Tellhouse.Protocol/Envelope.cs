@@ -36,8 +36,8 @@ public static class EnvelopeClassNames
 }
 
 /// <summary>
-/// The relay visible envelope. Its fields are exactly the relay-visible
-/// metadata list and nothing else:
+/// The relay visible envelope. Its fields are exactly the
+/// relay-visible metadata list and nothing else:
 ///
 ///   packet_id            unique id of this packet
 ///   household_endpoint   routing address of the household node
@@ -147,7 +147,7 @@ public sealed record Envelope(
         if (!names.SequenceEqual(FieldNames))
         {
             throw new ProtocolException(
-                "Envelope fields must be exactly the relay-visible list. Got: " + string.Join(",", names));
+                "Envelope fields must be exactly the relay-visible metadata list. Got: " + string.Join(",", names));
         }
         var env = new Envelope(
             root.GetProperty("packet_id").GetString() ?? "",

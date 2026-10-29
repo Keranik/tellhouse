@@ -14,10 +14,16 @@ namespace HomeNode.Services;
 public class PlanAssemblyService
 {
     private readonly AppDbContext _db;
+    private readonly NodeKeyStore _nodeKeys;
 
-    public PlanAssemblyService(AppDbContext db)
+    // The node keystore is the configured singleton, injected for
+    // the same reason as in ConfirmationService: plan deliveries
+    // must be signed with the configured store, never with a
+    // store resolved again from a default path.
+    public PlanAssemblyService(AppDbContext db, NodeKeyStore nodeKeys)
     {
         _db = db;
+        _nodeKeys = nodeKeys;
     }
 
     public async Task<Plan> CreatePlanAsync(int householdId, string label, DateTime? anchorAtLocal, int? anchorEventId = null)
@@ -336,18 +342,36 @@ public class PlanAssemblyService
         // sealed packet in the outbox, deduped by a one-way
         // fingerprint of the landing, instead of a plaintext row
         // here. Members with no connection keep the house layer
-        // landing below, exactly as the monolith had it.
+        // landing below, exactly as the house layer had it.
         if (await _db.HouseConnections.AnyAsync(c =>
                 c.PersonId == toPersonId && c.Standing == ConnectionStanding.Active))
         {
             var plan = await _db.Plans.FirstAsync(p => p.Id == element.PlanId);
             var dedupeKey = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes($"{element.Id}|{toPersonId}|{element.BodyText}")));
-            var deliveryService = new SealedDeliveryService(_db, new NodeKeyStore());
+            var deliveryService = new SealedDeliveryService(_db, _nodeKeys);
             var queuedItem = await deliveryService.QueueDeliveryAsync(
                 plan.HouseholdId, toPersonId, element.BodyText, "Plan",
                 sourcePlanElementId: element.Id, dedupeKey: dedupeKey);
             if (queuedItem is not null)
+            {
+                return;
+            }
+            // Connection level: a landing blocked by the person's
+            // connection level does not fall back to a plaintext
+            // row; the level governs this path too.
+            if (await deliveryService.IsDeliveryBlockedAsync(toPersonId, sourcePlanElementId: element.Id))
+            {
+                return;
+            }
+        }
+        // The same gate on the road to the plaintext landing for a
+        // person whose connection does not stand Active at all
+        // (a KnockOnly connection holds no Active row to enter the
+        // branch above, but its level still bars deliveries).
+        {
+            var deliveryService = new SealedDeliveryService(_db, _nodeKeys);
+            if (await deliveryService.IsDeliveryBlockedAsync(toPersonId, sourcePlanElementId: element.Id))
             {
                 return;
             }

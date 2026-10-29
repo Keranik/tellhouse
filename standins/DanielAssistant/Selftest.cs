@@ -4,11 +4,11 @@ using System.Text.Json.Nodes;
 
 namespace DanielAssistant;
 
-// Conformance checks against the shared the protocol test vectors
-// (standins/vectors/test-vectors.json, copied from the frozen ws/k
-// file). This code codes against the vectors from the outside,
-// exactly as the contract requires of a consumer: it never calls
-// the protocol library.
+// Conformance checks against the shared test vectors
+// (standins/vectors/test-vectors.json, copied from the frozen
+// contract's file). This code codes against the vectors from the
+// outside, exactly as the contract requires of a later
+// implementation: it never calls the protocol library.
 public static class Selftest
 {
     public static int Run(string vectorsPath)
@@ -139,6 +139,72 @@ public static class Selftest
             "conn-self", "session", "session", "hh-demo-01", "pkt-self", 1793275200L);
         Check("same sender sealing fresh packets yields different ciphertext",
             w1["ciphertext"]!.GetValue<string>() != w2["ciphertext"]!.GetValue<string>());
+
+        // Session hunt challenge choice (the answer must pair
+        // with the challenge the node actually holds open, never
+        // with a leftover from an interrupted attempt).
+        SessionHunt.Attempt Att(string nonce, long at) => new(nonce, at);
+        SessionHunt.Candidate Cand(string id, string server, long at) => new(id, server, at);
+        var only = SessionHunt.Choose(
+            new[] { Att("n1", 1000) },
+            new[] { Cand("pkt-a", "s1", 1002) }, 1003);
+        Check("session hunt: the only challenge is chosen and pairs with its attempt",
+            only != null && only.PacketId == "pkt-a" && only.ClientNonce == "n1"
+            && only.ServerNonce == "s1");
+        var staleOnly = SessionHunt.Choose(
+            new[] { Att("n1", 1000), Att("n2", 1010) },
+            new[] { Cand("pkt-a", "s1", 1002) }, 1012);
+        Check("session hunt: a challenge from a superseded attempt alone is not answered",
+            staleOnly == null);
+        var mixed = SessionHunt.Choose(
+            new[] { Att("n1", 1000), Att("n2", 1010) },
+            new[] { Cand("pkt-a", "s1", 1002), Cand("pkt-b", "s2", 1012) }, 1013);
+        Check("session hunt: with a stale and a current challenge queued, the current one is chosen and paired with the latest attempt",
+            mixed != null && mixed.PacketId == "pkt-b" && mixed.ClientNonce == "n2"
+            && mixed.ServerNonce == "s2");
+        var twoLive = SessionHunt.Choose(
+            new[] { Att("n1", 1000), Att("n2", 1003) },
+            new[] { Cand("pkt-a", "s1", 1005), Cand("pkt-b", "s2", 1007) }, 1008);
+        Check("session hunt: the most recently issued answerable challenge wins",
+            twoLive != null && twoLive.PacketId == "pkt-b" && twoLive.ClientNonce == "n2");
+        var expired = SessionHunt.Choose(
+            new[] { Att("n1", 1000) },
+            new[] { Cand("pkt-a", "s1", 1002) }, 1002 + 111);
+        Check("session hunt: a challenge past its lifetime is not answered",
+            expired == null);
+        var stillLive = SessionHunt.Choose(
+            new[] { Att("n1", 1000) },
+            new[] { Cand("pkt-a", "s1", 1002) }, 1002 + 100);
+        Check("session hunt: a challenge inside its lifetime is answered",
+            stillLive != null && stillLive.PacketId == "pkt-a");
+
+
+        // Session freshness: the re-open rule the
+        // auto session path runs before any session class send.
+        Check("session freshness: a proof 19 minutes old is fresh",
+            SessionFreshness.IsFresh(10000, 10000 + 19 * 60));
+        Check("session freshness: a proof 31 minutes old is stale and must be re-opened before sending",
+            SessionFreshness.IsStale(10000, 10000 + 31 * 60));
+        Check("session freshness: no recorded proof is stale, never fresh",
+            SessionFreshness.IsStale(0, 10000) && !SessionFreshness.IsFresh(0, 10000));
+        // The key file writer creates owner only (0600)
+        // files, and the tighten step repairs a file an older build
+        // left readable, on platforms that carry file modes.
+        if (!OperatingSystem.IsWindows())
+        {
+            var keyDir = Path.Combine(Path.GetTempPath(), "standin-keyfile-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(keyDir);
+            var keyPath = Path.Combine(keyDir, "keys.json");
+            Protocol.WriteKeyFile(keyPath, "{\"d\":\"test-only\"}");
+            Check("a freshly written key file is owner read/write only (0600)",
+                File.GetUnixFileMode(keyPath) == (UnixFileMode.UserRead | UnixFileMode.UserWrite));
+            File.SetUnixFileMode(keyPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            Protocol.TightenKeyFile(keyPath);
+            Check("a key file left group/world readable is tightened to 0600 on load",
+                File.GetUnixFileMode(keyPath) == (UnixFileMode.UserRead | UnixFileMode.UserWrite));
+            try { Directory.Delete(keyDir, true); } catch (IOException) { }
+        }
 
         Console.WriteLine($"SELFTEST {pass} passed, {fail} failed");
         return fail == 0 ? 0 : 1;

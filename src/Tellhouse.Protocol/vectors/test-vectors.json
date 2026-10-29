@@ -3,7 +3,7 @@
   "contract_version": "1.0",
   "generated_by": "tools/Tellhouse.Protocol.VectorGen",
   "notes": [
-    "Test key material only. Private keys are published here so anyone can reproduce the vectors. They protect nothing and must never protect a real household.",
+    "Test key material only. Private keys are published here so any lane can reproduce the vectors. They protect nothing and must never protect a real household.",
     "Signatures are verification only: verify them, never compare bytes. Every other byte must reproduce exactly.",
     "The envelope object in each vector is the complete relay visible metadata. There are no other relay visible fields."
   ],

@@ -14,6 +14,28 @@
     <p><strong>@Model.Note</strong></p>
 }
 
+<form method="get">
+    <label>
+        Reading as
+        <select name="ViewerId" onchange="this.form.submit()">
+            <option value="">No reader named (house entries only)</option>
+            @foreach (var person in Model.People)
+            {
+                if (Model.ViewerId == person.Id)
+                {
+                    <option value="@person.Id" selected>@person.DisplayName</option>
+                }
+                else
+                {
+                    <option value="@person.Id">@person.DisplayName</option>
+                }
+            }
+        </select>
+    </label>
+</form>
+<p>Promises are listed as the reader named here may see them, under
+   the audience stored on the telling that made each promise.</p>
+
 @if (Model.Promises.Count == 0)
 {
     <p>No promises on the record yet.</p>

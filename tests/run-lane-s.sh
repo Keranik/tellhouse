@@ -1,7 +1,8 @@
 #!/bin/bash
-# the backup tool proof run: build, selftest, and (when present) the restore
-# proof against a real seeded record database, when one is present. This script makes no network calls
-# beyond the local NuGet cache restore that dotnet build performs.
+# the backup tool proof run: build, selftest, and (when present) the
+# restore proof against a real seeded record database, when one is
+# present. This script makes no network calls beyond the local
+# NuGet cache restore that dotnet build performs.
 set -u
 export PATH="$HOME/.dotnet:$PATH"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,6 +27,6 @@ if [ -f "$REAL_DB" ]; then
   dotnet "$DLL" verify --before "$WORK/real.db" --after "$WORK/fresh/node.db" || exit 1
   echo "real-db restore proof: verify equal (see line above)"
 else
-  echo "real seeded database not present in this tree; fixture proof only"
+  echo "real seeded database not present; fixture proof only"
 fi
 echo "BACKUP PROOF RUN COMPLETE"

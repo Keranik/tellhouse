@@ -167,15 +167,14 @@ public class Event
     // connection carried it, and which packet it arrived in. All
     // three are null for a telling made on the house layer itself,
     // and surfaces render provenance only when it is present, so a
-    // plain lane entry never borrows a federated origin. The values
+    // plain local entry never borrows a federated origin. The values
     // are recorded by the node when the packet is opened, exactly as
     // reported by the ingress, and are part of the record the
     // audience rules filter like any other field of the event.
-    // (Field names and semantics are the provenance field names,
-    // so the record is the one provenance source of truth;
-    // rendering is ProvenanceRendering.Describe. A packet view
-    // over traffic is an observability surface, not a second
-    // source.)
+    // (The field names and semantics are kept exactly, so the
+    // record is the one provenance source of truth; rendering
+    // is ProvenanceRendering.Describe. A packet view is an
+    // observability surface over traffic, not a second source.)
     public string? ProvenanceOrigin { get; set; }
     public string? ProvenanceConnection { get; set; }
     public string? ProvenancePacketId { get; set; }
@@ -209,7 +208,7 @@ public class Event
     // and lapse never discards it.
     public bool RecordPending { get; set; }
 
-    // True while an audience ask (spec C.2.1 clause 7) about this
+    // True while an audience ask (audience decision clause 7) about this
     // event is unanswered or unpresented: the event is stored at the
     // narrowest audience its ceiling permits until the entitled
     // person answers, and an unanswered ask never widens it.
@@ -631,7 +630,7 @@ public class PlanDelivery
     public DateTime DeliveredAtUtc { get; set; }
 }
 
-// The standing audience default a person may hold (spec C.2.1 clause
+// The standing audience default a person may hold (audience decision clause
 // 4): Private resolves the holder's unspecified tellings to Personal,
 // Household leaves them at the shape's class, Ask asks the holder
 // before the audience is set. No default can select Open; the widest

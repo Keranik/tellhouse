@@ -2,11 +2,11 @@
 """Stand-in protocol checks, against the frozen protocol
 contract version 1.0 and the real relay.
 
-Boots the two stand-ins, the real relay (from this tree), and the stand-in node double (a test harness
-standing in for the home node). Runs the door
-ceremony, the contract section 7 session open exchange, the
-scripted acts, the Consent valve exercise, and the negative
-checks, and writes an evidence JSON.
+Boots the two stand-ins, the real relay (from this tree), and
+the stand-in node double (a test harness standing in for the
+home node). Runs the door ceremony, the contract section 7
+session open exchange, the scripted acts, the Consent valve
+exercise, and the negative checks, and writes an evidence JSON.
 
 The node double is harness code, not a home node deliverable; the
 results are evidence about the stand-ins' protocol behavior and
@@ -27,9 +27,9 @@ import urllib.request
 import urllib.error
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RELAY_SCRIPT = os.path.expanduser(
-    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "relay", "src", "sealed_relay.py"))
-RUN = "/tmp/standin-checks-run"
+RELAY_SCRIPT = os.path.join(
+    os.path.dirname(ROOT), "relay", "src", "sealed_relay.py")
+RUN = "/tmp/standin-run"
 DOTNET = os.path.expanduser("~/.dotnet/dotnet")
 RELAY = "http://127.0.0.1:7411"
 NODE = "http://127.0.0.1:7412"
@@ -280,7 +280,7 @@ def main():
         f3 = {"packet_id", "household_endpoint", "connection_id", "envelope_class", "delivery_mode",
               "ciphertext_length", "issued_at", "ciphertext_hash", "received_at", "expires_at"}
         packets_view = view.get("packets") if isinstance(view, dict) else view
-        check("relay view carries only the relay-visible fields plus relay timing",
+        check("relay view carries only the envelope fields plus relay timing",
               isinstance(packets_view, list)
               and all(isinstance(p, dict) and set(p.keys()) <= f3 for p in packets_view), view)
 
@@ -341,6 +341,74 @@ def main():
         s, b = req("POST", LISA + "/act/poll")
         check("Lisa receives no delivery", s == 200 and b.get("opened") == 0, b)
 
+        # Stale challenge recovery: two knocks in a row (the
+        # second supersedes the first at the node, but the first
+        # challenge delivery is still queued at the relay). The
+        # answer hunt takes both deliveries; it must answer the
+        # newest challenge, paired with the newest knock, and the
+        # session must open. Answering the leftover challenge
+        # mixes two exchanges' nonces and the node rejects it,
+        # while the real challenge, already taken by the same
+        # poll, could never be answered at all.
+        def session_rec(conn):
+            return req("GET", NODE + "/harness/sessions")[1].get(conn) or {}
+        req("POST", LISA + "/act/session-open")
+        got = wait_for(lambda: (lambda r: r if (r.get("stage") == "challenge"
+                                                and r.get("server_nonce")) else None)(
+                           session_rec(lisa_conn)), timeout=25)
+        nonce_a = (got or {}).get("server_nonce")
+        req("POST", LISA + "/act/session-open")
+        wait_for(lambda: (lambda r: r if (r.get("stage") == "challenge"
+                                          and r.get("server_nonce") not in (None, nonce_a)) else None)(
+                     session_rec(lisa_conn)), timeout=25)
+        s, ans = req("POST", LISA + "/act/session-answer")
+        opened = wait_for(lambda: session_rec(lisa_conn).get("open") is True, timeout=25)
+        check("a challenge left over from a superseded open attempt does not poison the next one: the answer pairs with the newest challenge and the session opens",
+              bool(opened) and bool(ans.get("challenge_packet")), ans)
+
+        # A delivery that lands behind a session challenge is
+        # taken by the same destructive poll that hunts for the
+        # challenge. It must be held and then acknowledged once
+        # the session opens, never stored by the hunt without its
+        # acknowledgement (which strands it: the house waits for
+        # a receipt that never comes).
+        daniel_inbox_before = {d["packet_id"] for d in
+                               json.load(open(os.path.join(stores["daniel"], "inbox.json")))}
+        req("POST", DANIEL + "/act/session-open")
+        wait_for(lambda: session_rec(daniel_conn).get("stage") == "challenge" or None, timeout=25)
+        req("POST", LISA + "/trigger/test-send", {"act": "lisa-telling-1"})
+        def delivery_queued():
+            s_, view_ = req("GET", RELAY + "/relay/view")
+            pk = view_.get("packets") if isinstance(view_, dict) else view_
+            return bool(pk) and any(p.get("connection_id") == daniel_conn
+                                    and p.get("envelope_class") == "session" for p in pk)
+        wait_for(delivery_queued, timeout=25)
+        req("POST", DANIEL + "/act/session-answer")
+        req("POST", DANIEL + "/act/poll")
+
+        def new_delivery():
+            inbox_now = json.load(open(os.path.join(stores["daniel"], "inbox.json")))
+            new = [d for d in inbox_now
+                   if d["packet_id"] not in daniel_inbox_before and d.get("kind") == "delivery"]
+            return new or None
+        new_del = wait_for(new_delivery, timeout=25) or []
+        new_ids = {d["packet_id"] for d in new_del}
+        acks_now = wait_for(lambda: (lambda a: a if any(
+            x["acked_packet_id"] in new_ids for x in a) else None)(
+            req("GET", NODE + "/harness/acks")[1]), timeout=25) or []
+        check("a delivery taken during a cold session exchange is held, then acknowledged once the session opens, not stranded",
+              len(new_del) >= 1
+              and any(x["acked_packet_id"] in new_ids and x["from_person"] == "Daniel"
+                      for x in acks_now),
+              {"new_deliveries": [d["packet_id"] for d in new_del],
+               "acks": [x["acked_packet_id"] for x in acks_now]})
+        inbox_final = json.load(open(os.path.join(stores["daniel"], "inbox.json")))
+        check("the held delivery reaches Daniel inbox exactly once",
+              len(new_del) >= 1
+              and all(sum(1 for d in inbox_final if d["packet_id"] == pid) == 1
+                      for pid in new_ids),
+              [d["packet_id"] for d in inbox_final])
+
         # Custody and separation.
         lisa_blob = ""
         for fn in os.listdir(stores["lisa"]):
@@ -386,13 +454,13 @@ def main():
                     pass
 
     passed = sum(1 for c in checks if c["passed"])
-    evidence = {"suite": "stand-in protocol checks", "checks": checks, "passed": passed, "total": len(checks),
+    evidence = {"suite": "standins", "checks": checks, "passed": passed, "total": len(checks),
                 "api_spend_usd": 0,
                 "valve_exercise": {
-                    "mapping": "The home node mapping: packet kind to material class, raw telling to OneLiner; Consent is standing node state, no valve field in band; content classes are recorded on the node's Consents and were not checked in band",
+                    "mapping": "Packet kind to material class mapping: raw telling to OneLiner; Consent is standing node state, no valve field in band; content classes are recorded on the node's Consents and were not checked in band",
                     "closed_leg": "standing node Consent state closed for conn-lisa-01 class OneLiner: packet rejected whole at intake, one trail line, no record event",
                     "open_leg": "standing node Consent state open for conn-lisa-01 class OneLiner: same act admitted and recorded"},
-                "note": "Stand-ins and the stand-in node double run against the real relay and the frozen protocol contract vectors. The node double follows the home node's stated mappings (valve by kind, proposal disposal by acknowledgement) but is not the home node; the integration drivers run the stand-ins against the real node."}
+                "note": "Stand-ins and the stand-in node double run against the real relay and the frozen protocol contract vectors. The node double follows the home node's stated mappings (valve by kind, proposal disposal by acknowledgement) but is not the home node; a separate integration exercise runs the stand-ins against the real node as integration evidence."}
     out = os.path.join(ROOT, "evidence", "protocol-checks-latest.json")
     with open(out, "w") as f:
         json.dump(evidence, f, indent=2)

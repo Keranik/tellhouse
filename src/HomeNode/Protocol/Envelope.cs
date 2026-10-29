@@ -37,7 +37,7 @@ public static class EnvelopeClassNames
 
 /// <summary>
 /// The relay visible envelope. Its fields are exactly the relay-visible
-/// metadata list and nothing else:
+/// fields and nothing else:
 ///
 ///   packet_id            unique id of this packet
 ///   household_endpoint   routing address of the household node
@@ -147,22 +147,45 @@ public sealed record Envelope(
         if (!names.SequenceEqual(FieldNames))
         {
             throw new ProtocolException(
-                "Envelope fields must be exactly the relay-visible list. Got: " + string.Join(",", names));
+                "Envelope fields must be exactly the relay-visible fields. Got: " + string.Join(",", names));
         }
         var env = new Envelope(
-            root.GetProperty("packet_id").GetString() ?? "",
-            root.GetProperty("household_endpoint").GetString() ?? "",
-            root.GetProperty("connection_id").GetString() ?? "",
-            EnvelopeClassNames.FromWire(root.GetProperty("envelope_class").GetString() ?? ""),
-            root.GetProperty("delivery_mode").GetString() ?? "",
-            root.GetProperty("ciphertext_length").GetInt64(),
-            root.GetProperty("issued_at").GetInt64(),
-            root.GetProperty("ciphertext_hash").GetString() ?? "");
+            RequireString(root, "packet_id"),
+            RequireString(root, "household_endpoint"),
+            RequireString(root, "connection_id"),
+            EnvelopeClassNames.FromWire(RequireString(root, "envelope_class")),
+            RequireString(root, "delivery_mode"),
+            RequireInt64(root, "ciphertext_length"),
+            RequireInt64(root, "issued_at"),
+            RequireString(root, "ciphertext_hash"));
         env.Validate();
         // The parsed form must re-serialize to the identical bytes,
         // or the bytes that were signed are not the bytes we hold.
         if (!env.CanonicalBytes().SequenceEqual(System.Text.Encoding.UTF8.GetBytes(canonicalJson)))
             throw new ProtocolException("Envelope is not in canonical form.");
         return env;
+    }
+
+    // Exact JSON kinds: a field carrying the wrong
+    // kind (a boolean issued_at, a floating point
+    // ciphertext_length, a numeric packet_id) is a protocol
+    // rejection, never a runtime exception from the JSON reader.
+    // GetString and GetInt64 throw InvalidOperationException on a
+    // kind mismatch, which escaped intake as a crash and, in the
+    // relay loop, lost the rest of the fetched batch.
+    internal static string RequireString(JsonElement obj, string field)
+    {
+        var value = obj.GetProperty(field);
+        if (value.ValueKind != JsonValueKind.String)
+            throw new ProtocolException($"Field {field} must be a JSON string.");
+        return value.GetString() ?? "";
+    }
+
+    internal static long RequireInt64(JsonElement obj, string field)
+    {
+        var value = obj.GetProperty(field);
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt64(out var n))
+            throw new ProtocolException($"Field {field} must be a JSON integer.");
+        return n;
     }
 }

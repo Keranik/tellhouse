@@ -17,7 +17,7 @@ public record MemberDeliveryItem(
 // (the /Member page). DEMO DELIVERY PATH ONLY: this view is the
 // house layer on one computer standing in for delivery. The
 // product's design reaches a person through that person's own
-// assistant, in their own channel, with a plain fallback lane;
+// assistant, in their own channel, with a plain fallback channel;
 // that cross-channel delivery is not built here, and nothing in
 // this service pretends to be it.
 //

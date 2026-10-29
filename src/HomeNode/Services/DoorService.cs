@@ -26,9 +26,11 @@ namespace HomeNode.Services;
 //      or explicitly declines. Silence is never a yes: a pending
 //      request does nothing until one of those two acts. Declining
 //      is a recorded disposal, not an absence.
-//   5. Only a confirmation creates a connection, Active, with the
-//      fingerprints in the registry. Permissions are then enforced
-//      on every packet intake, not only at the door.
+//   5. Only a confirmation creates a connection, with the
+//      fingerprints in the registry and the standing its level
+//      names (Active for Standard, KnockOnly for a KnockOnly
+//      invite). Permissions are then enforced on every packet
+//      intake and every delivery, not only at the door.
 //
 // Consent records are the valve: created by read back, expiring,
 // revocable in one act, forward looking only.
@@ -105,7 +107,7 @@ public class DoorService
     }
 
     // The knock against an invite row the caller has already
-    // identified. The HTTP door adapter (integration) identifies
+    // identified. The HTTP door adapter identifies
     // the invite by its intended person, because the frozen
     // stand-in knock body carries no invite code field; the code
     // itself is proven by the credential the joiner derives from
@@ -131,6 +133,11 @@ public class DoorService
             DoorInviteId = invite.Id,
             ClaimedName = claimedName,
             ClaimedPartyId = claimedPartyId,
+            // The connection id is generated exactly once, here
+            // and every later step (card, confirm,
+            // status, the connection itself) reads it from this
+            // row instead of deriving it again.
+            ConnectionId = ConnectionIdForParty(claimedPartyId),
             ProviderClaim = providerClaim,
             PublicKeyBase64Url = publicKeyBase64Url,
             Fingerprint = FingerprintOf(publicKeyBase64Url),
@@ -203,21 +210,50 @@ public class DoorService
         {
             throw new InvalidOperationException("The check phrase does not match. This is not their person's request.");
         }
-        var connection = new HouseConnection
+        // Re-enrollment replaces, never duplicates: a
+        // member who joins again with a new key takes over the one
+        // connection row their connection id names. Two rows under
+        // one id left every reader free to pick a different one:
+        // intake verified signatures against the old key while
+        // deliveries sealed to the new one, and revoking the id
+        // revoked only whichever row a lookup happened to find.
+        var connectionId = request.ConnectionId ?? ConnectionIdForParty(request.ClaimedPartyId);
+        var connection = await _db.HouseConnections
+            .FirstOrDefaultAsync(c => c.ConnectionId == connectionId);
+        if (connection is null)
         {
-            ConnectionId = ConnectionIdForParty(request.ClaimedPartyId),
-            HouseholdId = request.DoorInvite.HouseholdId,
-            PersonId = personId,
-            PartyId = request.ClaimedPartyId,
-            ProviderClaim = request.ProviderClaim,
-            Level = request.DoorInvite.Level,
-            Standing = ConnectionStanding.Active,
-            PublicKeyBase64Url = request.PublicKeyBase64Url,
-            Fingerprint = request.Fingerprint,
-            EnrollingInviterPersonId = inviterPersonId,
-            CreatedAtUtc = DateTime.UtcNow
-        };
-        _db.HouseConnections.Add(connection);
+            connection = new HouseConnection { ConnectionId = connectionId };
+            _db.HouseConnections.Add(connection);
+        }
+        connection.HouseholdId = request.DoorInvite.HouseholdId;
+        connection.PersonId = personId;
+        connection.PartyId = request.ClaimedPartyId;
+        connection.ProviderClaim = request.ProviderClaim;
+        connection.Level = request.DoorInvite.Level;
+        // The level is the standing: a KnockOnly
+        // invite confirms to a KnockOnly connection, which may
+        // present only a knock, and never silently becomes a
+        // fully Active full-access connection.
+        connection.Standing = ConnectionAccess.StandingForLevel(request.DoorInvite.Level);
+        connection.PublicKeyBase64Url = request.PublicKeyBase64Url;
+        connection.Fingerprint = request.Fingerprint;
+        connection.EnrollingInviterPersonId = inviterPersonId;
+        connection.CreatedAtUtc = DateTime.UtcNow;
+        connection.LastSessionAtUtc = null;
+        connection.RevokedAtUtc = null;
+        // Any other live connection this person holds (an earlier
+        // enrollment under a different id) is superseded by this
+        // one and revoked in the same act, so the person has
+        // exactly one live connection: the one just confirmed.
+        var superseded = await _db.HouseConnections
+            .Where(c => c.PersonId == personId && c.ConnectionId != connectionId
+                        && c.Standing != ConnectionStanding.Revoked)
+            .ToListAsync();
+        foreach (var old in superseded)
+        {
+            old.Standing = ConnectionStanding.Revoked;
+            old.RevokedAtUtc = DateTime.UtcNow;
+        }
         request.Status = "Confirmed";
         request.DecidedByPersonId = inviterPersonId;
         request.DecidedAtUtc = DateTime.UtcNow;
@@ -256,13 +292,42 @@ public class DoorService
     // Revocation is one act, effective immediately: the connection
     // stops accepting packets and sessions from this moment. Words
     // already in the record stay, as a departed member's words stay.
+    // The act covers every row the id names: duplicates
+    // written before re-enrollment replaced in place must not leave
+    // a live row behind under a revoked id.
     public async Task RevokeConnectionAsync(string connectionId)
     {
-        var connection = await _db.HouseConnections.FirstOrDefaultAsync(c => c.ConnectionId == connectionId)
-            ?? throw new InvalidOperationException($"Connection {connectionId} does not exist.");
-        connection.Standing = ConnectionStanding.Revoked;
-        connection.RevokedAtUtc = DateTime.UtcNow;
+        var rows = await _db.HouseConnections
+            .Where(c => c.ConnectionId == connectionId)
+            .ToListAsync();
+        if (rows.Count == 0)
+        {
+            throw new InvalidOperationException($"Connection {connectionId} does not exist.");
+        }
+        foreach (var row in rows)
+        {
+            row.Standing = ConnectionStanding.Revoked;
+            row.RevokedAtUtc = DateTime.UtcNow;
+        }
         await _db.SaveChangesAsync();
+    }
+
+    // Exact person lookup by name, for the door's HTTP adapter
+    // A name matches a person only when it is their
+    // full display name or their exact first name; a prefix, a
+    // single letter, or an empty string matches nobody. Prefix
+    // matching resolved "" and "M" to the first Margaret in the
+    // list, silently enrolling joins under the wrong inviter.
+    public static Person? FindPersonByName(IEnumerable<Person> people, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+        var wanted = name.Trim();
+        return people.FirstOrDefault(p =>
+            string.Equals(p.DisplayName, wanted, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(p.DisplayName.Split(' ')[0], wanted, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task SetKnockOnlyAsync(string connectionId)
@@ -286,9 +351,9 @@ public class DoorService
     // acknowledgement disposing a proposal needs a
     // ProposalResponse Consent. No Consent in force for the kind
     // means the valve is closed and the packet is rejected whole.
-    // This mapping is the home node's, stated here as node
-    // policy, because the stand-ins' draft in-band consent object was
-    // not part of the frozen protocol contract.
+    // This mapping is the home node's, flagged in the open as a
+    // proposal, because the stand-ins' draft in-band consent object did
+    // not survive the protocol freeze.
     public async Task<ConsentRecord> CreateConsentAsync(
         int householdId, int personId, string materialClass, string contentClass,
         TimeSpan lifetime, bool createdByReadBack)

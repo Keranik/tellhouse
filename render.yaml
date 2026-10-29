@@ -1,27 +1,177 @@
-# Render blueprint for the Tellhouse home node.
-# One free web service, Docker, built from the home node
-# Dockerfile. The database path is on the service's ephemeral
-# disk: a restart reseeds the same fictional demo day.
-# A custom domain would attach under this service's settings
-# later; none is configured here.
+# Tellhouse demo environment: the full four-service shape.
+#
+# One blueprint deploys the whole demonstration:
+#   tellhouse         the home node (the home base, the website)
+#   tellhouse-relay   the sealed relay (ciphertext and routing
+#                     metadata only, keeps no memory)
+#   tellhouse-lisa    Lisa's stand-in assistant
+#   tellhouse-daniel  Daniel's stand-in assistant
+#
+# FRESH VALUES AT DEPLOYMENT: every service boots in fresh
+# deploy mode (TELLHOUSE_DEPLOY_MODE=fresh). None of the demo
+# material published in this repository operates the deployed
+# instance: the node generates its own keypair and this
+# deployment's recovery phrase, the relay registry is built
+# from operator-supplied credential hashes, and each stand-in
+# joins through the real door with an invite the operator
+# issues from the deployed node. Every value that would do
+# that is marked sync: false below, so it is set by the
+# operator in the Render dashboard and is never in this
+# repository. The step-by-step operator sequence is in
+# DEPLOY.md, "Deploying fresh". (Running the services locally
+# without this blueprint uses the baked demo seed instead;
+# that local demo mode is what the demo-seed folders are for.)
+#
+# The service URLs below follow Render's naming: a service
+# named X is reached at https://X.onrender.com. If Render
+# assigns a different hostname because a name was already
+# taken, update the URL environment values to the assigned
+# hostnames; nothing else changes.
+#
+# Free tier note, plainly: free web services spin down after
+# about 15 minutes idle and the account's free instance hours
+# are shared, so four free services are a demonstration shape,
+# not an always-on deployment. The first visit after an idle
+# stretch pays a cold start on each service it touches. See
+# DEPLOY.md for the alternatives.
 services:
   - type: web
     name: tellhouse
-    env: docker
+    runtime: docker
     plan: free
     dockerfilePath: ./src/HomeNode/Dockerfile
-    dockerContext: ./src/HomeNode
+    dockerContext: ./src
     healthCheckPath: /
     envVars:
       - key: ASPNETCORE_URLS
         value: http://+:10000
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      - key: Extraction__Mode
-        value: Live
-      - key: Extraction__Model
-        value: muse-spark-1.3
+      - key: TELLHOUSE_DEPLOY_MODE
+        value: fresh
       - key: ConnectionStrings__HomeNode
         value: Data Source=/tmp/home-node.db
+      - key: HOME_NODE_KEYSTORE
+        value: /tmp/node-keys
+      - key: Relay__BaseUrl
+        value: https://tellhouse-relay.onrender.com
+      - key: Relay__NodeConnectionId
+        value: node-conn-01
+      # The node's relay token for THIS deployment. The
+      # operator generates a fresh random token at deploy time
+      # and sets it here; the relay registry carries only its
+      # SHA-256 hash (RELAY_NODE_TOKEN_SHA256 on the relay
+      # service). It is never in this repository.
+      - key: RELAY_NODE_TOKEN
+        sync: false
+      # The house secret for THIS deployment: the
+      # operator sets a fresh value here and presents it in the
+      # X-House-Secret header for every house side door act
+      # (issuing an invite, reading an inviter card, confirming or
+      # declining a join, and the /admin surfaces). Until it is
+      # set, those endpoints refuse every call; the joiner side of
+      # the door (knock with the invite code, status with the
+      # knock credential) does not use it.
+      - key: HOME_NODE_HOUSE_SECRET
+        sync: false
+      - key: Extraction__Mode
+        value: Live
+      # The live instance runs the STANDARD model. Anything a
+      # judge types is their own real words and never runs on
+      # the Contributor (training) tier. See DEPLOY.md.
+      - key: Extraction__Model
+        value: muse-spark-1.3
       - key: MODEL_API_KEY
+        sync: false
+      - key: Demo__StandinEndpoints__0__Name
+        value: LisaStandIn
+      - key: Demo__StandinEndpoints__0__PersonName
+        value: Lisa
+      - key: Demo__StandinEndpoints__0__TriggerUrl
+        value: https://tellhouse-lisa.onrender.com/trigger/test-send
+      - key: Demo__StandinEndpoints__0__ActId
+        value: lisa-telling-1
+  - type: web
+    name: tellhouse-relay
+    runtime: docker
+    plan: free
+    dockerfilePath: ./relay/Dockerfile
+    dockerContext: ./relay
+    healthCheckPath: /health
+    envVars:
+      - key: TELLHOUSE_DEPLOY_MODE
+        value: fresh
+      # Credential hashes for THIS deployment, computed by the
+      # operator from the fresh values (deploy/fresh/
+      # credential_hash.py; see DEPLOY.md). Until a hash is
+      # set, that connection simply cannot use the relay. The
+      # baked demo registry in this repository is not used.
+      - key: RELAY_NODE_TOKEN_SHA256
+        sync: false
+      - key: RELAY_LISA_TOKEN_SHA256
+        sync: false
+      - key: RELAY_DANIEL_TOKEN_SHA256
+        sync: false
+  - type: web
+    name: tellhouse-lisa
+    runtime: docker
+    plan: free
+    dockerfilePath: ./standins/LisaAssistant/Dockerfile
+    dockerContext: ./standins/LisaAssistant
+    healthCheckPath: /status
+    envVars:
+      - key: ASPNETCORE_URLS
+        value: http://+:10000
+      - key: TELLHOUSE_DEPLOY_MODE
+        value: fresh
+      - key: STANDIN_STORE
+        value: /tmp/store
+      - key: RELAY_URL
+        value: https://tellhouse-relay.onrender.com
+      - key: NODE_URL
+        value: https://tellhouse.onrender.com
+      - key: SELF_URL
+        value: http://127.0.0.1:10000
+      - key: STANDIN_AUTO_SESSION
+        value: "1"
+      - key: STANDIN_AUTO_JOIN
+        value: "1"
+      # The invite code the operator issues from the deployed
+      # node's door for Lisa, and optionally the check phrase
+      # her knock presents. Set after the node is up; the
+      # stand-in then knocks on its own and waits for the
+      # inviter's confirmation (DEPLOY.md, "Deploying fresh").
+      - key: STANDIN_INVITE_CODE
+        sync: false
+      - key: STANDIN_INVITE_CHECK_PHRASE
+        sync: false
+  - type: web
+    name: tellhouse-daniel
+    runtime: docker
+    plan: free
+    dockerfilePath: ./standins/DanielAssistant/Dockerfile
+    dockerContext: ./standins/DanielAssistant
+    healthCheckPath: /status
+    envVars:
+      - key: ASPNETCORE_URLS
+        value: http://+:10000
+      - key: TELLHOUSE_DEPLOY_MODE
+        value: fresh
+      - key: STANDIN_STORE
+        value: /tmp/store
+      - key: RELAY_URL
+        value: https://tellhouse-relay.onrender.com
+      - key: NODE_URL
+        value: https://tellhouse.onrender.com
+      # Daniel's receive act polls through his own /act/poll
+      # endpoint in the same process, over loopback.
+      - key: SELF_URL
+        value: http://127.0.0.1:10000
+      - key: STANDIN_AUTO_SESSION
+        value: "1"
+      - key: STANDIN_AUTO_JOIN
+        value: "1"
+      - key: STANDIN_INVITE_CODE
+        sync: false
+      - key: STANDIN_INVITE_CHECK_PHRASE
         sync: false

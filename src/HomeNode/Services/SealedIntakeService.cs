@@ -7,10 +7,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HomeNode.Services;
 
-// Sealed intake on the frozen protocol contract .
+// Sealed intake on the frozen protocol contract.
 //
 // A wire packet is exactly ciphertext, envelope, signature. The
-// envelope is exactly the eight fields. Intake runs in the
+// envelope is exactly the eight relay-visible fields. Intake runs in the
 // contract's section 8 order and rejects on the first failure,
 // creating no event and writing one trail line:
 //
@@ -39,7 +39,11 @@ namespace HomeNode.Services;
 // open session (contract section 7, completed by proof), and
 // store_and_forward packets require the connection to have
 // completed a session open at least once (node policy for queued
-// traffic, stated here as node policy).
+// traffic, flagged in the open). After opening, the
+// declared class is checked again against the packet's actual
+// kind, the standing, and the session state, and a
+// question that resolves to record entries needs the telling
+// permission to write them.
 //
 // A packet that passes is queued in the inbox, sealed, marked
 // unrecorded: it exists in no record table until ProcessPacket
@@ -105,8 +109,13 @@ public class SealedIntakeService
         {
             packet = Packet.Parse(wireJson);
         }
-        catch (Exception ex) when (ex is ProtocolException or JsonException or FormatException or CryptographicException)
+        catch (Exception ex) when (ex is ProtocolException or JsonException or FormatException or CryptographicException or InvalidOperationException)
         {
+            // InvalidOperationException is the JSON reader's kind
+            // mismatch signal: a malformed packet is a
+            // rejection with a receipt, never a throw, because the
+            // relay loop's caller has already been handed (and the
+            // relay has already dropped) the whole batch.
             await TrailAsync("", null, "Rejected",
                 "Wire packet or envelope is not in the contract form: " + ex.Message);
             return new IntakeReceipt(false, "", ex.Message);
@@ -121,9 +130,23 @@ public class SealedIntakeService
 
         // Step 3: the seen registry, at the envelope step, before
         // opening. A replayed packet_id is rejected here even if
-        // the first copy is still queued unopened.
+        // the first copy is still queued unopened, with one
+        // exception: a packet whose first copy is
+        // still sitting in this node's own inbox, queued and
+        // unrecorded, has recorded nothing yet, so a re-delivery
+        // of that same packet is the same in-flight packet, not a
+        // replay. It returns the existing queue entry and adds no
+        // second one (the inbox packet_id index is unique). Once
+        // the packet is recorded or rejected, or if it never
+        // reached the inbox, a second copy is a replay, full stop.
         if (await _db.PacketSeen.AnyAsync(s => s.PacketId == envelope.PacketId))
         {
+            var existing = await _db.PacketInbox
+                .FirstOrDefaultAsync(p => p.PacketId == envelope.PacketId);
+            if (existing is { Status: "QueuedUnrecorded" })
+            {
+                return new IntakeReceipt(true, envelope.PacketId, null);
+            }
             return await Reject("Replay rejected: packet_id already seen.");
         }
         _db.PacketSeen.Add(new PacketSeen
@@ -235,7 +258,7 @@ public class SealedIntakeService
         {
             plain = packet.Open(_nodeKeys.Keypair);
         }
-        catch (Exception ex) when (ex is ProtocolException or JsonException or FormatException or CryptographicException)
+        catch (Exception ex) when (ex is ProtocolException or JsonException or FormatException or CryptographicException or InvalidOperationException)
         {
             return await Reject("Packet did not open as a contract packet inside the house boundary: " + ex.Message);
         }
@@ -250,24 +273,54 @@ public class SealedIntakeService
             return await Reject("The plain packet is not addressed to this node.");
         }
         // Step 7, replay half: packet nonce single use per
-        // connection, checked after opening.
-        if (await _db.PacketNonceUses.AnyAsync(n =>
-                n.ConnectionId == connection.ConnectionId && n.PacketNonce == plain.PacketNonce))
+        // connection, checked after opening. The check runs here,
+        // but the use is only COMMITTED once the packet has been
+        // recorded. The old order wrote the nonce
+        // before dispatch, so a transient failure downstream (a
+        // model API error during extraction, say) burned the
+        // nonce of a packet that had recorded nothing, and its
+        // retry was rejected as a replay of itself: the telling
+        // was lost for good. Replay protection is unchanged for
+        // anything that WAS recorded: a recorded packet's nonce
+        // is on file, and any other packet carrying it is
+        // rejected here. A nonce row naming this same packet_id
+        // can only be a leftover of this packet's own earlier
+        // attempt; it is not a replay either.
+        var existingNonceUse = await _db.PacketNonceUses.FirstOrDefaultAsync(n =>
+            n.ConnectionId == connection.ConnectionId && n.PacketNonce == plain.PacketNonce);
+        if (existingNonceUse is not null && existingNonceUse.PacketId != packetId)
         {
             return await Reject("Replay rejected: packet nonce already used on this connection.");
         }
-        _db.PacketNonceUses.Add(new PacketNonceUse
-        {
-            ConnectionId = connection.ConnectionId,
-            PacketNonce = plain.PacketNonce,
-            PacketId = packetId,
-            UsedAtUtc = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync();
 
         inbox.ToldAtUtc = DateTimeOffset.FromUnixTimeSeconds(plain.ToldAt).UtcDateTime;
 
-        return plain.Type switch
+        // The declared envelope class is re-checked
+        // here, after opening, against what the packet actually
+        // is and against the connection's standing and session
+        // state at processing time. At intake (ReceiveWireAsync)
+        // the class can only be compared to the envelope; the
+        // packet is still sealed, so a telling declared as knock
+        // class sailed past the session gate, a KnockOnly
+        // connection recorded tellings with the same trick, and a
+        // session class telling was recorded when a challenge had
+        // merely been issued with no proof ever sent. The rules:
+        // knock class is acceptable only for the session open
+        // exchange itself; session class requires a session
+        // opened by a verified proof, the one exception being the
+        // proof response itself (verified in
+        // ProcessSessionProofAsync against the outstanding
+        // challenge); store_and_forward requires a completed
+        // session open at least once; and a KnockOnly connection
+        // may run nothing but the knock exchange that
+        // re-confirms it, whatever class it declares.
+        var classFailure = await CheckPacketClassAsync(packet.Envelope.Class, connection, plain);
+        if (classFailure is not null)
+        {
+            return await Reject(classFailure);
+        }
+
+        var receipt = plain.Type switch
         {
             PacketType.Delivery => await Reject(
                 "Delivery packets travel from the node to a member, never into intake."),
@@ -279,6 +332,63 @@ public class SealedIntakeService
                 await ProcessTellingAsync(inbox, connection, plain),
             _ => await Reject($"Packet type {plain.Type} is not one this house takes in.")
         };
+        if (receipt.Accepted && existingNonceUse is null)
+        {
+            _db.PacketNonceUses.Add(new PacketNonceUse
+            {
+                ConnectionId = connection.ConnectionId,
+                PacketNonce = plain.PacketNonce,
+                PacketId = packetId,
+                UsedAtUtc = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+        }
+        return receipt;
+    }
+
+    // The packet class check, run after opening (see
+    // ProcessPacketAsync). Returns the rejection reason, or null
+    // when the declared class matches the packet's actual work
+    // and the connection's standing and session state allow it.
+    private async Task<string?> CheckPacketClassAsync(
+        EnvelopeClass envelopeClass, HouseConnection connection, PlainPacket plain)
+    {
+        var isSessionOpen = plain.Type == PacketType.Telling
+            && plain.Body.TryGetProperty("kind", out var kindNode)
+            && kindNode.GetString() == Protocol.SessionChallenge.OpenKind;
+        if (connection.Standing == ConnectionStanding.KnockOnly)
+        {
+            return isSessionOpen && envelopeClass == EnvelopeClass.Knock
+                ? null
+                : "Connection stands KnockOnly; after opening, only the knock (session open) exchange is acceptable from it.";
+        }
+        switch (envelopeClass)
+        {
+            case EnvelopeClass.Knock:
+                return isSessionOpen
+                    ? null
+                    : "Knock class is acceptable only for the session open exchange; this packet is not one.";
+            case EnvelopeClass.Session:
+                if (await HasOpenSessionAsync(connection.ConnectionId))
+                {
+                    return null;
+                }
+                // The session open response itself: an
+                // acknowledgement carrying a proof, verified
+                // against the outstanding challenge when it is
+                // processed. Anything else in session class with
+                // no verified session (a challenge merely issued
+                // opens nothing) is rejected.
+                return plain.Type == PacketType.Acknowledgement && plain.Proof is not null
+                    ? null
+                    : "No open session for this connection; a session class packet requires a session opened by a verified proof.";
+            case EnvelopeClass.StoreAndForward:
+                return await HasEverOpenedSessionAsync(connection.ConnectionId)
+                    ? null
+                    : "This connection has never completed a session open; queued traffic waits for one.";
+            default:
+                return $"Envelope class {envelopeClass} is not one this house takes in.";
+        }
     }
 
     public async Task<int> ProcessAllQueuedAsync()
@@ -291,10 +401,35 @@ public class SealedIntakeService
         var recorded = 0;
         foreach (var packetId in queued)
         {
-            var receipt = await ProcessPacketAsync(packetId);
-            if (receipt.Accepted)
+            // Per-packet isolation: one
+            // packet's failure, transient or otherwise, must not
+            // abort the rest of the batch. A packet whose
+            // processing throws (a model API error during
+            // extraction is the live case) stays QueuedUnrecorded,
+            // so a later pass retries it; the failure is written
+            // to the trail, never silently dropped, and the
+            // remaining packets are still processed in this pass.
+            try
             {
-                recorded++;
+                var receipt = await ProcessPacketAsync(packetId);
+                if (receipt.Accepted)
+                {
+                    recorded++;
+                }
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    await TrailAsync(packetId, null, "ProcessingFailed",
+                        "Processing failed and the packet stays queued for a later pass: " + ex.Message);
+                }
+                catch
+                {
+                    // The trail write shares the store that may
+                    // have caused the failure; failing to log must
+                    // not lose the rest of the batch either.
+                }
             }
         }
         return recorded;
@@ -352,13 +487,46 @@ public class SealedIntakeService
 
         var person = await _db.Persons.FirstAsync(p => p.Id == connection.PersonId);
         var context = await _contextBuilder.BuildAsync(connection.HouseholdId);
+        // The extraction clock is the household's clock.
+        // The front door converts the telling instant through the
+        // household zone; this path used to hand extraction the
+        // UTC instant with a zero offset, so a federated "by six"
+        // told at 1:17 PM Chicago was resolved against 6:17 PM
+        // UTC and rolled to tomorrow. The told instant is the
+        // same; the frame it is read in is the household's zone,
+        // exactly as the front door frames it.
+        var householdRow = await _db.Households.FirstAsync(h => h.Id == connection.HouseholdId);
+        TimeZoneInfo householdZone;
+        try
+        {
+            householdZone = TimeZoneInfo.FindSystemTimeZoneById(householdRow.TimeZoneId ?? "America/Chicago");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            householdZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+        }
         var input = new ExtractionInput
         {
             UtteranceId = $"pkt-{inbox.PacketId}"[..Math.Min(26, inbox.PacketId.Length + 4)],
             Transcript = text.Trim(),
             SourceType = "federated",
-            OccurredAtLocal = new DateTimeOffset(
-                DateTime.SpecifyKind(inbox.ToldAtUtc!.Value, DateTimeKind.Utc), TimeSpan.Zero),
+            // Two clocks, kept apart.
+            // OccurredAtLocal is the TOLD instant on the household
+            // clock: due times in the words ("by six") resolve
+            // against the household's own day at the moment of
+            // telling. RecordedAtUtc is the node's
+            // RECEIPT instant: events are written with it as their
+            // record time, so the timeline order and the 24 hour
+            // proposal lapse run from when the house received the
+            // telling, never from the sender's clock.
+            // The sender's own time is kept exactly where it
+            // belongs: on the event's ToldAtUtc, written from the
+            // packet below.
+            OccurredAtLocal = TimeZoneInfo.ConvertTime(
+                new DateTimeOffset(
+                    DateTime.SpecifyKind(inbox.ToldAtUtc!.Value, DateTimeKind.Utc), TimeSpan.Zero),
+                householdZone),
+            RecordedAtUtc = inbox.ReceivedAtUtc,
             Speaker = new ExtractionPersonRef
             {
                 PersonId = person.Id,
@@ -367,12 +535,84 @@ public class SealedIntakeService
             },
             Context = context
         };
-        var result = await _extraction.ProcessAsync(input);
+
+        // The Question valve admits asking,
+        // not writing. The same words the OneLiner valve rejects
+        // as a telling ("Toilet paper is low." with that Consent
+        // closed) wrote a supply record entry when they arrived
+        // as a question, because extraction writes as it goes.
+        // A question therefore runs inside a transaction: if
+        // extraction resolves it to record entries and the person
+        // holds no OneLiner Consent in force, the transaction
+        // rolls back, nothing is written, and the packet is
+        // rejected whole, the same shape the valve gives a
+        // telling (a closed valve for a material class rejects
+        // the packet whole for that class). A question that
+        // resolves to no entries (a lookup, a clarification) is
+        // answered as before, and a question from a person who
+        // does hold the telling permission may write under it.
+        ExtractionResult result;
+        if (kind == "question")
+        {
+            var preExisting = _db.ChangeTracker.Entries()
+                .Select(e => e.Entity).ToHashSet();
+            await using var questionTx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                result = await _extraction.ProcessAsync(input);
+            }
+            catch
+            {
+                await questionTx.RollbackAsync();
+                throw;
+            }
+            if (result.WrittenEvents.Count > 0)
+            {
+                var writingFailure = await CheckValveAsync(connection, "OneLiner");
+                if (writingFailure is not null)
+                {
+                    await questionTx.RollbackAsync();
+                    // Extraction's rows live on this context inside
+                    // the transaction; after a rollback they must
+                    // not ride a later save. Everything extraction
+                    // created is detached (a saved row reads as
+                    // Unchanged in the tracker, so state alone
+                    // cannot find them; the pre-extraction snapshot
+                    // can), and anything pre-existing it modified
+                    // (a supply count) is reloaded from the record.
+                    // The inbox row is kept: Reject below records
+                    // its outcome.
+                    foreach (var entry in _db.ChangeTracker.Entries().ToList())
+                    {
+                        if (entry.Entity is PacketInbox)
+                        {
+                            continue;
+                        }
+                        if (!preExisting.Contains(entry.Entity))
+                        {
+                            entry.State = EntityState.Detached;
+                        }
+                        else if (entry.State == EntityState.Modified)
+                        {
+                            await entry.ReloadAsync();
+                        }
+                    }
+                    return await Reject(
+                        "Valve closed: this question resolves to a record entry, and writing requires the OneLiner permission. "
+                        + writingFailure);
+                }
+            }
+            await questionTx.CommitAsync();
+        }
+        else
+        {
+            result = await _extraction.ProcessAsync(input);
+        }
 
         var recordedAt = DateTime.UtcNow;
         foreach (var ev in result.WrittenEvents)
         {
-            // The record's provenance fields (the provenance model's names and
+            // The record's provenance fields (names and
             // semantics) are the source of truth, written here,
             // by the intake that opened the packet: the origin is
             // the member's own channel, named the way surfaces
@@ -602,6 +842,20 @@ public class SealedIntakeService
         item.AckPacketId = inbox.PacketId;
         inbox.Status = "Recorded";
         inbox.RecordedAtUtc = DateTime.UtcNow;
+        // An acknowledged alert is the moment its entry
+        // completes. The dispatcher queued the alert and left the
+        // entry Confirmed, owed and visible; only this
+        // acknowledgement, from the member the alert was sealed
+        // to, moves it to Done, through the same confirmation
+        // service every other transition uses.
+        if (item.SourceKind == "Alert" && item.SourceEventId is int alertEventId)
+        {
+            var alertEvent = await _db.Events.FirstOrDefaultAsync(e => e.Id == alertEventId);
+            if (alertEvent is { ConfirmationState: ConfirmationState.Confirmed })
+            {
+                await _confirmations.CompleteAsync(alertEventId);
+            }
+        }
         await _db.SaveChangesAsync();
         await TrailAsync(inbox.PacketId, connection.ConnectionId, "Acknowledged",
             item.SourceKind == "Proposal"

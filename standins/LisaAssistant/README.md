@@ -57,3 +57,39 @@ VECTORS_PATH pointing at the shared vectors file. It checks the
 canonical serialization, the ciphertext hash, opening under the
 vector key, refusal under a wrong key, a seal and open round trip,
 and that the same plaintext seals differently twice.
+
+## As a service
+
+Docker shape: the Dockerfile in this directory builds in two
+stages (sdk:10.0 build, aspnet:10.0 final), publishes the project,
+and copies demo-seed/ and entrypoint.sh into /app. The build
+context is this project directory. The container listens on port
+8080 (ASPNETCORE_URLS=http://+:8080) and starts through
+entrypoint.sh.
+
+Environment: STANDIN_STORE (the assistant's own store directory,
+default /tmp/store under the entrypoint), RELAY_URL, NODE_URL,
+and STANDIN_AUTO_SESSION (see below).
+
+Seed rule: if the store has no state.json and a baked demo seed
+exists at demo-seed/store/ in the image, entrypoint.sh copies the
+seed keys.json and state.json into the store before starting. The
+demo seed is the post-ceremony store of the demo seed ceremony:
+demo keys for a fictional member, in the repo on purpose. A store
+that exists is the assistant's own and is never reseeded.
+
+Auto session mode (STANDIN_AUTO_SESSION=1): a self-operating
+session mode for the deployed demo, where nobody drives the /act
+endpoints step by step. Honestly stated: when the mode is on and
+the stand-in is joined, the trigger first makes sure a session
+proof is fresh (a recorded proof younger than 20 minutes counts;
+the node accepts session class tellings within 30 minutes of a
+verified proof) and otherwise runs the same section 7 session
+open and session answer exchange the /act endpoints run, then
+sends. A background keepalive runs the same check after startup
+and every 20 minutes. If the relay is unreachable the send still
+proceeds and queues unrecorded, exactly as it does without the
+mode. Test drivers leave the mode off: with the variable unset or
+not "1", nothing changes and every existing driver behavior is
+untouched. The mode uses the same real proof exchange, never a
+bypass.

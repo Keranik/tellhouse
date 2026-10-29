@@ -65,7 +65,41 @@ public static class CanonicalExport
         return names;
     }
 
+    // Builds the export from ONE consistent snapshot of the
+    // database. The export reads every table, and a
+    // backup taken while the node is writing must not mix reads
+    // from different moments: read table by table with no
+    // snapshot, a backup caught rows torn across a writer's
+    // transaction (a child row whose parent the same export did
+    // not hold), and restores of such backups failed their
+    // foreign key check. The snapshot is taken with SQLite's
+    // online backup API, which copies a single point in time
+    // even while other connections write; the export then reads
+    // only the snapshot file.
     public static Export Build(string dbPath)
+    {
+        var snapshotPath = Path.Combine(Path.GetTempPath(),
+            ".export-snapshot-" + Guid.NewGuid().ToString("N")[..8] + ".db");
+        try
+        {
+            using (var src = OpenReadOnly(dbPath))
+            using (var dst = new SqliteConnection($"Data Source={snapshotPath}"))
+            {
+                dst.Open();
+                src.BackupDatabase(dst);
+            }
+            return BuildFromSnapshot(snapshotPath);
+        }
+        finally
+        {
+            foreach (var suffix in new[] { "", "-wal", "-shm", "-journal" })
+            {
+                if (File.Exists(snapshotPath + suffix)) File.Delete(snapshotPath + suffix);
+            }
+        }
+    }
+
+    private static Export BuildFromSnapshot(string dbPath)
     {
         using var conn = OpenReadOnly(dbPath);
         var export = new Export();
@@ -118,8 +152,8 @@ public static class CanonicalExport
     public static Export Parse(string json) => JsonSerializer.Deserialize<Export>(json) ?? throw new InvalidOperationException("export parse failed");
 
     // Restore announcement rows are the one permitted difference between a
-    // pre backup export and a post restore export (the package wording:
-    // excluding only the restore audit entry and rotated key identifiers).
+    // pre backup export and a post restore export, excluding only the
+    // restore audit entry and rotated key identifiers.
     // An announcement is an Events row whose Details JSON carries the
     // RestoreAnnouncement marker; its audit rows are the EventAudits rows
     // that point at such an event. Everything else must match exactly.
@@ -176,14 +210,33 @@ public static class CanonicalExport
             if (!aTables.TryGetValue(name, out var at)) { diffs.Add($"table {name}: present before, missing after"); continue; }
             if (!bt.Columns.SequenceEqual(at.Columns)) { diffs.Add($"table {name}: columns differ"); continue; }
             rows += bt.Rows.Count;
+            // Row counts compare explicitly, per table. That includes
+            // sqlite_sequence, which is a table in the export like any
+            // other, apart from the two announcement rows that
+            // WithoutRestoreArtifacts already removed from both sides.
+            if (bt.Rows.Count != at.Rows.Count)
+                diffs.Add($"table {name}: row count differs before={bt.Rows.Count} after={at.Rows.Count}");
             var bRows = bt.Rows.Select(r => JsonSerializer.Serialize(r, JsonOpts)).OrderBy(x => x, StringComparer.Ordinal).ToList();
             var aRows = at.Rows.Select(r => JsonSerializer.Serialize(r, JsonOpts)).OrderBy(x => x, StringComparer.Ordinal).ToList();
             if (!bRows.SequenceEqual(aRows))
             {
-                var onlyB = bRows.Except(aRows).Take(3);
-                var onlyA = aRows.Except(bRows).Take(3);
-                foreach (var x in onlyB) diffs.Add($"table {name}: row only before: {Trunc(x)}");
-                foreach (var x in onlyA) diffs.Add($"table {name}: row only after: {Trunc(x)}");
+                // Multiset comparison, not a set comparison. A set based
+                // Except reports nothing when the after side only adds
+                // duplicate copies of rows that are already present,
+                // which is exactly how duplicated sqlite_sequence rows
+                // used to pass as equal. Count occurrences per row and
+                // report every row whose multiplicity differs.
+                var bCounts = bRows.GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
+                var aCounts = aRows.GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
+                foreach (var key in bCounts.Keys.Union(aCounts.Keys).OrderBy(x => x, StringComparer.Ordinal).Take(6))
+                {
+                    int bc = bCounts.GetValueOrDefault(key);
+                    int ac = aCounts.GetValueOrDefault(key);
+                    if (bc == ac) continue;
+                    if (bc == 0) diffs.Add($"table {name}: row only after: {Trunc(key)}");
+                    else if (ac == 0) diffs.Add($"table {name}: row only before: {Trunc(key)}");
+                    else diffs.Add($"table {name}: row occurs {bc} times before, {ac} times after: {Trunc(key)}");
+                }
             }
         }
         // Stored audience equality, spelled out per event: SensitivityClass

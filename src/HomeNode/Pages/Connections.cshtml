@@ -26,6 +26,14 @@
             }
         </select>
     </label>
+    <label>Intended person
+        <select name="intendedPersonId">
+            @foreach (var person in Model.People)
+            {
+                <option value="@person.Id">@person.DisplayName</option>
+            }
+        </select>
+    </label>
     <label>Level
         <select name="level">
             <option value="Standard">Standard</option>

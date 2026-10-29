@@ -1,16 +1,17 @@
-"""the relay checks for the sealed relay.
+"""Checks for the sealed relay.
 
 Run: python3 -m unittest discover -s tests -v
 Standard library only. No live calls: the server under test is
 started in process on an ephemeral local port.
 
 Packet fixtures follow the protocol wire shape as found in
-progress in this tree: a packet is exactly ciphertext,
-envelope and signature; the envelope is exactly the eight relay-visible
+progress: a packet is exactly ciphertext, envelope and
+signature; the envelope is exactly the eight relay-visible
 fields; ciphertext and signature are base64url without padding;
 the ciphertext hash is the base64url SHA-256 of the ciphertext.
-The sealed blobs here are derived bytes that stand in for the protocol
-sealing in relay tests only; the relay never sees a plaintext.
+The sealed blobs here are derived bytes that stand in for
+protocol sealing in relay tests only; the relay never sees a
+plaintext.
 """
 
 import ast
@@ -176,7 +177,7 @@ class TestAcceptForwardDrop(HttpCase):
         self.assertEqual([p for p in body["packets"]
                           if p["packet_id"] == "fwd-1"], [])
 
-    def test_forwarded_packet_metadata_is_exactly_f3_plus_carried(self):
+    def test_forwarded_packet_metadata_is_exactly_the_relay_visible_fields_plus_carried(self):
         packet = make_packet("fwd-2")
         self.post_packet(packet)
         _, body = self.poll()
@@ -264,7 +265,7 @@ class TestRejections(HttpCase):
         status, _ = self.post_packet(packet)
         self.assertEqual(status, 400)
 
-    def test_lane_k_envelope_classes_accepted(self):
+    def test_protocol_envelope_classes_accepted(self):
         for cls_name in ("knock", "session", "store_and_forward"):
             packet = make_packet("cls-" + cls_name,
                                  envelope_class=cls_name)
@@ -280,7 +281,7 @@ class TestRejections(HttpCase):
         self.assertEqual(status, 400)
         self.assertEqual(body["error"], "hash_mismatch")
 
-    def test_hex_hash_rejected_lane_k_uses_base64url(self):
+    def test_hex_hash_rejected_protocol_uses_base64url(self):
         packet = make_packet("rej-9")
         blob = relay.b64url_decode(packet["ciphertext"])
         packet["envelope"]["ciphertext_hash"] = \
@@ -329,6 +330,81 @@ class TestRejections(HttpCase):
         status, body = self.post_packet(packet)
         self.assertEqual(status, 403)
         self.assertEqual(body["error"], "household_mismatch")
+
+
+class TestTypeConfusion(HttpCase):
+    """Every envelope field must carry its exact JSON
+    type. Python True is an int and equals 1, and 96.0 equals 96,
+    so equality and isinstance checks alone accepted a boolean
+    issued_at and a floating point ciphertext_length."""
+
+    def assert_rejected_400(self, packet):
+        with self.assertRaises(relay.Reject) as ctx:
+            relay.validate_and_build(packet)
+        self.assertEqual(ctx.exception.status, 400)
+
+    def test_issued_at_boolean_rejected_over_http(self):
+        packet = make_packet("tc-issued-bool")
+        packet["envelope"]["issued_at"] = True
+        status, body = self.post_packet(packet)
+        self.assertEqual(status, 400)
+        self.assertEqual(body["error"], "bad_issued_at")
+
+    def test_ciphertext_length_float_rejected_over_http(self):
+        packet = make_packet("tc-length-float")
+        packet["envelope"]["ciphertext_length"] = 96.0
+        status, body = self.post_packet(packet)
+        self.assertEqual(status, 400)
+        self.assertEqual(body["error"], "bad_ciphertext_length")
+
+    def test_issued_at_float_and_string_rejected(self):
+        for value in (float(ISSUED_AT), str(ISSUED_AT)):
+            packet = make_packet("tc-issued-x")
+            packet["envelope"]["issued_at"] = value
+            self.assert_rejected_400(packet)
+
+    def test_ciphertext_length_string_rejected(self):
+        packet = make_packet("tc-length-str")
+        packet["envelope"]["ciphertext_length"] = "96"
+        self.assert_rejected_400(packet)
+
+    def test_ciphertext_length_boolean_rejected_even_when_equal(self):
+        # A one byte blob makes True == len(blob), so only an
+        # exact type check can reject this packet.
+        packet = make_packet("tc-length-bool", blob=b"\x07")
+        packet["envelope"]["ciphertext_length"] = True
+        self.assert_rejected_400(packet)
+
+    def test_id_fields_non_string_rejected(self):
+        for field, value in (("packet_id", 123),
+                             ("household_endpoint", None),
+                             ("connection_id", True)):
+            packet = make_packet("tc-id-" + field)
+            packet["envelope"][field] = value
+            self.assert_rejected_400(packet)
+
+    def test_class_and_mode_non_string_rejected(self):
+        for field, value in (("envelope_class", 123),
+                             ("delivery_mode", ["session"])):
+            packet = make_packet("tc-cm-" + field)
+            packet["envelope"][field] = value
+            self.assert_rejected_400(packet)
+
+    def test_hash_and_carried_fields_non_string_rejected(self):
+        for field, value in (("ciphertext_hash", 123),):
+            packet = make_packet("tc-hash")
+            packet["envelope"][field] = value
+            self.assert_rejected_400(packet)
+        for field in ("ciphertext", "signature"):
+            packet = make_packet("tc-carried-" + field)
+            packet[field] = 123
+            self.assert_rejected_400(packet)
+
+    def test_exact_types_still_accepted(self):
+        packet = make_packet("tc-valid")
+        status, _ = self.post_packet(packet)
+        self.assertEqual(status, 202)
+        self.poll()  # drain
 
 
 class TestRevokedStanding(HttpCase):
@@ -410,7 +486,7 @@ class TestExpiryAndLimits(unittest.TestCase):
 
 
 class TestBlindness(HttpCase):
-    """The regression net blindness proof, run against the live
+    """The blindness proof, run against the live
     service above plus the files it actually wrote."""
 
     def runtime_texts(self):
@@ -506,8 +582,8 @@ class TestBlindness(HttpCase):
         self.poll()  # drain
 
 
-class TestLaneKVectors(unittest.TestCase):
-    """Real the protocol vector packets, copied into tests/fixtures
+class TestProtocolVectors(unittest.TestCase):
+    """Real protocol vector packets, copied into tests/fixtures
     from the protocol vectors file, must cross this relay unchanged:
     accepted, forwarded to the right side, byte identical."""
 

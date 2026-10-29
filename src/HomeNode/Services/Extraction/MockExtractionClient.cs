@@ -48,7 +48,7 @@ public class MockExtractionClient : IExtractionClient
         }
         var lower = transcript.ToLowerInvariant();
 
-        // Stated-audience marks (spec C.2.1 clause 3): where the
+        // Stated-audience marks (audience decision clause 3): where the
         // teller's words state an audience, the marks ride on the
         // events as proposals quoting the clause they came from.
         // Deterministic code downstream fences and decides; a mark
@@ -730,7 +730,7 @@ public class MockExtractionClient : IExtractionClient
         return (Note(clause, speaker, ("MedMention", "None")), null);
     }
 
-    // The mock's stated-audience patterns (spec C.2.1 clause 3).
+    // The mock's stated-audience patterns (audience decision clause 3).
     // Only a stated phrase produces a mark; the topic or tone of a
     // telling never does. Each mark quotes its clause from the
     // transcript exactly as spoken, and a named mark is produced

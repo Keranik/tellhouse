@@ -30,7 +30,7 @@ namespace HomeNode.Pages;
 // be determined renders for nobody. The check fails closed, never
 // open.
 // One person's standing audience default as the front door shows it
-// (spec C.2.1 clause 4): the stored value, or the minor's Ask until
+// (audience decision clause 4): the stored value, or the minor's Ask until
 // set (clause 8), or no default.
 public class AudienceDefaultRow
 {
@@ -69,7 +69,8 @@ public class FrontDoorModel : PageModel
 
     // Construction without the Test Send control, used by the suites'
     // page model checks: no stand-ins configured, so the control
-    // renders its unconfigured state.
+    // renders its unconfigured state. The suites' assertions are
+    // untouched by the end-to-end exercises.
     public FrontDoorModel(
         AppDbContext db,
         ExtractionContextBuilder contextBuilder,

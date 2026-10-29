@@ -1,32 +1,32 @@
 #!/bin/bash
-# Beat 6 whereabouts question: staging and verification.
+# Whereabouts question: staging and verification.
 #
 # The defect this stages around: asked against the pristine seeded
 # day, the Brief page whereabouts lookup returns Daniel's newest
 # whereabouts, his 2:55 PM closing entry, at a shifted time ("At
 # 9:55 AM, Daniel said: Home, like I said this morning."). The
-# lookup itself is correct and the demo suite pins its behavior
+# lookup itself is correct and the test suite pins its behavior
 # (newest confirmed whereabouts, stated time converted to the
 # household timezone). Two facts of the seed make the pristine
-# answer wrong for the film: the seeded day already contains the
-# afternoon closing entry, and seed times store the scenario's
-# wall clock as UTC while the lookup converts from UTC.
+# answer wrong for the morning question: the seeded day already
+# contains the afternoon closing entry, and seed times store the
+# scenario's wall clock as UTC while the lookup converts from UTC.
 #
-# The film's question belongs to the morning of the scenario
+# The question belongs to the morning of the scenario
 # (Margaret's 7:15 AM "Where's Daniel?", answered from Daniel's
 # 5:40 AM line), so the question is staged against a copy of the
 # seeded database in which the record stands as it stood that
 # morning for this question:
 #   1. Daniel's closing statement is recorded as a HouseholdNote,
-#      the promise-closing note it is (the demo suite's own
+#      the promise-closing note it is (the test suite's own
 #      closing event is a HouseholdNote with these same words),
 #      so it is not a whereabouts source.
 #   2. Daniel's morning whereabouts line carries its true UTC
 #      instant (5:40 AM America/Chicago on Oct 27, 2026 is
 #      10:40 UTC), so the lookup's conversion names 5:40 AM.
-# The pristine seeded database is never modified; the Beat 6
-# timeline hold (the promise object, made 05:40, kept 14:55) is
-# filmed against the pristine day, not against this staging copy.
+# The pristine seeded database is never modified; the timeline
+# hold (the promise object, made 05:40, kept 14:55) stands as it
+# is in the pristine day, not in this staging copy.
 #
 # The script starts the app on a fresh seed in Mock mode (no live
 # API calls), prints the pristine answer for the record, applies
@@ -105,7 +105,7 @@ echo "building..."
 if ! (cd "$APP_DIR" && dotnet build --nologo -v q > /tmp/beat6-build.log 2>&1); then
   tail -10 /tmp/beat6-build.log >&2
   fail "dotnet build"
-  echo "Beat 6 staging: $FAILURES failure(s)"
+  echo "Whereabouts question staging: $FAILURES failure(s)"
   exit 1
 fi
 
@@ -117,7 +117,7 @@ DANIEL_ID=$(sqlite3 "$PRISTINE_DB" "SELECT Id FROM Persons WHERE DisplayName='Da
 LISA_ID=$(sqlite3 "$PRISTINE_DB" "SELECT Id FROM Persons WHERE DisplayName='Lisa';")
 if [ -z "$DANIEL_ID" ] || [ -z "$LISA_ID" ]; then
   fail "seeded persons not found (Daniel='$DANIEL_ID', Lisa='$LISA_ID')"
-  echo "Beat 6 staging: $FAILURES failure(s)"
+  echo "Whereabouts question staging: $FAILURES failure(s)"
   exit 1
 fi
 
@@ -138,12 +138,12 @@ echo "restarting on the staging copy..."
 start_app "$STAGED_DB" || { fail "app start on staging copy"; exit 1; }
 STAGED_ANSWER=$(ask_whereabouts "$LISA_ID" "$DANIEL_ID")
 echo "staged answer: $STAGED_ANSWER"
-[ "$STAGED_ANSWER" = "$EXPECTED" ] || fail "staged answer is not the film's form: got '$STAGED_ANSWER'"
+[ "$STAGED_ANSWER" = "$EXPECTED" ] || fail "staged answer is not the expected form: got '$STAGED_ANSWER'"
 stop_app
 
 if [ "$FAILURES" -eq 0 ]; then
-  echo "Beat 6 staging: PASS (pristine answer printed above; staged answer matches the film's form verbatim)"
+  echo "Whereabouts question staging: PASS (pristine answer printed above; staged answer matches the expected form verbatim)"
 else
-  echo "Beat 6 staging: $FAILURES failure(s)"
+  echo "Whereabouts question staging: $FAILURES failure(s)"
 fi
 exit "$FAILURES"

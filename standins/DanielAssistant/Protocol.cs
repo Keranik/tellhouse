@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 namespace DanielAssistant;
 
 // Lisa's own implementation of the Tellhouse Protocol Contract
-// version 1.0 (the protocol, frozen). Written inside this project from
+// version 1.0 (frozen). Written inside this project from
 // the contract document and the shared test vectors only. This
 // project references no Tellhouse library, no node code, and no
 // other stand-in's code.
@@ -26,6 +26,43 @@ public static class Protocol
         return Convert.FromBase64String(t);
     }
     public static string Hex(byte[] b) => Convert.ToHexString(b).ToLowerInvariant();
+
+    // Key file permissions: keys.json holds this assistant's private key, so it
+    // is created owner read/write only (0600) whatever the process
+    // umask says, and a key file left readable by an older build is
+    // tightened on load, on platforms that carry file modes.
+    public static void WriteKeyFile(string path, string contents)
+    {
+        var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+        using (var stream = new FileStream(path, options))
+        using (var writer = new StreamWriter(stream))
+        {
+            writer.Write(contents);
+        }
+        TightenKeyFile(path);
+    }
+
+    public static void TightenKeyFile(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+        try
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
 
     // Canonical serialization (contract section 2): UTF-8 JSON, no
     // whitespace, object keys sorted ordinal recursively, arrays in
@@ -275,7 +312,7 @@ public static class Protocol
         return plain;
     }
 
-    // Envelope (contract section 3): exactly the eight fields.
+    // Envelope (contract section 3): exactly the eight envelope fields.
     public static JsonObject Envelope(string packetId, string connectionId, string deliveryMode,
         string envelopeClass, string householdEndpoint, long issuedAt, long ciphertextLength,
         string ciphertextHash) => new()
@@ -411,4 +448,75 @@ public static class Protocol
             Encoding.UTF8.GetBytes(inviteCode), 32,
             Encoding.UTF8.GetBytes("invite:" + fingerprint),
             Encoding.ASCII.GetBytes("tellhouse-door-v1")));
+}
+
+// Choosing which session challenge to answer (contract section 7).
+//
+// The relay poll that hunts for the challenge is destructive: it
+// takes every queued packet for this connection. A challenge
+// delivery from an earlier, interrupted open attempt can still be
+// sitting in that queue (a restarted process, a knock whose answer
+// never completed). The node keeps ONE outstanding challenge per
+// connection: a new knock consumes the old challenge and issues a
+// new one. Answering the stale delivery mixes this attempt's
+// client nonce with the old server nonce, the node rightly
+// rejects the proof, and the current challenge delivery has
+// already been taken by the same poll, so it can never be
+// answered at all. The rules below, applied to every challenge
+// the hunt sees, keep the answer paired with the challenge the
+// node actually holds open:
+//
+//   a challenge issued before the latest open attempt was sent
+//   (allowing two seconds of clock skew) answers a superseded
+//   knock and is never answered;
+//   a challenge older than 110 seconds is dead (the challenge
+//   lifetime is 120 seconds) and is never answered;
+//   among the rest, the most recently issued challenge is the
+//   node's outstanding one, and it pairs with the open attempt
+//   sent most recently before it was issued.
+public static class SessionHunt
+{
+    public sealed record Attempt(string ClientNonce, long SentAt);
+    public sealed record Candidate(string PacketId, string ServerNonce, long IssuedAt);
+    public sealed record Choice(string PacketId, string ServerNonce, string ClientNonce);
+
+    public static bool IsAnswerable(Attempt latestAttempt, Candidate c, long now) =>
+        c.IssuedAt >= latestAttempt.SentAt - 2 && now - c.IssuedAt <= 110;
+
+    public static Choice? Choose(IReadOnlyList<Attempt> attempts,
+        IReadOnlyList<Candidate> candidates, long now)
+    {
+        if (attempts.Count == 0) return null;
+        var latest = attempts.MaxBy(a => a.SentAt)!;
+        Candidate? best = null;
+        foreach (var c in candidates)
+        {
+            if (!IsAnswerable(latest, c, now)) continue;
+            if (best == null || c.IssuedAt > best.IssuedAt) best = c;
+        }
+        if (best == null) return null;
+        var paired = attempts.Where(a => a.SentAt <= best.IssuedAt + 2)
+                             .MaxBy(a => a.SentAt) ?? latest;
+        return new Choice(best.PacketId, best.ServerNonce, paired.ClientNonce);
+    }
+}
+
+// Session freshness, the rule EnsureSessionAsync runs on.
+// The node accepts session class packets within 30
+// minutes of a verified session open proof. This stand-in treats
+// a proof as fresh for 20 of those minutes, leaving margin for
+// the node's own poll and processing, and re-opens through the
+// real knock, challenge, and proof exchange once its recorded
+// proof is older than that, or was never recorded at all. A
+// trigger that cannot re-open must not send on a stale proof and
+// report the telling as sent: the node will refuse it with "No
+// open session" and record nothing.
+public static class SessionFreshness
+{
+    public const long FreshWindowSeconds = 20 * 60;
+
+    public static bool IsFresh(long openedAt, long now) =>
+        openedAt > 0 && now >= openedAt && now - openedAt < FreshWindowSeconds;
+
+    public static bool IsStale(long openedAt, long now) => !IsFresh(openedAt, now);
 }

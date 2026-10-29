@@ -11,7 +11,7 @@ public class ExtractionResult
     public required ExtractionValidation Validation { get; init; }
     public List<Event> WrittenEvents { get; init; } = new();
     public List<Promise> PromisesBorn { get; init; } = new();
-    // Audience asks opened by this telling (spec C.2.1 clause 7): the
+    // Audience asks opened by this telling (audience decision clause 7): the
     // events named are stored at their narrowest audience until the
     // person the house asked answers.
     public List<AudienceAsk> AsksCreated { get; init; } = new();
@@ -26,7 +26,7 @@ public class ExtractionResult
 // writes through the one confirmation dispatcher, so an utterance can
 // never reach the record by a side door. Sensitivity class and
 // audience are computed here, once, at write time, by the
-// deterministic audience decision (spec C.2.1; see
+// deterministic audience decision (see
 // AudienceDecisionService), and stored on the event; later surfaces
 // may only narrow an audience, never widen it. The model proposes
 // shapes and stated audiences; it plays no part in the decision and
@@ -65,12 +65,35 @@ public class ExtractionService
         // telling or question travels with.
         FenceRecentEventsToSpeaker(input);
 
-        // Beat 4 stated-turn pre-pass (integration): the deterministic
+        // Stated-turn pre-pass: the deterministic
         // shape runs before the client on every mode, live included,
         // so a stated turn can never land as a plain note. See
         // StatedTurnPrePass.
         var output = StatedTurnPrePass.TryExtract(input)
             ?? await _client.ExtractAsync(input, ct);
+
+        // Authorship is set in code, never taken from a client's
+        // output: in Live mode the model
+        // returned AuthorPersonId from its own reading of the
+        // words, so Lisa's assistant saying "Daniel said he'll
+        // get the milk by five" was validated and written as
+        // Daniel's own commitment, the audit rows credited
+        // Daniel, and Lisa could not see her own telling. The
+        // author of a telling is the authenticated speaker the
+        // caller resolved for this input (the front door's named
+        // speaker, or the connection's enrolled person on the
+        // sealed intake path), or nobody when there is no speaker.
+        // What the client says about who the words concern (the
+        // subject) is content and is left as it is; who authored
+        // the telling is not content. The override runs before
+        // validation, so a Commitment's maker, the promise it
+        // births, and every audit row downstream all read the
+        // speaker, on the mock and Live paths alike.
+        foreach (var extractedEvent in output.Events)
+        {
+            extractedEvent.AuthorPersonId = input.Speaker?.PersonId;
+        }
+
         var validation = ExtractionValidator.Validate(input, output);
         var result = new ExtractionResult { Output = output, Validation = validation };
 
@@ -97,7 +120,7 @@ public class ExtractionService
                 AuthorPersonId = extracted.AuthorPersonId,
                 RelatedSupplyItemId = extracted.RelatedSupplyItemId,
                 Details = extracted.Details.Count == 0 ? null : extracted.Details.ToJsonString(),
-                CreatedAtUtc = input.OccurredAtLocal.UtcDateTime,
+                CreatedAtUtc = input.RecordedAtUtc ?? input.OccurredAtLocal.UtcDateTime,
                 SensitivityClass = resolution.Class,
                 AudienceRule = resolution.Rule
             };

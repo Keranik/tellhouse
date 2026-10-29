@@ -1,9 +1,9 @@
 # Tellhouse Protocol Contract, version 1.0 (frozen)
 
-This file is the contract every other project in this tree codes
-against: the sealed relay, the home node, and the stand-in
-assistants. The stand-ins code against this document and the test
-vectors only, never against this library's internals. Other
+This file is the contract every other project in this tree
+codes against: the sealed relay, the home node, and the stand-in
+assistants. The stand-ins code against this document and the
+test vectors only, never against this library's internals. Other
 projects may use this library as a reference implementation; the
 vectors, not the library, define correctness.
 
@@ -41,8 +41,8 @@ Encodings:
 - Party ids in this contract's examples: the node is
   household-node, the members are member-lisa and member-daniel,
   their connections are conn-lisa-01 and conn-daniel-01, and the
-  household endpoint is hh-demo-01. The home node and the relay own the real
-  registry; these ids are the vector ids.
+  household endpoint is hh-demo-01. The home node and the sealed
+  relay own the real registry; these ids are the vector ids.
 
 ## 2. Canonical serialization
 
@@ -238,8 +238,8 @@ rejects on the first failure, creating no event and writing one
 trail line:
 
 1. Parse the packet; reject any extra or missing wire key.
-2. Parse the envelope; reject any field outside the relay-visible list and
-   any non canonical byte form.
+2. Parse the envelope; reject any field outside the
+   relay-visible metadata list and any non canonical byte form.
 3. Reject a packet_id already seen (the seen registry, in the
    reference library as SeenRegistry).
 4. Check ciphertext_length and recompute ciphertext_hash from
@@ -259,8 +259,8 @@ The shared vectors live at:
 src/Tellhouse.Protocol/vectors/test-vectors.json
 
 They contain the fixed test key material for the node and both
-members (test only private keys, published on purpose so anyone
-can reproduce them), four complete packets (a telling from
+members (test only private keys, published on purpose so any
+project can reproduce them), four complete packets (a telling from
 Lisa to the node, a delivery from the node to Daniel, an
 acknowledgement from Daniel to the node, a store and forward
 delivery from the node to Lisa), and one session challenge proof
@@ -287,12 +287,13 @@ against them from the outside, the same way later consumers must.
 Named so nobody builds on a misunderstanding:
 
 - No relay behavior is specified here beyond what it may see.
-  Queueing, limits and expiry are the relay's, against section 3.
+  Queueing, limits and expiry are for the sealed relay, against
+  section 3.
 - No door ceremony is specified here beyond fingerprints and the
   session challenge. Inviter cards, check phrases and disposal
-  are the home node, building on sections 1 and 7.
+  are for the home node, building on sections 1 and 7.
 - No record, extraction or audience behavior is specified here.
-  A packet that passes intake hands its raw text to the home node's
-  existing pipeline unchanged.
+  A packet that passes intake hands its raw text to the home
+  node's existing pipeline unchanged.
 - No backup or restore sealing is specified here. The backup
   tool seals with the household content key under its own design.

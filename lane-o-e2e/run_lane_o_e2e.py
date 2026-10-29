@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""the Test Send driver end-to-end proof: the website Test Send control on
+"""End-to-end proof: the website Test Send control on
 the real HomeNode (Mock extraction), the real relay, and
 Lisa's real stand-in.
 
@@ -35,6 +35,7 @@ NODE = "http://127.0.0.1:7442"
 LISA = "http://127.0.0.1:7444"
 ENDPOINT = "hh-demo-01"
 NODE_TOKEN = "lane-o-e2e-node-token"
+HOUSE_SECRET = "local-driver-house-secret"  # the house side credential this driver presents to the node door admin surfaces; the node it starts is given the same value.
 
 checks = []
 
@@ -57,6 +58,8 @@ def req(method, url, body=None, headers=None, form=None):
         h["Content-Type"] = "application/json"
     if headers:
         h.update(headers)
+    if any(part in url for part in ("/door/invite", "/door/card", "/door/confirm", "/door/decline", "/admin/")):
+        h["X-House-Secret"] = HOUSE_SECRET
     r = urllib.request.Request(url, data=data, headers=h, method=method)
     try:
         with urllib.request.urlopen(r, timeout=30) as resp:
@@ -161,6 +164,7 @@ def main():
                         Demo__StandinEndpoints__0__TriggerUrl=LISA + "/trigger/test-send",
                         Demo__StandinEndpoints__0__ActId="lisa-telling-1")
         node_env["RELAY_NODE_TOKEN"] = NODE_TOKEN
+        node_env["HOME_NODE_HOUSE_SECRET"] = HOUSE_SECRET
         procs["node"] = start("node", [DOTNET, os.path.join(
             ROOT, "src/HomeNode/bin/Debug/net10.0/HomeNode.dll")], node_env)
         assert wait_up(NODE + "/"), "node did not start"
@@ -280,7 +284,7 @@ def main():
                     pass
 
     passed = sum(1 for c in checks if c["passed"])
-    evidence = {"leg": "end-to-end (website Test Send control, real node Mock extraction, real relay, real Lisa stand-in)",
+    evidence = {"leg": "End-to-end (website Test Send control, real node Mock extraction, real relay, real Lisa stand-in)",
                 "checks": checks, "passed": passed, "total": len(checks), "api_spend_usd": 0}
     out = os.path.join(ROOT, "lane-o-e2e", "lane-o-e2e-evidence.json")
     with open(out, "w") as f:

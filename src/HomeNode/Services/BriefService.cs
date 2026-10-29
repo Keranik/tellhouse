@@ -90,13 +90,33 @@ public class BriefService
             });
         }
 
-        var now = DateTime.Now;
+        // A promise's due time is a household wall clock
+        // time (DueAtLocal), so "now" for the past-due wording is
+        // the household's local time, converted from UTC through
+        // the household's own zone. The server clock (UTC in the
+        // deployed containers) used to decide this, and at 12:54 PM
+        // Chicago the brief already called a 2:00 PM promise past.
+        var household = await _db.Households.FirstOrDefaultAsync(h => h.Id == person.HouseholdId);
+        TimeZoneInfo householdZone;
+        try
+        {
+            householdZone = TimeZoneInfo.FindSystemTimeZoneById(household?.TimeZoneId ?? "America/Chicago");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            householdZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+        }
+        var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, householdZone);
         var promises = await _db.Promises
             .Include(p => p.PromisorPerson)
             .Include(p => p.PromiseePerson)
             .Where(p => p.HouseholdId == person.HouseholdId && p.State == PromiseState.Made)
             .ToListAsync();
-        foreach (var promise in promises.Where(p => PromiseVisibleTo(p, personId)))
+        var promiseSources = await _db.Events
+            .Where(e => promises.Select(p => p.SourceEventId).Contains(e.Id))
+            .ToDictionaryAsync(e => e.Id);
+        foreach (var promise in promises.Where(p => PromiseVisibleTo(
+                     p, promiseSources.GetValueOrDefault(p.SourceEventId), personId)))
         {
             var maker = promise.PromisorPersonId == personId ? "You" : promise.PromisorPerson?.DisplayName.Split(' ')[0];
             var due = promise.DueAtLocal is { } dueAt && dueAt < now
@@ -188,7 +208,7 @@ public class BriefService
 
     // Whether the stored audience rule names this person: by one of
     // the class rule's person keys, or by the AudiencePersonIds list
-    // the audience decision (spec C.2.1) stores when a stated mark, a
+    // the audience decision stores when a stated mark, a
     // default, or an ask answer narrows an event to named people.
     // This reads the stored rule only; nothing is recomputed at read
     // time, and no model is ever asked who should see an event
@@ -230,13 +250,37 @@ public class BriefService
         return false;
     }
 
-    private static bool PromiseVisibleTo(Promise promise, int personId)
+    // A promise's visibility is the stored audience of the telling
+    // that borned it: the source event's class and
+    // rule, read exactly as every other event is read. A commitment
+    // is stored Named to its maker and its promisee, so a promise
+    // with no promisee is visible to its maker alone under that
+    // rule, never to everyone by virtue of having no promisee. A
+    // promise whose source telling was stored Household is visible
+    // to the house, because the stored rule says so. A promise
+    // whose source event cannot be found fails closed to its maker
+    // and its promisee, the narrowest reading its own fields
+    // support.
+    public static bool PromiseVisibleTo(Promise promise, Event? sourceEvent, int personId)
     {
-        // A promise made to the house (no named promisee) is part of the
-        // shared record; a named promise belongs to its maker and its
-        // promisee.
-        return promise.PromiseePersonId is null
-            || promise.PromisorPersonId == personId
+        if (sourceEvent is not null)
+        {
+            return IsVisibleTo(sourceEvent, personId);
+        }
+        return promise.PromisorPersonId == personId
             || promise.PromiseePersonId == personId;
     }
+
+    // The no-reader form of the promise rule, matching the front
+    // door's no-reader rule for events: only a promise whose source
+    // telling is a shared class (Open or Household) shows at all,
+    // and a promise with no source event shows to nobody.
+    public static bool PromiseVisibleWithNoReader(Promise promise, Event? sourceEvent) =>
+        sourceEvent is not null && IsVisibleWithNoReader(sourceEvent);
+
+    // The no-reader rule for a record event: only the house's
+    // shared entries (Open and Household classes) are visible at
+    // all when no reader is named.
+    public static bool IsVisibleWithNoReader(Event ev) =>
+        ev.SensitivityClass is SensitivityClass.Open or SensitivityClass.Household;
 }

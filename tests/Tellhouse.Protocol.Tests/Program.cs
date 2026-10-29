@@ -9,8 +9,8 @@ using Tellhouse.Protocol;
 // Run: dotnet run --project tests/Tellhouse.Protocol.Tests
 // It loads the shared vectors from
 // src/Tellhouse.Protocol/vectors/test-vectors.json and codes
-// against them exactly the way later consumers must: from the file,
-// not from the library internals that produced it.
+// against them exactly the way later consumers must: from the
+// file, not from the library internals that produced it.
 
 int passed = 0;
 int failed = 0;
@@ -128,7 +128,7 @@ Check("canonical: duplicate keys are rejected", () =>
 // Envelope: exactly the relay-visible fields
 // ----------------------------------------------------------------
 
-Check("envelope: field set is exactly the relay-visible list, no material class anywhere", () =>
+Check("envelope: field set is exactly the relay-visible metadata list, no material class anywhere", () =>
 {
     foreach (var v in vectors.EnumerateArray())
     {

@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Tellhouse.Protocol</RootNamespace>
     <AssemblyName>Tellhouse.Protocol</AssemblyName>
-    <!-- the protocol: protocol and crypto core. BCL only, no NuGet packages,
+    <!-- Protocol and crypto core. BCL only, no NuGet packages,
          so every other project restores and builds offline. -->
   </PropertyGroup>
 

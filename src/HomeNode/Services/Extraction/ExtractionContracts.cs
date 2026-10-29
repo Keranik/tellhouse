@@ -87,11 +87,21 @@ public class ExtractionInput
     public string Transcript { get; set; } = "";
     public string SourceType { get; set; } = "voice";
     public DateTimeOffset OccurredAtLocal { get; set; }
+    // The node's receipt instant for a telling that arrived from
+    // elsewhere: when set, events are WRITTEN with this
+    // as their record time, so the timeline order and the 24 hour
+    // proposal lapse run on when the house received the telling,
+    // never on the sender's clock. OccurredAtLocal stays the told
+    // instant on the household clock, which is what due times in
+    // the words resolve against. Null on paths where
+    // the telling happens here (the front door), where the two
+    // instants are the same moment.
+    public DateTime? RecordedAtUtc { get; set; }
     public ExtractionPersonRef? Speaker { get; set; }
     public ExtractionContext Context { get; set; } = new();
 }
 
-// One stated-audience mark proposed by the model (spec C.2.1 clause
+// One stated-audience mark proposed by the model (audience decision clause
 // 3): the teller's own words stated an audience, and the model may
 // carry that statement only as a proposal, quoting the clause it
 // came from in Clause. Kind is Personal, Household, Named (with

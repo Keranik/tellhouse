@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Integration live leg: the two real stand-ins against the
-real home node through the real relay.
+REAL home node through the REAL relay.
 
-The stand-ins' own checks ran against a node double. This driver
-runs the same ceremony against the full tree: door joins for
-both stand-ins through the node's HTTP door adapter (DoorService),
-session opens, Lisa's tellings landing on the node record with
-the provenance fields populated by the node intake, Daniel's
+The stand-ins' own 33 of 33 ran against their node double. This
+driver is the same ceremony against the integrated tree: door
+joins for both stand-ins through the node's HTTP door adapter
+(DoorService), session opens, Lisa's tellings landing on the
+node record with provenance fields populated by the node
+intake, Daniel's
 deliveries and proposal disposal by acknowledgement, the Consent
 valve exercise against the node's standing Consent state, the
 relay-killed case queuing in Lisa's outbox marked unrecorded, and
@@ -37,6 +38,7 @@ DANIEL = "http://127.0.0.1:7433"
 LISA = "http://127.0.0.1:7434"
 ENDPOINT = "hh-demo-01"
 NODE_TOKEN = "<redacted>"
+HOUSE_SECRET = "local-driver-house-secret"  # the house side credential this driver presents to the node door admin surfaces; the node it starts is given the same value.
 
 checks = []
 
@@ -59,6 +61,8 @@ def req(method, url, body=None, headers=None, form=None):
         h["Content-Type"] = "application/json"
     if headers:
         h.update(headers)
+    if any(part in url for part in ("/door/invite", "/door/card", "/door/confirm", "/door/decline", "/admin/")):
+        h["X-House-Secret"] = HOUSE_SECRET
     r = urllib.request.Request(url, data=data, headers=h, method=method)
     try:
         with urllib.request.urlopen(r, timeout=30) as resp:
@@ -146,6 +150,7 @@ def main():
                         Relay__BaseUrl=RELAY, Relay__NodeConnectionId="node-conn-01",
                         Extraction__Mode="Mock")
         node_env["RELAY" + "_NODE_" + "TOKEN"] = NODE_TOKEN
+        node_env["HOME_NODE_HOUSE_SECRET"] = HOUSE_SECRET
         procs["node"] = start("node", [DOTNET, os.path.join(
             ROOT, "src/HomeNode/bin/Debug/net10.0/HomeNode.dll")], node_env)
         assert wait_up(NODE + "/"), "node did not start"
@@ -283,18 +288,26 @@ def main():
         check("Lisa telling lands on the node record exactly once (one Recorded inbox row, its events written once)",
               bool(got) and inbox == [("Recorded",)], (got, inbox))
         if got:
-            check("telling events carry the provenance fields populated by the node intake",
+            check("telling events carry provenance fields populated by the node intake",
                   all(e[2] == "Lisa's assistant" and e[3] == "conn-lisa-01" and e[4] == pid for e in got), got)
 
         # Daniel's deliveries and proposal disposal, on the real
         # node's own roads. A front door telling from Margaret (her
         # ankle, in her words) extracts to a Proposed health mention
-        # whose NotifyPerson action addresses Daniel. The house
-        # queues its proposal to Daniel as a sealed proposal
-        # delivery; Daniel's acknowledgement carries his scripted
-        # disposition (confirmed), which disposes the proposal on
-        # the node. A second front door telling (the Beat 4 trash
-        # turn, shaped by the stated-turn pre-pass) is confirmed by
+        # whose NotifyPerson action addresses Daniel. No connection
+        # level the house offers may hear health class material and
+        # Daniel's connection is Standard, so proposing that health
+        # event to Daniel is refused at the door and queues
+        # nothing. The proposal round trip itself runs on a
+        # class clean event: a stated-turn Task telling (Margaret,
+        # Daniel's turn to take the bins out) shaped by the
+        # stated-turn pre-pass into a Proposed Task with a
+        # NotifyPerson action for Daniel. The house queues its
+        # proposal to Daniel as a sealed proposal delivery;
+        # Daniel's acknowledgement carries his scripted disposition
+        # (confirmed), which disposes the proposal on the node. A
+        # later front door telling (the Beat 4 trash turn, also
+        # shaped by the stated-turn pre-pass) is confirmed by
         # Margaret on the front door, and its alert reaches Daniel
         # only, body verbatim, acknowledged as received.
         import http.cookiejar
@@ -318,19 +331,29 @@ def main():
         prop = wait_for(lambda: q("select e.Id from Events e join EventActions a on a.EventId=e.Id where e.Body='My ankle has swollen up again.' and e.ConfirmationState='Proposed' and a.ActionType='NotifyPerson' and a.TargetPersonId=2"), timeout=25)
         check("front door health telling lands as a Proposed event with a NotifyPerson action addressed to Daniel only",
               st == 200 and bool(prop), (st, prop))
+        health_id = prop[0][0]
+        s, b = req("POST", NODE + "/admin/propose", {"event_id": health_id})
+        fence_rows = q("select Status from SealedOutbox where SourceEventId=? and SourceKind='Proposal'", (health_id,))
+        fence_state = q("select ConfirmationState from Events where Id=?", (health_id,))
+        check("house proposal of a health entry to a Standard connection is refused at the door",
+              s == 409 and isinstance(b, dict) and b.get("error") == "addressee cannot receive that delivery on their connection"
+              and not fence_rows and fence_state and fence_state[0][0] == "Proposed", (s, b, fence_rows, fence_state))
+        bins = "Daniel's turn to take the bins out, the truck comes at six."
+        st = front_door("Tell", {"speakerId": 1, "telling": bins})
+        prop = wait_for(lambda: q("select e.Id from Events e join EventActions a on a.EventId=e.Id where e.Body=? and e.ConfirmationState='Proposed' and a.ActionType='NotifyPerson' and a.TargetPersonId=2", (bins,)), timeout=25)
         prop_id = prop[0][0]
         s, b = req("POST", NODE + "/admin/propose", {"event_id": prop_id})
         sent_prop = wait_for(lambda: q("select Status from SealedOutbox where SourceEventId=? and SourceKind='Proposal' and Status='Sent'", (prop_id,)), timeout=25)
-        check("house proposal reaches the relay as a sealed proposal delivery to Daniel",
+        check("house proposal of the bins turn task reaches the relay as a sealed proposal delivery to Daniel",
               s == 200 and bool(sent_prop), (b, sent_prop))
         s, b = req("POST", DANIEL + "/trigger/test-send", {"act": "daniel-receive"})
         daniel_inbox = json.load(open(os.path.join(stores["daniel"], "inbox.json")))
         proposals = [d for d in daniel_inbox if d.get("kind") == "proposal"]
-        check("Daniel receives the house proposal as a sealed proposal delivery, body verbatim",
-              len(proposals) == 1 and proposals[0]["body_text"] == "My ankle has swollen up again.", daniel_inbox)
+        check("Daniel receives the house proposal of the bins turn task as a sealed proposal delivery, body verbatim",
+              len(proposals) == 1 and proposals[0]["body_text"] == "Daniel's turn to take the bins out, the truck comes at six.", daniel_inbox)
         acked = wait_for(lambda: q("select Status from SealedOutbox where SourceEventId=? and SourceKind='Proposal' and Status='Acknowledged'", (prop_id,)), timeout=25)
         state = q("select ConfirmationState from Events where Id=?", (prop_id,))
-        check("Daniel proposal disposed by his acknowledgement (scripted disposition confirmed lands on the node)",
+        check("Daniel proposal of the bins turn task disposed by his acknowledgement (scripted disposition confirmed lands on the node)",
               bool(acked) and state and state[0][0] == "Confirmed", (acked, state))
 
         trash = "Tonight is Daniel's turn to take the trash out, the truck comes at seven."

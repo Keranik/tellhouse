@@ -1,0 +1,11 @@
+{
+  "connection_id": "conn-daniel-01",
+  "credential": "cb2ff0da26c0248004b2db2220cf7c9029d240009ab292f128035bc3d7e988b9",
+  "joined": true,
+  "node_public_key": "BNpHXeYP4wVzwlUGB-gSKP81fZxyQEZQhswYybSydvcrvNb3zqE95fBNSJ378N5rktC40_7OIDN7m46BOzPsApE",
+  "invite_disposed": true,
+  "pending_client_nonce": null,
+  "pending_open_packet": "pkt-e37b9575a28b3507",
+  "session_proof_sent": true,
+  "session_open_at": 1793262553
+}

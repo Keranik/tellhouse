@@ -5,9 +5,9 @@ Behaviour, and nothing more:
   forward it to the polling destination, drop it.
 
 The wire packet and envelope shapes are the protocol contract as
-stated in this tree (see CONTRACT.md for the
-reconciliation notes): a packet is exactly the keys ciphertext,
-envelope and signature; the envelope is exactly the eight relay-visible
+found in progress (see CONTRACT.md for the reconciliation
+notes): a packet is exactly the keys ciphertext, envelope and
+signature; the envelope is exactly the eight relay-visible
 fields. The relay carries those bytes without interpreting the
 signature and without any ability to open the ciphertext. It
 holds no key material of any kind, it imports no routine that
@@ -16,9 +16,10 @@ logs no content.
 
 Its queue entries, queue snapshot and log lines carry only the
 envelope fields, the relay timing fields (received_at and
-expires_at, the timing item from the relay side, which the
-regression net's packet view asks for as relay received and
-delivered times) and the carried packet bytes themselves.
+expires_at, the relay timing fields from the relay side, which
+the packet view used by the regression checks asks for as relay
+received and delivered times) and the carried packet bytes
+themselves.
 
 It may check that a connection exists and is in good standing,
 enforce size and rate limits, and expire its queue on a stated
@@ -43,10 +44,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # ------------------------------------------------------------------
 SESSION_TTL_SECONDS = 60            # delivery_mode "session"
 STORE_AND_FORWARD_TTL_SECONDS = 300  # delivery_mode "store_and_forward"
-MAX_CIPHERTEXT_BYTES = 65536        # the protocol Packet.MaxCiphertextLength
+MAX_CIPHERTEXT_BYTES = 65536        # protocol maximum ciphertext length
 RATE_LIMIT_PER_MINUTE = 30          # accepted packets per connection
 SEEN_ID_RETENTION_SECONDS = 600     # replay window for packet ids
-SIGNATURE_BYTES = 64                # the protocol signature wire length
+SIGNATURE_BYTES = 64                # protocol signature wire length
 
 # The exact protocol envelope fields: the relay-visible list.
 ENVELOPE_FIELDS = (
@@ -320,18 +321,34 @@ def validate_and_build(raw):
         if bad in env:
             raise Reject(400, "forbidden_field")
     if set(env.keys()) != set(ENVELOPE_FIELDS):
-        raise Reject(400, "envelope_fields_must_be_exactly_the_f3_list")
+        raise Reject(400, "envelope_fields_must_be_exactly_the_relay_visible_list")
+    # Exact JSON types for every envelope field. Python equality
+    # and isinstance alone are not enough here: True is an int
+    # instance and equals 1, and 96.0 equals 96, so a boolean or
+    # float field would otherwise pass the numeric checks below.
+    # type(...) is int excludes bool, whose type is
+    # bool, and excludes float; the text fields require type str.
     for field in ("packet_id", "household_endpoint", "connection_id"):
         value = env[field]
-        if not isinstance(value, str) or not value or \
+        if type(value) is not str or not value or \
                 len(value) > 128:
             raise Reject(400, "bad_id_field")
-    if env["envelope_class"] not in ENVELOPE_CLASSES:
+    if type(env["envelope_class"]) is not str or \
+            env["envelope_class"] not in ENVELOPE_CLASSES:
         raise Reject(400, "bad_envelope_class")
-    if env["delivery_mode"] not in DELIVERY_MODES:
+    if type(env["delivery_mode"]) is not str or \
+            env["delivery_mode"] not in DELIVERY_MODES:
         raise Reject(400, "bad_delivery_mode")
-    if not isinstance(env["issued_at"], int) or env["issued_at"] <= 0:
+    if type(env["issued_at"]) is not int or env["issued_at"] <= 0:
         raise Reject(400, "bad_issued_at")
+    if type(env["ciphertext_length"]) is not int:
+        raise Reject(400, "bad_ciphertext_length")
+    if type(env["ciphertext_hash"]) is not str:
+        raise Reject(400, "bad_hash_encoding")
+    if type(raw["ciphertext"]) is not str:
+        raise Reject(400, "bad_ciphertext_encoding")
+    if type(raw["signature"]) is not str:
+        raise Reject(400, "bad_signature_encoding")
     try:
         blob = b64url_decode(raw["ciphertext"])
     except Exception:
@@ -417,7 +434,7 @@ class RelayService:
                 "expires_at": entry["expires_at"]}
 
     def poll(self, auth_connection, auth_token, household_endpoint):
-        """Forwarding rule (CONTRACT.md, Proposal 2):
+        """Forwarding rule (CONTRACT.md):
         the household node collects every queued packet for its
         household that it did not post itself; a member collects
         the queued packets posted by the node whose envelope

@@ -3,8 +3,9 @@ using System.Text.RegularExpressions;
 
 namespace HomeNode.Services.Extraction;
 
-// The stated-turn shape, built on the mock path, moved into a deterministic
-// pre-pass in the node's extraction pipeline. It runs before the
+// The stated-turn shape, first built on the mock path and moved
+// into a deterministic pre-pass in the node's extraction
+// pipeline. It runs before the
 // extraction client, on every mode, so the shape cannot be lost on
 // the live path: a live model output has no turn field to carry
 // it, and without this pass a live extraction of the trash turn

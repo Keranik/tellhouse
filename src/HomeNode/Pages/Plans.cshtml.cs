@@ -26,6 +26,9 @@ public class PlansModel : PageModel
 
     public List<Plan> Plans { get; private set; } = new();
     public List<Person> People { get; private set; } = new();
+
+    [BindProperty(SupportsGet = true)]
+    public int? ViewerId { get; set; }
     public List<Event> OpenDecisions { get; private set; } = new();
     public string? Note => TempData["PlanNote"] as string;
 
@@ -41,8 +44,20 @@ public class PlansModel : PageModel
             .Where(e => e.Type == EventType.HouseholdNote && e.Details != null)
             .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync();
+        // Open decisions are record content, so they follow the
+        // stored audience of the underlying note,
+        // through the same rule the brief and timeline use: a
+        // Private note appears only for a reader inside its stored
+        // audience (its author, for a Personal entry), and with no
+        // reader named only house entries show. This list also
+        // feeds the dinner form's source selector below, so a
+        // narrowed note cannot be picked as a plan source by a
+        // reader who may not see it either.
         OpenDecisions = notes
             .Where(e => ExtractionDetailsReader.GetString(e.Details, "DecisionState") == "Undecided")
+            .Where(e => ViewerId is int viewer
+                ? BriefService.IsVisibleTo(e, viewer)
+                : BriefService.IsVisibleWithNoReader(e))
             .ToList();
     }
 

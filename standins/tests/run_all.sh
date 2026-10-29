@@ -1,5 +1,5 @@
 #!/bin/sh
-# Full check run for the stand-ins: build, both stand-in vector selftests,
+# Full check run: build, both stand-in vector selftests,
 # and the live protocol driver against the real relay.
 # No live model API is used. Spend: $0.
 set -e

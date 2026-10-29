@@ -72,3 +72,40 @@ the allowlist, no database file is created, no key material
 exists in the project files or config, and the service source
 imports no routine that could open a sealed body (an AST scan
 of its own imports and definitions, not a comment claim).
+
+## As a service
+
+The relay also ships as a single Docker service for a free
+tier host. The build context is this `relay` directory. The
+`Dockerfile` uses `python:3.12-slim`, sets `WORKDIR /app`,
+copies `src/` to `/app/src/`, `demo-seed/` to
+`/app/demo-seed/`, and `entrypoint.sh` to `/app/entrypoint.sh`,
+exposes port 8790, and runs `/app/entrypoint.sh` as the
+command. The relay uses the Python standard library only, so
+the image installs no packages.
+
+`entrypoint.sh` resolves three environment variables:
+
+* `PORT`: the port the platform injects. The relay binds
+  `0.0.0.0` on this port, defaulting to 8790 when `PORT` is
+  unset.
+* `RELAY_CONFIG`: path to the standing registry file,
+  default `/tmp/relay/config.json`.
+* `RELAY_RUNTIME_DIR`: path for the queue snapshot and the
+  JSON lines log, default `/tmp/relay/runtime`.
+
+Reseed rule: on an ephemeral disk the registry file vanishes
+with the instance, so a fresh boot re-seeds the demo registry
+from the image at `demo-seed/relay-config.json`. If a config
+file is already present at the resolved path, the entrypoint
+uses it as-is and never overwrites it. Operator state wins
+over reseeding.
+
+Single-instance free-tier note: this shape assumes one
+instance, with the file registry on that instance disk.
+Ephemeral restarts reseed deterministically, so the demo
+household returns in the same state each time. A restart does
+clear the relay queue snapshot handling and its in-memory
+duplicate window, but duplicate rejection also lives in the
+node's own registry, so a relay restart loses no replay
+protection that matters.

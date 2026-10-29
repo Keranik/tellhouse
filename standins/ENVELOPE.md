@@ -1,18 +1,18 @@
 # Stand-in envelope format: reconciled to the frozen contract
 
-The governing format is the Tellhouse Protocol Contract
-version 1.0 (frozen), in src/Tellhouse.Protocol/CONTRACT.md in
-this tree, with the shared vectors at
+Status: SUPERSEDED as a draft. The governing format is the
+Tellhouse Protocol Contract version 1.0 (frozen), in
+src/Tellhouse.Protocol/CONTRACT.md, with the shared vectors at
 src/Tellhouse.Protocol/vectors/test-vectors.json (a copy sits in
 this folder at vectors/test-vectors.json for the stand-ins'
-selftests). Both stand-ins were written against that
-contract and those vectors. Nothing here defines its own
-wire format anymore.
+selftests). Both stand-ins were recoded against that contract
+and those vectors. Nothing here defines its own wire format
+anymore.
 
 What the stand-ins implement, from the contract:
 
 - Wire packet: exactly ciphertext, envelope, signature.
-- Envelope: exactly the eight fields (ciphertext_hash,
+- Envelope: exactly the eight envelope fields (ciphertext_hash,
   ciphertext_length, connection_id, delivery_mode, envelope_class,
   household_endpoint, issued_at, packet_id). No material class,
   no packet type, no sender name in the clear.
@@ -47,7 +47,7 @@ them:
   the raw agreement directly (a P-256 scalar multiplication in
   each project's Protocol file). With that, the frozen vectors'
   ciphertext reproduces byte for byte in both stand-ins'
-  selftests (35 of 35 checks each).
+  selftests (46 of 46 checks each).
 - In this sandbox, HTTP connections made through dual-mode
   (IPv4-mapped IPv6) sockets are reset by the network
   interception layer, while plain IPv4 sockets pass. Each
@@ -55,8 +55,8 @@ them:
   proxy for mesh traffic. This is a transport property of the
   sandbox, not a protocol property.
 
-Consent valve and proposals, per the home node's dispositions (the
-frozen plain packet carries no valve field):
+Consent valve and proposals, per the home node's dispositions
+(the frozen plain packet carries no valve field):
 
 - Consent is standing node state. At processing the node maps
   packet kind to a material class (raw telling to OneLiner,
@@ -64,7 +64,7 @@ frozen plain packet carries no valve field):
   ProposalResponse) and requires a Consent in force for that
   class. The stand-ins carry no valve basis in band. Content
   classes are recorded on the node's Consents and cannot be
-  checked in band; these stand-ins do not claim in-band class
+  checked in band; the stand-ins do not claim in-band class
   checking.
 - A ProposalResponse rides the acknowledgement packet: the node
   sends a proposal as a sealed delivery (kind proposal), and the

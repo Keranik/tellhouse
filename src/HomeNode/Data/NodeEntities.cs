@@ -8,7 +8,7 @@ namespace HomeNode.Data;
 // these tables: the inbox and the outbox hold ciphertext only, and
 // the registry holds public keys and their fingerprints, never a
 // private key. The record itself stays in the tables in Entities.cs,
-// exactly as the monolith kept it.
+// exactly as the house layer kept it.
 
 // Where a connection stands with the house. An invite grants
 // nothing by itself; a connection exists only after the named
@@ -109,6 +109,15 @@ public class JoinRequest
     public string ProviderClaim { get; set; } = "";
     // The party id the joiner claims for their enrollment.
     public string ClaimedPartyId { get; set; } = "";
+    // The connection id this request will enroll under, generated
+    // once at knock time. For the frozen scope parties
+    // it is the contract's scope id; for anyone else it is a
+    // generated id, and generating it again at card or confirm
+    // time would name a different connection every call, which is
+    // how a knock for a non-scope party used to return an id the
+    // card and confirm endpoints then reported as unknown. Null
+    // only on requests written before the id was stored.
+    public string? ConnectionId { get; set; }
     public string PublicKeyBase64Url { get; set; } = "";
     public string Fingerprint { get; set; } = "";
     public string CheckPhrase { get; set; } = "";
@@ -223,7 +232,7 @@ public class SessionChallenge
     public bool Consumed { get; set; }
 }
 
-// The seen registry, persisted on the node (the protocol contract
+// The seen registry, persisted on the node (protocol contract
 // section 8, step 3): every packet_id whose envelope parsed is
 // recorded here at the envelope step, before opening, whether
 // the packet is later admitted or rejected. A second arrival of
@@ -236,7 +245,7 @@ public class PacketSeen
     public DateTime SeenAtUtc { get; set; }
 }
 
-// Packet nonce single use, per connection (the protocol contract
+// Packet nonce single use, per connection (protocol contract
 // section 8, step 7): recorded after a packet opens and its plain
 // form validates. A fresh packet_id carrying a nonce already used
 // on that connection is still a replay.
@@ -279,9 +288,15 @@ public class SealedOutboxItem
     public int? SourceEventId { get; set; }
     public int? SourcePlanElementId { get; set; }
 
-    // Queued or Acknowledged.
+    // Queued, Sent, or Acknowledged.
     public string Status { get; set; } = "Queued";
     public DateTime CreatedAtUtc { get; set; }
+    // When the relay loop last posted this packet to the relay
+    // The relay holds a store-and-forward packet for
+    // 300 seconds; a Sent item with no acknowledgement whose last
+    // post is older than that is owed again, and the loop queues
+    // it for another post instead of leaving it Sent forever.
+    public DateTime? SentAtUtc { get; set; }
     public DateTime? AcknowledgedAtUtc { get; set; }
     public string? AckPacketId { get; set; }
 }

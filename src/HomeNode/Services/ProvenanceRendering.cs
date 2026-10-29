@@ -6,7 +6,7 @@ namespace HomeNode.Services;
 // shows the record (front door recent list, timeline, member views),
 // so a federated event reads the same way wherever it appears. An
 // event is federated when the node recorded an origin for it when
-// its packet was opened; a plain lane event has no origin and
+// its packet was opened; a plain local event has no origin and
 // renders no provenance line at all. Provenance is part of the
 // event, so it travels with the event through each surface's stored
 // audience filter: a reader who may not see the event never sees

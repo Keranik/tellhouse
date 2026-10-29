@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace HomeNode.Pages;
 
 // The household's promises, as first-class records: who promised what,
-// in their words, and how it closed. Closing a promise happens here
+// in their words, and how it closed, listed as the named reader may
+// see them under each promise's stored audience. Closing a promise happens here
 // the way closing works: a person says the closing words into
 // the record (a HouseholdNote of their own), and the dispatcher links
 // that telling to the promise. The house never closes a promise on a
@@ -26,16 +27,34 @@ public class PromisesModel : PageModel
 
     public List<Promise> Promises { get; private set; } = new();
     public List<Person> People { get; private set; } = new();
+
+    [BindProperty(SupportsGet = true)]
+    public int? ViewerId { get; set; }
     public string? Note => TempData["PromiseNote"] as string;
 
     public async Task OnGetAsync()
     {
-        Promises = await _db.Promises
+        // The list follows the stored audience of each promise's
+        // source telling, through the same rule the
+        // brief uses: a reader sees the promises that reader may
+        // see, and with no reader named only house-audience
+        // promises show. The closing forms below post back with no
+        // reader named; closing itself is governed by the
+        // confirmation service, not by this list.
+        var all = await _db.Promises
             .Include(p => p.PromisorPerson)
             .Include(p => p.PromiseePerson)
             .Include(p => p.ClosedByPerson)
             .OrderByDescending(p => p.Id)
             .ToListAsync();
+        var sources = await _db.Events
+            .Where(e => all.Select(p => p.SourceEventId).Contains(e.Id))
+            .ToDictionaryAsync(e => e.Id);
+        Promises = all
+            .Where(p => ViewerId is int viewer
+                ? BriefService.PromiseVisibleTo(p, sources.GetValueOrDefault(p.SourceEventId), viewer)
+                : BriefService.PromiseVisibleWithNoReader(p, sources.GetValueOrDefault(p.SourceEventId)))
+            .ToList();
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
     }
 

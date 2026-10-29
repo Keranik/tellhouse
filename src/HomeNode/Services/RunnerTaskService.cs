@@ -129,7 +129,7 @@ public record RunnerTaskProjection(
     }
 }
 
-// The runner side of a task : who may complete it, and the
+// The runner side of a task: who may complete it, and the
 // completion itself. Completion is the runner's act alone: a
 // person inside the telling's audience who is not the named
 // runner cannot complete the task, and the runner completes it

@@ -17,7 +17,8 @@
 #      restart equal the successful (302) POSTs in the log.
 set -u
 export PATH="$HOME/.dotnet:$PATH"
-APP_DIR="$(cd "$(dirname "$0")/.." && pwd)/src/HouseholdCoordinator"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+APP_DIR="$ROOT/src/HouseholdCoordinator"
 DB=/tmp/powercutA.db
 PORT=5097
 BASE=http://127.0.0.1:$PORT

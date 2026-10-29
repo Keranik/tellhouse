@@ -17,19 +17,20 @@ Method:
      text and in raw bytes for the canary phrase, its fragments,
      the full telling, and any event body text that crossed.
   3. One tampered packet produces no record entry. Two forms are
-     run and reported separately: (T1) a bit flipped ciphertext
-     with its stated hash untouched, and (T2) a bit flipped
+     run and reported separately: (first form) a bit flipped ciphertext
+     with its stated hash untouched, and (second form) a bit flipped
      ciphertext with the hash recomputed so the relay admits it
      and the real node's sealed intake itself must reject it
      (signature no longer verifies), under a fresh packet id so
      the rejection cannot be a replay rejection.
   4. One replayed packet is rejected. Two layers are run and
-     reported separately: (R1) the exact original wire re-posted
+     reported separately: (live registry) the exact original wire re-posted
      to the relay while the relay's seen registry is live, and
-     (R2) the exact original wire re-posted after a relay process
-     restart (the relay rebuilds its seen set from its snapshot
-     file only, and the forwarded entry is gone from it, so the
-     packet reaches the real node's intake, whose own PacketSeen
+     (after a restart) the exact original wire re-posted after the
+     relay process restarts (the relay rebuilds its seen set from
+     its snapshot file only, and the forwarded entry is gone from
+     it, so the packet reaches the real node's intake, whose own
+     PacketSeen
      registry must reject it as a replay).
 Mock extraction throughout; API spend $0.
 """
@@ -57,6 +58,7 @@ NODE = "http://127.0.0.1:7532"
 LISA = "http://127.0.0.1:7534"
 ENDPOINT = "hh-demo-01"
 NODE_TOKEN = "canary-node-token-7532"
+HOUSE_SECRET = "local-driver-house-secret"  # the house side credential this driver presents to the node door admin surfaces; the node it starts is given the same value.
 CANARY_PHRASE = "velvet cactus lantern 417"
 CANARY_TELLING = ("Lisa here. Note for the house: velvet cactus "
                   "lantern 417 goes on the hall shelf.")
@@ -89,6 +91,8 @@ def req(method, url, body=None, headers=None, form=None):
         h["Content-Type"] = "application/json"
     if headers:
         h.update(headers)
+    if any(part in url for part in ("/door/invite", "/door/card", "/door/confirm", "/door/decline", "/admin/")):
+        h["X-House-Secret"] = HOUSE_SECRET
     r = urllib.request.Request(url, data=data, headers=h, method=method)
     try:
         with urllib.request.urlopen(r, timeout=30) as resp:
@@ -227,6 +231,7 @@ def main():
                         Relay__BaseUrl=RELAY, Relay__NodeConnectionId="node-conn-01",
                         Extraction__Mode="Mock")
         node_env["RELAY" + "_NODE_" + "TOKEN"] = NODE_TOKEN
+        node_env["HOME_NODE_HOUSE_SECRET"] = HOUSE_SECRET
         procs["node"] = start("node", [DOTNET, os.path.join(
             ROOT, "src/HomeNode/bin/Debug/net10.0/HomeNode.dll")], node_env)
         assert wait_up(NODE + "/"), "node did not start"
@@ -354,19 +359,19 @@ def main():
 
         ev_after_canary = q("select count(*) from Events")[0][0]
 
-        # ---- TAMPER T1: flipped ciphertext, stated hash untouched. ----
+        # ---- TAMPER, FIRST FORM: flipped ciphertext, stated hash untouched. ----
         t1 = copy.deepcopy(wire)
         first = t1["ciphertext"][0]
         t1["ciphertext"] = ("A" if first != "A" else "B") + t1["ciphertext"][1:]
         s, rb = relay_post(t1)
-        check("T1 tampered packet (ciphertext bit flip, hash untouched) is rejected at hash agreement",
+        check("tampered packet with a ciphertext bit flip and its hash untouched is rejected at hash agreement",
               s == 400 and "hash_mismatch" in json.dumps(rb), (s, rb))
         time.sleep(3)
-        check("T1 produces no record entry (event count unchanged, no new trail line for the node)",
+        check("the hash-untouched tampered packet produces no record entry (event count unchanged, no new trail line for the node)",
               q("select count(*) from Events")[0][0] == ev_after_canary,
               q("select count(*) from Events")[0][0])
 
-        # ---- TAMPER T2: flipped ciphertext, hash recomputed, fresh packet id.
+        # ---- TAMPER, SECOND FORM: flipped ciphertext, hash recomputed, fresh packet id.
         # Relay admits on shape and hash; the real node intake must reject. ----
         t2 = copy.deepcopy(wire)
         t2_pid = "pkt-tamper-" + hashlib.sha256(
@@ -378,7 +383,7 @@ def main():
         t2["envelope"]["ciphertext_hash"] = b64url_encode(
             hashlib.sha256(bytes(blob)).digest())
         s, rb = relay_post(t2)
-        check("T2 tampered packet (hash recomputed) is admitted by the relay on shape, so the node itself is the rejecting layer",
+        check("tampered packet with its hash recomputed is admitted by the relay on shape, so the node itself is the rejecting layer",
               s == 202, (s, rb))
         trail = wait_for(lambda: [r for r in q(
             "select PacketId, Outcome, Reason from PacketTrailLines where PacketId=?",
@@ -386,24 +391,25 @@ def main():
         time.sleep(1)
         t2_events = q("select count(*) from Events where ProvenancePacketId=?", (t2_pid,))
         t2_inbox = q("select Status from PacketInbox where PacketId=?", (t2_pid,))
-        check("T2 is rejected by the real node's sealed intake and produces no record entry",
+        check("the hash-recomputed tampered packet is rejected by the real node's sealed intake and produces no record entry",
               bool(trail) and q("select count(*) from Events")[0][0] == ev_after_canary
               and t2_events == [(0,)] and t2_inbox != [("Recorded",)],
               {"trail": trail, "inbox": t2_inbox})
 
-        # ---- REPLAY R1: exact original wire, relay seen registry live. ----
+        # ---- REPLAY, LIVE REGISTRY: exact original wire, relay seen registry live. ----
         s, rb = relay_post(copy.deepcopy(wire))
-        check("R1 replayed packet (exact original wire) is rejected by the relay as a duplicate",
+        check("replayed packet (exact original wire, relay registry live) is rejected by the relay as a duplicate",
               s == 409 and "duplicate" in json.dumps(rb), (s, rb))
         time.sleep(3)
-        check("R1 produces no second record entry (canary still recorded exactly once)",
+        check("the replay against the live relay registry produces no second record entry (canary still recorded exactly once)",
               q("select count(*) from Events")[0][0] == ev_after_canary and
               q("select count(*) from PacketInbox where PacketId=? and Status='Recorded'",
                 (canary_pid,)) == [(1,)],
               q("select count(*) from Events")[0][0])
 
-        # ---- REPLAY R2: relay restarted (its seen set rebuilds from the
-        # snapshot file only), exact wire reaches the real node's intake. ----
+        # ---- REPLAY AFTER A RELAY RESTART: the relay's seen set rebuilds
+        # from the snapshot file only, and the exact wire reaches the real
+        # node's intake. ----
         procs["relay"].terminate()
         procs["relay"].wait(timeout=10)
         procs["relay"] = start("relay2", relay_argv, dict(os.environ))
@@ -417,11 +423,11 @@ def main():
             (canary_pid,)) if r[1] == "Rejected" and "Replay" in (r[2] or "")],
             timeout=30)
         time.sleep(1)
-        check("R2 replayed packet passes the restarted relay and is rejected by the real node's own replay registry",
+        check("replayed packet after a relay restart passes the restarted relay and is rejected by the real node's own replay registry",
               relay_accepted and bool(trail2),
               {"relay_status": s, "relay_body": rb, "trail": trail2,
                "trail_rows_before": trail_before})
-        check("R2 produces no second record entry (event count and Recorded inbox row unchanged)",
+        check("the replay after a relay restart produces no second record entry (event count and Recorded inbox row unchanged)",
               q("select count(*) from Events")[0][0] == ev_after_canary and
               q("select count(*) from PacketInbox where PacketId=? and Status='Recorded'",
                 (canary_pid,)) == [(1,)],
@@ -456,7 +462,7 @@ def main():
 
     passed = sum(1 for c in checks if c["passed"])
     evidence = {"batch": "Canary batch, one sitting, fresh seed",
-                "tree": "this tree",
+                "tree": "integrated tree",
                 "canary_phrase": CANARY_PHRASE,
                 "canary_telling": CANARY_TELLING,
                 "checks": checks, "passed": passed, "total": len(checks),

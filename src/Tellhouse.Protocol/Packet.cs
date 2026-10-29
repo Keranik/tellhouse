@@ -9,8 +9,9 @@ namespace Tellhouse.Protocol;
 /// three keys: ciphertext, envelope, signature.
 ///
 /// The relay visible metadata is the envelope only, exactly the
-/// list (see Envelope). The ciphertext is opaque bytes whose
-/// length and hash the envelope already states. The signature is
+/// relay-visible metadata list (see Envelope). The ciphertext is
+/// opaque bytes whose length and hash the envelope already states.
+/// The signature is
 /// authentication material for the endpoints: ECDSA P-256 over
 /// SHA-256, IEEE P1363 form (r concatenated with s, 64 bytes),
 /// over the byte string:

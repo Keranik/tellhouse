@@ -44,13 +44,24 @@ of both.
 Demo: the people in this house are invented, it runs on one
 computer, and no real family's data is in it.
 
+Demo data and public release, stated plainly: this repository
+is populated with demo data for demo purposes. The household,
+its people, and its records are invented, and the keys,
+phrases, and tokens in the demo seed are toy material
+published for the demo; the live deployed demo runs on fresh
+values set at deployment time, not on anything in this
+repository. Some functionality is limited or removed in this
+public release version.
+
 There is no Tellhouse app to install. What is here is the house
 layer: a front door where a person tells the house something in
 their own words, and the shared record the household can read. In
 the live configuration, a telling is understood by Meta's Muse
 Spark model, through the Meta Model API, into record entries; a
 person confirms what needs confirming, and the confirmed record
-is what the house works from. By default the demo runs the same
+is what the house works from. The model proposes structured
+events; the house's own machinery confirms, routes, and
+records them. By default the demo runs the same
 path on a deterministic local stand-in. This demo runs one
 household on one computer: the architecture at demo scale. In
 this build the one computer runs three processes: the home node,
@@ -94,6 +105,44 @@ configuration and start command), and each stand-in is its own
 project under standins/ (see the README in each stand-in's
 folder for the environment it needs). src/HomeNode/README.md
 describes how the node talks to both.
+
+TEST-EVIDENCE.md records what was run against the code in
+this repository and what it showed.
+
+## Built on open source
+
+Tellhouse stands on open-source projects, and on one model:
+
+- .NET and ASP.NET Core (MIT): the home node, the two
+  stand-in assistants, the backup tool, and the protocol
+  library are C# on .NET 10, and the front door is ASP.NET
+  Core Razor Pages.
+- Entity Framework Core (MIT) with its SQLite provider:
+  the house record lives in a SQLite database (SQLite is
+  public domain).
+- Python 3 (PSF), standard library only: the sealed relay.
+- Bootstrap 5.3.3 and jQuery 3.7.1 (both MIT), with the
+  jQuery Validation plugins, vendored under wwwroot/lib:
+  the front door's styling and client scripts.
+- Muse Spark, Meta's model, through the Meta Model API:
+  the model call at the center of the design. It reads a
+  telling in a person's own words and returns the
+  structured events the house then works from.
+
+What we built on top of them is the house itself: the
+shared record and its front door, the confirmation step a
+person takes before anything is settled on the record,
+the audience rules that decide who may see and be told
+what, the sealed member protocol and the relay that
+carries messages it cannot read, the door ceremony that
+connects a member's own assistant, and the sealed backup
+and restore that also powers the demo reset.
+
+Standalone: this repository runs on its own. Nothing in
+it depends on any pre-existing Tellhouse infrastructure;
+the only outside service it calls is the Meta Model API,
+with the key supplied as the MODEL_API_KEY environment
+variable (see .env.example).
 
 ## Where this is going
 

@@ -42,13 +42,13 @@ public static class Crypto
 
 // The household content key, held in the node keystore file. The keystore
 // lives beside the node, never inside the database and never inside a
-// backup. Reconciliation note: the protocol designs the household
-// content key as a keypair on the node. This tool models the backup
-// sealing half as a symmetric 32 byte key in the node keystore, because
-// a backup is sealed data, not a packet to a reader. This keystore
-// entry maps to the protocol's household content key identifier;
-// the backup format carries a keyId so that mapping is a rename,
-// not a format change.
+// backup. Note: the protocol designs the household content key as
+// a keypair on the node. This tool models the backup sealing half
+// as a symmetric 32 byte key in the node keystore, because a backup
+// is sealed data, not a packet to a reader. This keystore entry
+// maps to the household content key identifier in the protocol
+// contract; the backup format carries a keyId so that mapping is a
+// rename, not a format change.
 public sealed class ContentKeyStore
 {
     public string KeyId { get; set; } = "";
@@ -60,6 +60,10 @@ public sealed class ContentKeyStore
     {
         if (File.Exists(path))
         {
+            // A keystore written by an older build may be group
+            // or world readable. Tighten it on load, on platforms
+            // that carry file modes.
+            TightenKeyFile(path);
             var ks = JsonSerializer.Deserialize<ContentKeyStore>(File.ReadAllText(path))
                      ?? throw new InvalidOperationException("keystore file is unreadable");
             if (ks.Key.Length != 32) throw new InvalidOperationException("keystore key must be 32 bytes");
@@ -71,8 +75,44 @@ public sealed class ContentKeyStore
             KeyBase64 = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
         };
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        File.WriteAllText(path, JsonSerializer.Serialize(fresh, new JsonSerializerOptions { WriteIndented = true }));
+        WriteKeyFile(path, JsonSerializer.Serialize(fresh, new JsonSerializerOptions { WriteIndented = true }));
         return fresh;
+    }
+
+    // The keystore holds the household backup key, so it is
+    // created owner read/write only (0600) whatever the process
+    // umask says.
+    private static void WriteKeyFile(string path, string contents)
+    {
+        var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+        using (var stream = new FileStream(path, options))
+        using (var writer = new StreamWriter(stream))
+        {
+            writer.Write(contents);
+        }
+        TightenKeyFile(path);
+    }
+
+    private static void TightenKeyFile(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+        try
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     public static ContentKeyStore Load(string path)

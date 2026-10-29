@@ -32,16 +32,39 @@ public class BriefModel : PageModel
 
     public string? LookupAnswer => TempData["LookupAnswer"] as string;
 
-    public async Task OnGetAsync()
+    public async Task<IActionResult> OnGetAsync()
     {
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
         var id = PersonId ?? People.FirstOrDefault()?.Id;
         if (id is not int viewerId)
         {
-            return;
+            return Page();
         }
-        Viewer = People.First(p => p.Id == viewerId);
-        Lines = await _briefs.BuildBriefAsync(viewerId, DateOnly.FromDateTime(DateTime.Now));
+        // An id that names nobody in the house is a 404, never a
+        // 500: ordinary bad input gets an ordinary
+        // answer.
+        Viewer = People.FirstOrDefault(p => p.Id == viewerId);
+        if (Viewer is null)
+        {
+            return NotFound();
+        }
+        // "Today" for the brief is the household's
+        // today, not the server clock's. The supply order-by and
+        // run-out lines in the brief count days on the household
+        // calendar, the same zone the service uses for due times.
+        var household = await _db.Households.FirstOrDefaultAsync(h => h.Id == Viewer.HouseholdId);
+        TimeZoneInfo householdZone;
+        try
+        {
+            householdZone = TimeZoneInfo.FindSystemTimeZoneById(household?.TimeZoneId ?? "America/Chicago");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            householdZone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+        }
+        Lines = await _briefs.BuildBriefAsync(viewerId,
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, householdZone)));
+        return Page();
     }
 
     public async Task<IActionResult> OnPostLookupAsync(int askerPersonId, int subjectPersonId)

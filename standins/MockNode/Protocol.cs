@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 namespace MockNode;
 
 // Lisa's own implementation of the Tellhouse Protocol Contract
-// version 1.0 (the protocol, frozen). Written inside this project from
+// version 1.0 (frozen). Written inside this project from
 // the contract document and the shared test vectors only. This
 // project references no Tellhouse library, no node code, and no
 // other stand-in's code.
@@ -275,7 +275,7 @@ public static class Protocol
         return plain;
     }
 
-    // Envelope (contract section 3): exactly the eight fields.
+    // Envelope (contract section 3): exactly the eight envelope fields.
     public static JsonObject Envelope(string packetId, string connectionId, string deliveryMode,
         string envelopeClass, string householdEndpoint, long issuedAt, long ciphertextLength,
         string ciphertextHash) => new()

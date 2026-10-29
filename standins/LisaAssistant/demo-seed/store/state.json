@@ -1,0 +1,11 @@
+{
+  "connection_id": "conn-lisa-01",
+  "credential": "26aeaffcc88e476d63cf484dc67b4a0c38a4274556cf925782f9ca8d8b03faf9",
+  "joined": true,
+  "node_public_key": "BNpHXeYP4wVzwlUGB-gSKP81fZxyQEZQhswYybSydvcrvNb3zqE95fBNSJ378N5rktC40_7OIDN7m46BOzPsApE",
+  "invite_disposed": true,
+  "pending_client_nonce": null,
+  "pending_open_packet": "pkt-dd4694e6f4d4243a",
+  "session_proof_sent": true,
+  "session_open_at": 1793262551
+}

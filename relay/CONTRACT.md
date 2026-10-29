@@ -1,17 +1,23 @@
 # Relay contract
 
-Status: this document describes the relay as built, against the
-frozen protocol contract in src/Tellhouse.Protocol/CONTRACT.md.
-Where the protocol's frozen test vectors differ from this
-document, the vectors govern. Divergences are flagged below as
-proposals, never silently resolved.
+Status: coded first from an early design package, then
+reconciled against the protocol project as it stood in
+progress on Oct 28 (files Envelope.cs, Packet.cs and
+PlainPacket.cs, not yet final at the time of reading). Where
+the protocol's final test vectors differ from this document,
+the vectors govern and this document gets a reconciliation
+update. Divergences are flagged below as proposals, never
+silently resolved.
 
-All four packets from the protocol's vectors file (telling,
-delivery, acknowledgement, delivery) cross this relay unchanged,
-in both directions, in the check suite (fixture snapshot in
-tests/fixtures/lane_k_vectors.json).
+Reconciliation already run: all four packets from the
+protocol vectors file (telling, delivery, acknowledgement,
+delivery) cross this relay unchanged, in both directions, in
+the check suite (TestProtocolVectors, fixture snapshot in
+tests/fixtures/lane_k_vectors.json, taken Oct 28 at about
+3:24 PM CT, before the protocol was final; the snapshot
+should be re-checked against the final vectors file).
 
-## Wire shape (from the protocol contract)
+## Wire shape (protocol, adopted)
 
 A packet is one JSON object with exactly three keys:
 
@@ -35,7 +41,7 @@ The envelope fields, exactly the relay-visible list:
 | ciphertext_hash | Base64url (no padding) SHA-256 of the ciphertext bytes |
 
 Packet type (telling, delivery, acknowledgement) lives only
-inside the sealed body, per the protocol contract, so a telling, a question and
+inside the sealed body, under the protocol, so a telling, a question and
 a confirmation reply inside session traffic are
 indistinguishable to this relay. There is no material class
 field, no sender or recipient field, and no subject field.
@@ -51,8 +57,9 @@ holds no keys with which it could verify anything.
 
 The snapshot, view and log add two relay generated fields,
 received_at and expires_at (unix seconds). Together with
-issued_at these are the relay timing fields: the regression net's
-packet view asks for relay received and delivered times, and a
+issued_at these are the relay timing fields: the packet view
+used by the regression checks asks for relay received and
+delivered times, and a
 queue window cannot be stated or enforced without them. No
 other relay generated metadata field exists.
 
@@ -75,7 +82,7 @@ snapshot, the log or the relay view. Packets reloaded from a
 snapshot after a relay restart are treated as member posted, so
 a delivery in flight across a restart can be collected by the
 node and dropped there; that edge is stated here rather than
-hidden. If the frozen protocol contract names a different routing
+hidden. If the protocol's final contract names a different routing
 reading for connection_id, this rule is the part that changes;
 the store and log shapes do not.
 
@@ -85,7 +92,7 @@ the store and log shapes do not.
 | --- | --- |
 | Session queue window | 60 seconds, then dropped |
 | Store-and-forward queue window | 300 seconds, then dropped |
-| Largest ciphertext | 65,536 bytes (the protocol maximum) |
+| Largest ciphertext | 65,536 bytes (protocol maximum) |
 | Rate limit | 30 accepted packets per connection per minute |
 | Replay window | A packet_id seen in the last 600 seconds is rejected as a duplicate |
 

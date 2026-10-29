@@ -12,7 +12,7 @@ namespace HomeNode.Services.Extraction;
 public static class ExtractionPrompt
 {
     public const string System = """
-You are the extraction pipeline for a household coordinator. You turn one transcribed utterance into structured household events. You follow the rules in this prompt exactly.
+You are the extraction pipeline for a household coordinator. You turn one transcribed utterance into structured household events. You follow the extraction spec exactly.
 
 Event types: Request, HouseholdNote, Supply, Journal, FacilityNotice, Whereabouts, HealthMention, Commitment, Task.
 

@@ -48,7 +48,7 @@ public class TestSendResult
 // extracted on the node). This service holds no database reference
 // and no path into the record; the node suite asserts both.
 //
-// Wire shape note: the monolith reference payload carried
+// Wire shape note: an earlier reference payload carried
 // exactly trigger, requestId, and requestedAtUtc. The real stand-ins
 // refuse a trigger with no act id (their endpoint answers 400, "act
 // id required"), so the act id rides along as a fourth, identifier
@@ -132,16 +132,25 @@ public class TestSendService
             // sent shape is { act, packet_id, relay_status,
             // relay_result }; its relay stopped shape is HTTP 202
             // with { act, packet_id, result: "queued locally,
-            // unrecorded" }. The stub shape ({ status,
+            // unrecorded" }. The stub shape from the integration exercises ({ status,
             // packetId }) is read too, so the suite's stub answers
             // and the real stand-in's answers surface the same way.
             string status = "sent";
             string? packetId = null;
             string? standInWords = null;
+            int? relayStatus = null;
             try
             {
                 using var doc = JsonDocument.Parse(body);
                 var root = doc.RootElement;
+                if (root.TryGetProperty("relay_status", out var rs) && rs.ValueKind == JsonValueKind.Number)
+                {
+                    relayStatus = rs.GetInt32();
+                }
+                if (root.TryGetProperty("relayStatus", out var rs2) && rs2.ValueKind == JsonValueKind.Number)
+                {
+                    relayStatus = rs2.GetInt32();
+                }
                 if (root.TryGetProperty("packet_id", out var pid) && pid.ValueKind == JsonValueKind.String)
                 {
                     packetId = pid.GetString();
@@ -178,9 +187,24 @@ public class TestSendService
                 // still counts as triggered; the record is the
                 // evidence, not this note.
             }
+            // A stand-in answer that reports the relay
+            // itself refused the packet (a duplicate, a refusal, an
+            // error status from the relay) is not a send, whatever
+            // the rest of the answer says. The front door must not
+            // tell a judge "sent" for a packet the relay turned
+            // away; the node's own rejection after a relay
+            // acceptance is a separate, later step, and the
+            // stand-in's session handling is what keeps that step
+            // from being a stale-session refusal.
+            if (relayStatus is >= 400 && status == "sent")
+            {
+                status = "unreachable";
+            }
             var note = status == "queued-unrecorded"
                 ? "The stand-in holds its telling in its own outbox, marked unrecorded. It has not landed in the record. This is what a stopped relay looks like from the house."
-                : "The stand-in was triggered and sent its own telling through the relay. Watch the record for it, landing with its provenance.";
+                : status == "unreachable" && relayStatus is >= 400
+                    ? $"The stand-in reported that the relay refused its packet (HTTP {relayStatus}). The telling did not leave the stand-in toward the house on this click, and nothing landed in the record from it."
+                    : "The stand-in was triggered and sent its own telling through the relay. Watch the record for it, landing with its provenance.";
             if (standInWords is not null && status == "sent")
             {
                 note += $" The stand-in answered: {standInWords}";

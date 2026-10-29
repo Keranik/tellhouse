@@ -9,11 +9,11 @@ namespace HomeNode.Services;
 // member, on the frozen protocol contract. A delivery is a wire
 // packet (exactly ciphertext, envelope, signature): sealed to the
 // member's one identity keypair, signed with the node content
-// keypair, envelope carrying exactly the eight fields. No
+// keypair, envelope carrying exactly the eight relay-visible fields. No
 // plaintext copy of a delivery body is written anywhere in the
 // node store. This replaces direct in-database delivery for
 // members who hold a connection; members with no connection keep
-// the house layer delivery the monolith already had.
+// the house layer's in-database delivery, unchanged.
 //
 // The service also answers the routing question for the existing
 // pipeline: the confirmation dispatcher and plan assembly call
@@ -33,14 +33,76 @@ public class SealedDeliveryService
 
     // The demo household's endpoint is the frozen protocol contract's
     // own endpoint (hh-demo-01, the value in the frozen test vectors
-    // and the value both stand-ins speak). The
-    // node adopts that endpoint for the seeded demo household, so
-    // envelopes, the relay registry, and intake all name one
-    // endpoint. (A household-{id} form would match no stand-in and
-    // no vector, so it is not used.)
+    // and the value both stand-ins speak). The node adopts that
+    // endpoint for the seeded demo household, so envelopes, the
+    // relay registry, and intake all name one endpoint. (An earlier
+    // home node form used a household-{id} endpoint, which no
+    // stand-in speaks.)
     public static string HouseholdEndpointFor(int householdId) => "hh-demo-01";
 
     public static string NewPacketId() => $"pkt-{Guid.NewGuid():N}";
+
+    // Whether a delivery to this person is blocked by the access
+    // level of the connection they hold. Blocked is
+    // different from unreachable: a person with no connection at
+    // all is not blocked, and their delivery takes the house layer
+    // fallback their callers already had. A person who holds a
+    // connection is blocked when that connection may not receive
+    // this material (it stands KnockOnly or Revoked, its level is
+    // KnockOnly, or the material is health class and its level
+    // excludes health entries, as every offered level does). A
+    // blocked delivery must not fall back to a plaintext row
+    // either: the fallback would deliver through the member view
+    // exactly what the level was promised the connection cannot
+    // hear. Callers that have a fallback consult this first.
+    public async Task<bool> IsDeliveryBlockedAsync(
+        int toPersonId, int? sourceEventId = null, int? sourcePlanElementId = null)
+    {
+        var connection = await _db.HouseConnections
+            .Where(c => c.PersonId == toPersonId && c.Standing != ConnectionStanding.Revoked)
+            .OrderByDescending(c => c.CreatedAtUtc)
+            .FirstOrDefaultAsync();
+        if (connection is null)
+        {
+            return false;
+        }
+        if (!ConnectionAccess.AllowsDelivery(connection))
+        {
+            return true;
+        }
+        return await IsHealthClassAsync(sourceEventId, sourcePlanElementId)
+            && !ConnectionAccess.AllowsHealthDelivery(connection);
+    }
+
+    // Health class, resolved from the record the delivery carries:
+    // its source event, or any source event of its plan element.
+    private async Task<bool> IsHealthClassAsync(int? sourceEventId, int? sourcePlanElementId)
+    {
+        if (sourceEventId is int eventId)
+        {
+            var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+            if (ev is not null && ConnectionAccess.IsHealthClass(ev))
+            {
+                return true;
+            }
+        }
+        if (sourcePlanElementId is int elementId)
+        {
+            var element = await _db.PlanElements.FirstOrDefaultAsync(e => e.Id == elementId);
+            if (element is not null)
+            {
+                foreach (var id in PlanAssemblyService.SourceEventIds(element))
+                {
+                    var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == id);
+                    if (ev is not null && ConnectionAccess.IsHealthClass(ev))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
 
     public async Task<SealedOutboxItem?> QueueDeliveryAsync(
         int householdId, int toPersonId, string bodyText, string sourceKind,
@@ -55,11 +117,15 @@ public class SealedDeliveryService
                 return existing;
             }
         }
+        if (await IsDeliveryBlockedAsync(toPersonId, sourceEventId, sourcePlanElementId))
+        {
+            return null;
+        }
         var connection = await _db.HouseConnections
             .Where(c => c.PersonId == toPersonId && c.Standing == ConnectionStanding.Active)
             .OrderByDescending(c => c.CreatedAtUtc)
             .FirstOrDefaultAsync();
-        if (connection is null)
+        if (connection is null || !ConnectionAccess.AllowsDelivery(connection))
         {
             return null;
         }
@@ -67,6 +133,38 @@ public class SealedDeliveryService
             connection, kind, bodyText, sourceKind,
             sourceEventId, sourcePlanElementId, toldAtUtc, dedupeKey,
             EnvelopeClass.StoreAndForward, Envelope.DeliveryStoreAndForward);
+    }
+
+    // The /admin/propose operation: queueing a proposal
+    // delivery for an event. Pass one put the house secret gate on
+    // the endpoint; what remained was that the endpoint queued the
+    // entry's text for the addressed person whatever state the
+    // entry was in and whoever the entry's stored audience named.
+    // Reproduced on this tree over HTTP before the fix: a Done
+    // entry was queued as a proposal, and a Personal entry stored
+    // for Daniel alone was queued to Lisa. Both checks now live
+    // here, inside the operation, failing closed:
+    //   the entry must still be Proposed, and
+    //   the proposed recipient must be inside the entry's stored
+    //     audience (BriefService.IsVisibleTo, the same stored
+    //     audience read every surface uses).
+    // The refusal strings are stable tokens the endpoint maps to
+    // status codes; the delivery gating itself (connection level,
+    // health class) stays QueueDeliveryAsync's, below.
+    public async Task<(SealedOutboxItem? Item, string? Refusal)> QueueProposalAsync(
+        Event ev, int targetPersonId)
+    {
+        if (ev.ConfirmationState != ConfirmationState.Proposed)
+        {
+            return (null, "not-a-proposal");
+        }
+        if (!BriefService.IsVisibleTo(ev, targetPersonId))
+        {
+            return (null, "outside-audience");
+        }
+        var item = await QueueDeliveryAsync(ev.HouseholdId, targetPersonId,
+            ev.Body, "Proposal", sourceEventId: ev.Id, kind: "proposal");
+        return item is null ? (null, "undeliverable") : (item, null);
     }
 
     // Builds, seals, and signs one delivery packet to one enrolled

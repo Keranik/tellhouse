@@ -1,9 +1,10 @@
-# Sealed backup, recovery restore, demo reset
+# TellhouseBackup: sealed backup, recovery restore, demo reset
 
-Node side project. New code only; the monolith is not modified and is
-not referenced by this project. It works on the node's record database
-file (SQLite, the monolith and node record format) from outside the
-record code, the same place a household backup tool would sit.
+A node side project. New code only; the household coordinator
+program is not modified and is not referenced by this project. It
+works on the node's record database file (SQLite, the record
+format the node uses) from outside the record code, the same
+place a household backup tool would sit.
 
 ## What is built
 
@@ -33,7 +34,7 @@ record code, the same place a household backup tool would sit.
   widening can never hide inside a general equality pass. The one
   permitted difference is the restore announcement itself (its event,
   its audit row, and the AUTOINCREMENT sequence rows for those two
-  tables, which the announcement advances), as stated for the restore proof.
+  tables, which the announcement advances).
 - Announcement. A restore writes one HouseholdNote event into the
   restored record (Household audience, marked RestoreAnnouncement in
   its Details, naming the backup and the restore path) and one
@@ -43,18 +44,67 @@ record code, the same place a household backup tool would sit.
   traffic with provenance (origin, connection, packet id in the
   event Details) is part of the snapshot and returns with the reset,
   together with the restore audit row.
+- sqlite_sequence, handled exactly. The AUTOINCREMENT high water
+  marks are record state and ride in the export. On restore, the
+  row that inserting the data creates for each table is replaced
+  by the exported row, never added to it, so a restored database
+  holds exactly one sequence row per table with the exported
+  value. That matters when the mark sits above the largest
+  surviving id (tail rows deleted before the backup): reading the
+  wrong row would hand deleted ids out again. The comparison
+  used by verify and by the selftest compares row counts per
+  table and rows as multisets (a row occurring twice is a
+  difference from the same row occurring once), including
+  sqlite_sequence, so "equal" means equal. The one permitted
+  sequence difference remains the restore announcement, which
+  advances the Events and EventAudits marks by one each; the
+  selftest also reads the restored sequence directly and checks
+  every other table's mark against the exported value.
+- Restore is a stopped node operation, and it removes stale
+  journal files. Never run restore or demo-reset onto a database
+  a running node has open: the tool cannot stop the node for you,
+  and a running node keeps working on the file it opened. Stop
+  the node first (the packaged flows do: the entrypoint restores
+  before the app starts, and DEPLOY.md's reset sequence stops
+  the service, restores, and starts it again). When the restore
+  swaps the restored file into place it first deletes the
+  destination's journal sidecar files (the -wal, -shm, and
+  -journal files). Those files belong to the old database file;
+  left in place, the next open can replay them against the
+  restored file and produce a mixed record. The selftest proves
+  the removal against sidecars copied from a live WAL database
+  that had gained a row after the backup.
+- Further parts of that stopped node rule. Before the swap the
+  restore tool now refuses a destination another process holds
+  open (visible on Linux through /proc; where the holder lives
+  in another container the stop first rule above still applies),
+  and it checkpoints the destination's WAL, refusing when the
+  checkpoint stays busy. It also never
+  rolls back the seen packet tables: rows in PacketSeen and
+  PacketNonceUses that the destination accepted after the
+  snapshot was taken are merged into the restored database, so
+  a packet the reset removed from the record cannot be recorded
+  a second time when it is re-posted after the relay's short
+  in-memory duplicate window passes. A demo reset therefore
+  returns the record to its determined state while keeping
+  exactly this replay protection, and nothing else, from after
+  the snapshot.
 - At rest file sealing for a stopped node. seal-db seals the whole
   database file under the household content key; unseal-db opens it
   and verifies the plaintext hash before writing. While sealed, the
-  file on disk holds no record text.
+  file on disk holds no record text. The seal is taken from the
+  checkpointed database: the WAL is flushed into the main file
+  first (refusing while another process holds the file open or
+  the checkpoint stays busy), so rows that existed only in the
+  write-ahead log are sealed too, not silently left behind.
 
 ## Commands
 
 See the program usage output (`dotnet run --project src/TellhouseBackup`
 with no arguments). Proof run: `tests/run-lane-s.sh`, which builds and
-runs the selftest harness, then, when the seeded monolith database is
-present in the main tree, repeats the restore proof against
-that real record database.
+runs the selftest harness, then, when a seeded record database is
+present in this tree, repeats the restore proof against that real
+record database.
 
 ## Divergences and limits, flagged not hidden
 
@@ -76,22 +126,24 @@ that real record database.
    half as a symmetric 32 byte key in a node keystore file, since a
    backup is sealed data rather than a packet addressed to a reader.
    The backup header carries the keyId, so mapping to the protocol
-   identifier is a rename.
-   Open design point: confirm whether backup wrapping should use the content key
-   directly as here, or a key derived from the node keypair.
-3. Consent, grants and valve tables. The monolith record has no such
-   tables yet; they belong to the split node. The canonical export
-   is table agnostic, so those tables ride the backup automatically
-   when they exist, and the selftest fixture includes them in the
-   split shape (Connections, ConsentGrants, ValveSettings) to prove
-   the restore covers them. That fixture is a backup tool test fixture,
-   not a claim that the node tables exist today.
+   identifier for the content key is a rename. One point to confirm
+   when the protocol contract is applied here: whether backup
+   wrapping should use the content key directly as here, or a key
+   derived from the node keypair.
+3. Consent, grants and valve tables. The household coordinator
+   record has no such tables yet; they belong to the node. The
+   canonical export is table agnostic, so those tables ride the
+   backup automatically when they exist, and the selftest fixture
+   includes them in the node shape (Connections, ConsentGrants,
+   ValveSettings) to prove the restore covers them. That fixture
+   is a test fixture for this tool, not a claim that the node
+   tables exist today.
 4. Restore governance beyond announcement (quorum, veto, sensitive
    power gating, receiving only windows) is not built and is not
-   claimed. It stays direction, as designed. The restore
+   claimed. It remains a direction for future work. The restore
    audit row records a null actor; no governance row is written.
-5. The demo snapshot in the selftest uses the backup tool fixture
-   record as the seeded demonstration state. On the full demo, the
+5. The demo snapshot in the selftest uses this tool's fixture
+   record as the seeded demonstration state. In the full demo, the
    snapshot is taken from the real seeded node database using the
    same two commands; the proof run in tests/run-lane-s.sh already
    runs the restore half against the real seeded database.

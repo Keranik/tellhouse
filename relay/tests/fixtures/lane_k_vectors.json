@@ -1,5 +1,5 @@
 {
- "source": "Test vectors copied from src/Tellhouse.Protocol/vectors/test-vectors.json in this tree. Wire packets only (ciphertext, envelope, signature), copied from each vector packet_canonical field. Test vector material only; it protects no real household.",
+ "source": "Protocol test vectors, src/Tellhouse.Protocol/vectors/test-vectors.json, snapshot taken Oct 28, 2026 at about 15:24 CT while the protocol was still in progress and before it was final. Wire packets only (ciphertext, envelope, signature), copied from each vector packet_canonical field. Test vector material only; it protects no real household. This snapshot should be re-checked against the final vectors file.",
  "household_endpoint": "hh-demo-01",
  "packets": [
   {

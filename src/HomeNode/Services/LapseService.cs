@@ -1,15 +1,15 @@
 namespace HomeNode.Services;
 
 // The timer behind the confirmation flow's one timer-driven move:
-// an unanswered proposal lapses to NotConfirmed after 24 hours
-// of silence, with the system as actor and
+// an unanswered proposal lapses to NotConfirmed after 24 hours,
+// with the system as actor and
 // "lapse" as the audit channel. Silence is never a yes; the lapse
 // is the only state change in the system that no person performs,
 // and it only ever discards a proposal, never a record-pending
 // fact and never anything a person has already decided.
 //
 // The sweep runs once at startup and then on an interval. The
-// 24-hour deadline itself is the design's; the sweep interval is an
+// 24-hour deadline itself is the spec's; the sweep interval is an
 // implementation detail (a proposal lapses at most one interval
 // after its deadline, never before it).
 public class LapseService : BackgroundService
@@ -39,7 +39,7 @@ public class LapseService : BackgroundService
                 {
                     _logger.LogInformation("Lapsed {Count} unanswered proposal(s) past the 24-hour mark.", lapsed);
                 }
-                // The audience ask lapse (spec C.2.1 clause 7): a
+                // The audience ask lapse (audience decision clause 7): a
                 // presented ask unanswered past its clock lapses, and
                 // the event stays at its narrowest audience. Silence
                 // never widens, so this sweep changes no audience.

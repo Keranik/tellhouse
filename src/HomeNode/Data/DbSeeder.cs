@@ -64,7 +64,7 @@ public static class DbSeeder
         household.BackupRoutePersonId = lisa.Id;
         db.SaveChanges();
 
-        // Audience defaults (spec C.2.1): Lisa is the seeded holder.
+        // Audience defaults: Lisa is the seeded holder.
         // She set her Private default by telling, with read-back, and
         // the request row below is that telling and her disposal.
         // Mia's Ask was set at enrollment by Daniel, the adult who
@@ -121,7 +121,7 @@ public static class DbSeeder
         db.SaveChanges();
 
         // Household notes that answer by task, in the family's own words,
-        // from task-notes.json. The coordinator hands these back exactly as
+        // from task-notes.json. The house hands these back exactly as
         // written; it does not write or change them.
         (string Task, string Note)[] taskNotes =
         {
@@ -208,7 +208,7 @@ public static class DbSeeder
             // the backup. A statement of her plan, written already
             // Confirmed with Margaret as its confirmer of record,
             // the same shape as every statement-only entry on this
-            // day. This is the record line Beat 6 shows among the
+            // day. This is the record line the demo shows among the
             // day's entries; it is record content, not a telling
             // produced live.
             new()
@@ -367,8 +367,7 @@ public static class DbSeeder
             Write(events[9], "voice")
         );
 
-        // Dinner provenance, stated in the days before the demo day
-        // (the dinner provenance tellings):
+        // Dinner provenance, stated in the days before the demo day:
         // the household's usual meals and its fridge contents exist
         // only as tellings, each with its author and its day, so a
         // dinner proposal can carry the telling behind every item it

@@ -94,7 +94,7 @@ case "${1:-}" in
   verify) verify ;;
   reset)
     stop
-    rm -f "$DEMO_DB" "$DEMO_DB-wal" "$DEMO_DB-shm"
+    rm -f "$DEMO_DB" "$DEMO_DB-wal" "$DEMO_DB-shm" "$DEMO_DB-journal"
     start && verify && echo "reset complete: pristine seeded day"
     ;;
   *)

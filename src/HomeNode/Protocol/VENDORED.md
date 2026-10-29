@@ -1,16 +1,17 @@
 # Vendored protocol core (frozen)
 
 The .cs files in this folder are the protocol reference
-implementation, copied verbatim from src/Tellhouse.Protocol with
-only the namespace changed from Tellhouse.Protocol to
-HomeNode.Protocol, so this project stays self-contained. The
-contract is the protocol's CONTRACT.md; the shared test vectors
-are test-vectors.json beside this file.
+implementation, copied verbatim from the protocol project
+(src/Tellhouse.Protocol) with only the namespace changed from
+Tellhouse.Protocol to HomeNode.Protocol, so this project stays
+self-contained. The contract is the protocol project's
+CONTRACT.md; the shared test vectors are test-vectors.json
+beside this file, copied from the same source.
 
 Correctness is defined by the contract and the vectors, not by
-this copy. If this vendored copy is later replaced
-with a project reference to the protocol's library, nothing in the home node
-should need to change: the home node code calls only the contract level
+this copy. If this vendored copy is later replaced with a
+project reference to the protocol library, nothing in the home
+node should need to change: home node code calls only the contract level
 operations (Packet.Create, Packet.Parse, Packet.Open,
 Sealer.Seal, Envelope.AadBytes as the seal authenticated data,
 SessionChallenge proof build and verify, the fingerprint rule).
