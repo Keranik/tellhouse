@@ -462,6 +462,7 @@ def main():
                     "open_leg": "standing node Consent state open for conn-lisa-01 class OneLiner: same act admitted and recorded"},
                 "note": "Stand-ins and the stand-in node double run against the real relay and the frozen protocol contract vectors. The node double follows the home node's stated mappings (valve by kind, proposal disposal by acknowledgement) but is not the home node; a separate integration exercise runs the stand-ins against the real node as integration evidence."}
     out = os.path.join(ROOT, "evidence", "protocol-checks-latest.json")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         json.dump(evidence, f, indent=2)
     print(f"CHECKS {passed} passed, {len(checks) - passed} failed, of {len(checks)}")

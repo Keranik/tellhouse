@@ -8,8 +8,21 @@ commit built on top of it (October 29, 2026).
 
 ## Build
 
-Both commits: every project in the tree builds clean,
-0 warnings and 0 errors (.NET 10).
+First public commit (75b6ed3): every project in the tree
+builds clean, 0 warnings and 0 errors (.NET 10), verified
+from a fresh tree.
+
+Follow-up commit: every project in the tree builds clean
+from scratch (a fresh export of the exact tree, in both
+Release and Debug), 0 warnings and 0 errors (.NET 10).
+An earlier verification record for this follow-up's
+pre-final tree stated 0 warnings; that figure came from
+incremental builds and was an artifact of them. A
+from-scratch build of that tree showed two
+nullable-reference warnings in the home node suite,
+both remedied with null-forgiving markers before this
+commit was finalized. The figure stated here is the
+from-scratch result on this exact tree.
 
 ## Suites
 
