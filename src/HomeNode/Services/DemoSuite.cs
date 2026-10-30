@@ -838,7 +838,7 @@ public static class DemoSuite
         var fencingPlan = await plans.CreatePlanAsync(householdId, "Element fencing", null);
         var fencingRestricted = await plans.AddElementAsync(fencingPlan.Id, PlanElementKind.Task,
             "Fencing canary: the restricted element words.", Array.Empty<int>(),
-            sourceEventIds: new[] { q38RestrictedTask.Id });
+            sourceEventIds: new[] { runnerRestrictedTask.Id });
         var fencingPersonal = await plans.AddElementAsync(fencingPlan.Id, PlanElementKind.Task,
             "Fencing canary: the personal element words.", Array.Empty<int>(),
             sourceEventIds: new[] { landingPersonal.Id });

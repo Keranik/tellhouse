@@ -395,48 +395,48 @@ public static class SelfTest
             File.WriteAllText(NodeLiveness.LockPathFor(targetDb), payload);
         }
 
-        var q42Dest = Path.Combine(work, "q42.db");
-        File.Copy(db, q42Dest);
-        var q42Before = Crypto.Sha256Hex(File.ReadAllBytes(q42Dest));
-        PlantLock(q42Dest, DateTime.UtcNow, "selftest-live-instance");
-        bool q42Refused = Throws(() => Program.RestoreFromPhrase(backupPath, phrase, q42Dest, "demo-reset"));
+        var lockDest = Path.Combine(work, "lock.db");
+        File.Copy(db, lockDest);
+        var lockBefore = Crypto.Sha256Hex(File.ReadAllBytes(lockDest));
+        PlantLock(lockDest, DateTime.UtcNow, "selftest-live-instance");
+        bool lockRefused = Throws(() => Program.RestoreFromPhrase(backupPath, phrase, lockDest, "demo-reset"));
         Check("live-node-lock-refuses-reset-and-leaves-the-database-untouched",
-            q42Refused && Crypto.Sha256Hex(File.ReadAllBytes(q42Dest)) == q42Before,
-            $"refused={q42Refused}");
-        bool q42OverrideOk = !Throws(() => Program.RestoreFromPhrase(backupPath, phrase, q42Dest, "demo-reset", true));
-        var q42AuditPath = NodeLiveness.AuditLogPathFor(q42Dest);
-        var q42Audit = File.Exists(q42AuditPath) ? File.ReadAllText(q42AuditPath) : "";
+            lockRefused && Crypto.Sha256Hex(File.ReadAllBytes(lockDest)) == lockBefore,
+            $"refused={lockRefused}");
+        bool lockOverrideOk = !Throws(() => Program.RestoreFromPhrase(backupPath, phrase, lockDest, "demo-reset", true));
+        var lockAuditPath = NodeLiveness.AuditLogPathFor(lockDest);
+        var lockAudit = File.Exists(lockAuditPath) ? File.ReadAllText(lockAuditPath) : "";
         Check("live-node-override-resets-and-logs-the-override",
-            q42OverrideOk && q42Audit.Contains("override-live-node") && q42Audit.Contains("selftest-live-instance"),
-            $"override restored={q42OverrideOk} audit recorded={q42Audit.Contains("selftest-live-instance")}");
-        PlantLock(q42Dest, DateTime.UtcNow.AddMinutes(-10), "selftest-stale-instance");
-        bool q42StaleOk = !Throws(() => Program.RestoreFromPhrase(backupPath, phrase, q42Dest, "demo-reset"));
+            lockOverrideOk && lockAudit.Contains("override-live-node") && lockAudit.Contains("selftest-live-instance"),
+            $"override restored={lockOverrideOk} audit recorded={lockAudit.Contains("selftest-live-instance")}");
+        PlantLock(lockDest, DateTime.UtcNow.AddMinutes(-10), "selftest-stale-instance");
+        bool lockStaleOk = !Throws(() => Program.RestoreFromPhrase(backupPath, phrase, lockDest, "demo-reset"));
         Check("stale-lock-lets-the-reset-proceed-and-is-removed",
-            q42StaleOk && !File.Exists(NodeLiveness.LockPathFor(q42Dest)),
-            $"restored={q42StaleOk} lock still present={File.Exists(NodeLiveness.LockPathFor(q42Dest))}");
-        File.WriteAllText(NodeLiveness.LockPathFor(q42Dest), "this is not a lock file {{{");
-        bool q42CorruptOk = !Throws(() => Program.RestoreFromPhrase(backupPath, phrase, q42Dest, "demo-reset"));
-        Check("unreadable-lock-never-blocks-a-reset", q42CorruptOk, $"restored={q42CorruptOk}");
-        try { File.Delete(NodeLiveness.LockPathFor(q42Dest)); } catch { }
+            lockStaleOk && !File.Exists(NodeLiveness.LockPathFor(lockDest)),
+            $"restored={lockStaleOk} lock still present={File.Exists(NodeLiveness.LockPathFor(lockDest))}");
+        File.WriteAllText(NodeLiveness.LockPathFor(lockDest), "this is not a lock file {{{");
+        bool lockCorruptOk = !Throws(() => Program.RestoreFromPhrase(backupPath, phrase, lockDest, "demo-reset"));
+        Check("unreadable-lock-never-blocks-a-reset", lockCorruptOk, $"restored={lockCorruptOk}");
+        try { File.Delete(NodeLiveness.LockPathFor(lockDest)); } catch { }
 
         // The at-rest unseal swap takes the same refusal, and the
         // same logged override.
-        var q42SealDbPath = Path.Combine(work, "q42-seal.db");
-        File.Copy(db, q42SealDbPath);
-        var q42SealedPath = Path.Combine(work, "q42-seal.db.thsealed");
-        AtRestFileSeal.SealFile(q42SealDbPath, q42SealedPath, ks);
-        File.Delete(q42SealDbPath);
-        PlantLock(q42SealDbPath, DateTime.UtcNow, "selftest-live-instance");
-        bool q42UnsealRefused = Throws(() => AtRestFileSeal.UnsealFile(q42SealedPath, q42SealDbPath, ks));
+        var lockSealDbPath = Path.Combine(work, "lock-seal.db");
+        File.Copy(db, lockSealDbPath);
+        var lockSealedPath = Path.Combine(work, "lock-seal.db.thsealed");
+        AtRestFileSeal.SealFile(lockSealDbPath, lockSealedPath, ks);
+        File.Delete(lockSealDbPath);
+        PlantLock(lockSealDbPath, DateTime.UtcNow, "selftest-live-instance");
+        bool lockUnsealRefused = Throws(() => AtRestFileSeal.UnsealFile(lockSealedPath, lockSealDbPath, ks));
         Check("live-node-lock-refuses-at-rest-unseal",
-            q42UnsealRefused && !File.Exists(q42SealDbPath),
-            $"refused={q42UnsealRefused} destination written={File.Exists(q42SealDbPath)}");
-        bool q42UnsealOverrideOk = !Throws(() => AtRestFileSeal.UnsealFile(q42SealedPath, q42SealDbPath, ks, true));
-        var q42SealAudit = File.Exists(NodeLiveness.AuditLogPathFor(q42SealDbPath))
-            ? File.ReadAllText(NodeLiveness.AuditLogPathFor(q42SealDbPath)) : "";
+            lockUnsealRefused && !File.Exists(lockSealDbPath),
+            $"refused={lockUnsealRefused} destination written={File.Exists(lockSealDbPath)}");
+        bool lockUnsealOverrideOk = !Throws(() => AtRestFileSeal.UnsealFile(lockSealedPath, lockSealDbPath, ks, true));
+        var lockSealAudit = File.Exists(NodeLiveness.AuditLogPathFor(lockSealDbPath))
+            ? File.ReadAllText(NodeLiveness.AuditLogPathFor(lockSealDbPath)) : "";
         Check("live-node-override-unseals-and-logs-the-override",
-            q42UnsealOverrideOk && File.Exists(q42SealDbPath) && q42SealAudit.Contains("at-rest unseal"),
-            $"unsealed={q42UnsealOverrideOk} destination exists={File.Exists(q42SealDbPath)}");
+            lockUnsealOverrideOk && File.Exists(lockSealDbPath) && lockSealAudit.Contains("at-rest unseal"),
+            $"unsealed={lockUnsealOverrideOk} destination exists={File.Exists(lockSealDbPath)}");
 
         // Demo reset through the same machinery. The fixture record IS
         // the seeded demonstration state for this proof: it carries two
