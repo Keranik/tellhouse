@@ -14,6 +14,29 @@
     <p><strong>@Model.Note</strong></p>
 }
 
+<form method="get">
+    <label>
+        Reading as
+        <select name="ViewerId" onchange="this.form.submit()">
+            <option value="">No reader named (house entries only)</option>
+            @foreach (var person in Model.People)
+            {
+                if (Model.ViewerId == person.Id)
+                {
+                    <option value="@person.Id" selected>@person.DisplayName</option>
+                }
+                else
+                {
+                    <option value="@person.Id">@person.DisplayName</option>
+                }
+            }
+        </select>
+    </label>
+</form>
+<p>Open decisions, plan elements, and the tellings behind them are
+   shown as the reader named here may see them, under the audience
+   stored on each telling.</p>
+
 <h2>Start a plan</h2>
 <form method="post" asp-page-handler="CreatePlan">
     <label>Plan name <input type="text" name="label" placeholder="Tonight" /></label>
@@ -73,6 +96,10 @@ else
 
     @foreach (var element in plan.Elements)
     {
+        if (!Model.ElementVisibleToViewer(element))
+        {
+            continue;
+        }
         var required = HouseholdCoordinator.Services.PlanAssemblyService.RequiredDisposers(element);
         var isMeal = element.Kind == HouseholdCoordinator.Data.PlanElementKind.MealProposal;
         var mealProvenance = isMeal && Model.ElementProvenance.TryGetValue(element.Id, out var found) ? found : null;
@@ -162,6 +189,7 @@ else
     <h3>Add to this plan</h3>
     <form method="post" asp-page-handler="AddDinner">
         <input type="hidden" name="planId" value="@plan.Id" />
+        <input type="hidden" name="viewerId" value="@Model.ViewerId" />
         @if (Model.OpenDecisions.Count > 0)
         {
             <label>
@@ -190,6 +218,7 @@ else
     </form>
     <form method="post" asp-page-handler="ProposeFromProvenance">
         <input type="hidden" name="planId" value="@plan.Id" />
+        <input type="hidden" name="viewerId" value="@Model.ViewerId" />
         <fieldset>
             <legend>Propose from the tellings (one usual meal, plus any fridge contents it draws on)</legend>
             @foreach (var item in Model.ProvenanceItems)

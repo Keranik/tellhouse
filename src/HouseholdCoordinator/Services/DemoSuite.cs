@@ -21,7 +21,8 @@ namespace HouseholdCoordinator.Services;
 // and a final block exercises the plan assembly, promise closing,
 // audience-filtered brief, and fenced whereabouts lookup. A closing
 // block exercises the stored audience where the record is read (the
-// front door and timeline page models, the briefs per person) and
+// front door, timeline, promises, and plans page models, the briefs
+// per person) and
 // where a confirmed telling is dispatched. Nothing
 // here touches the network or the demo day's database.
 public static class DemoSuite
@@ -1156,6 +1157,127 @@ public static class DemoSuite
         nowLevel.BackupPersonId = 3;
         householdRow.HealthMentionLevelKey = "now";
         await db.SaveChangesAsync();
+
+        // The monolith's /Promises
+        // and /Plans read surfaces fence by the stored audience,
+        // as the node's equivalents and this suite's brief and
+        // timeline checks already do. A commitment stored Named to
+        // its maker alone, a personal undecided note, and an
+        // element built from a personal telling are exercised
+        // through the page models themselves, per reader.
+        var fenceCommitment = new Event
+        {
+            HouseholdId = householdId,
+            Type = EventType.Commitment,
+            Body = "Fence check: a commitment for its maker only.",
+            SubjectPersonId = 2,
+            AuthorPersonId = 2,
+            CreatedAtUtc = DateTime.UtcNow,
+            ConfirmationState = ConfirmationState.Confirmed,
+            SensitivityClass = SensitivityClass.Named,
+            AudienceRule = """{"Class":"Named","MakerPersonId":2}"""
+        };
+        await confirmations.WriteStatementAsync(fenceCommitment, "tap");
+        db.Promises.Add(new Promise
+        {
+            HouseholdId = householdId,
+            PromisorPersonId = 2,
+            PromiseePersonId = null,
+            CommitmentText = "Fence check: a commitment for its maker only.",
+            SourceEventId = fenceCommitment.Id,
+            State = PromiseState.Made
+        });
+        await db.SaveChangesAsync();
+
+        async Task<HouseholdCoordinator.Pages.PromisesModel> PromisesAs(int? viewerId)
+        {
+            var page = new HouseholdCoordinator.Pages.PromisesModel(db, confirmations) { ViewerId = viewerId };
+            await page.OnGetAsync();
+            return page;
+        }
+        var promisesMaker = await PromisesAs(2);
+        var promisesOther = await PromisesAs(3);
+        var promisesNone = await PromisesAs(null);
+        bool PromiseShown(HouseholdCoordinator.Pages.PromisesModel page, string text)
+            => page.Promises.Any(p => p.CommitmentText.Contains(text));
+        Check("Monolith fence: /Promises shows a maker-only commitment to its maker",
+            PromiseShown(promisesMaker, "a commitment for its maker only"));
+        Check("Monolith fence: /Promises hides a maker-only commitment from another reader and from no reader",
+            !PromiseShown(promisesOther, "a commitment for its maker only")
+            && !PromiseShown(promisesNone, "a commitment for its maker only"));
+
+        var fenceNote = new Event
+        {
+            HouseholdId = householdId,
+            Type = EventType.HouseholdNote,
+            Body = "Fence check: a personal undecided note.",
+            SubjectPersonId = 1,
+            AuthorPersonId = 1,
+            CreatedAtUtc = DateTime.UtcNow,
+            ConfirmationState = ConfirmationState.Confirmed,
+            SensitivityClass = SensitivityClass.Personal,
+            AudienceRule = """{"Class":"Personal"}""",
+            Details = """{"DecisionTopic":"dinner","DecisionState":"Undecided"}"""
+        };
+        await confirmations.WriteStatementAsync(fenceNote, "tap");
+        var fenceTelling = new Event
+        {
+            HouseholdId = householdId,
+            Type = EventType.HouseholdNote,
+            Body = "Fence check: a personal usual telling.",
+            SubjectPersonId = 1,
+            AuthorPersonId = 1,
+            CreatedAtUtc = DateTime.UtcNow,
+            ConfirmationState = ConfirmationState.Confirmed,
+            SensitivityClass = SensitivityClass.Personal,
+            AudienceRule = """{"Class":"Personal"}""",
+            Details = """{"MealProvenance":"UsualMeal","ItemName":"fence stew"}"""
+        };
+        await confirmations.WriteStatementAsync(fenceTelling, "tap");
+        var fencePlan = await plans.CreatePlanAsync(householdId, "Fence check plan", null);
+        var fenceElement = await plans.AddElementAsync(fencePlan.Id, PlanElementKind.MealProposal,
+            "Fence check: an element from a personal telling.", new[] { 1, 2 },
+            sourceEventIds: new[] { fenceTelling.Id });
+
+        async Task<HouseholdCoordinator.Pages.PlansModel> FencePlansAs(int? viewerId)
+        {
+            var page = new HouseholdCoordinator.Pages.PlansModel(db, plans) { ViewerId = viewerId };
+            await page.OnGetAsync();
+            return page;
+        }
+        var fencePlansAuthor = await FencePlansAs(1);
+        var fencePlansOther = await FencePlansAs(2);
+        var fencePlansNone = await FencePlansAs(null);
+        Check("Monolith fence: /Plans shows a personal undecided note as an open decision to its author only",
+            fencePlansAuthor.OpenDecisions.Any(e => e.Body.Contains("a personal undecided note"))
+            && !fencePlansOther.OpenDecisions.Any(e => e.Body.Contains("a personal undecided note"))
+            && !fencePlansNone.OpenDecisions.Any(e => e.Body.Contains("a personal undecided note")));
+        Check("Monolith fence: /Plans shows an element built from a personal telling to that telling's audience only",
+            fencePlansAuthor.ElementVisibleToViewer(fenceElement)
+            && !fencePlansOther.ElementVisibleToViewer(fenceElement)
+            && !fencePlansNone.ElementVisibleToViewer(fenceElement));
+        Check("Monolith fence: /Plans lists a personal provenance telling only for a reader inside its audience",
+            fencePlansAuthor.ProvenanceItems.Any(i => i.SourceEventId == fenceTelling.Id)
+            && !fencePlansOther.ProvenanceItems.Any(i => i.SourceEventId == fenceTelling.Id)
+            && !fencePlansNone.ProvenanceItems.Any(i => i.SourceEventId == fenceTelling.Id));
+
+        // The dinner form's posted source is rechecked against the
+        // reader the form carries: another reader naming the
+        // personal telling is refused whole; its author is not.
+        HouseholdCoordinator.Pages.PlansModel FencePage()
+            => new(db, plans)
+            {
+                TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+                    new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+                    new PassthroughTempDataProvider())
+            };
+        var elementsBeforeRefusal = await db.PlanElements.CountAsync(e => e.PlanId == fencePlan.Id);
+        await FencePage().OnPostAddDinnerAsync(fencePlan.Id, fenceTelling.Id, "fence stew", new[] { 1, 2 }, viewerId: 2);
+        Check("Monolith fence: the dinner form refuses a posted source the named reader may not see",
+            await db.PlanElements.CountAsync(e => e.PlanId == fencePlan.Id) == elementsBeforeRefusal);
+        await FencePage().OnPostAddDinnerAsync(fencePlan.Id, fenceTelling.Id, "fence stew", new[] { 1, 2 }, viewerId: 1);
+        Check("Monolith fence: the dinner form accepts the same source for a reader inside its audience",
+            await db.PlanElements.CountAsync(e => e.PlanId == fencePlan.Id) == elementsBeforeRefusal + 1);
 
         Console.WriteLine();
         Console.WriteLine($"Demo suite: {_passed} passed, {_failed} failed.");

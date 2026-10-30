@@ -260,11 +260,13 @@ MODEL_API_KEY is set:
    runs with: Lisa's OneLiner, Daniel's OneLiner, and
    Daniel's ProposalResponse, through the node's valve
    endpoint: `curl -X POST https://tellhouse.onrender.com/
-   admin/valve -H 'Content-Type: application/json' -d
+   admin/valve -H 'Content-Type: application/json' -H
+   'X-House-Secret: <the house secret>' -d
    '{"connection_id": "conn-lisa-01", "material_class":
    "OneLiner", "state": "open"}'`, and the same for
    conn-daniel-01 with "OneLiner" and again with
-   "ProposalResponse". This is the same standing state the
+   "ProposalResponse" (each presenting the X-House-Secret
+   header, as step 2 requires of every /admin call). This is the same standing state the
    baked demo's seed ceremony composes through the same
    endpoint. It is load-bearing, not ceremony: by design
    the node rejects a member's packets whole while that

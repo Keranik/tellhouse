@@ -1579,6 +1579,27 @@ public static class NodeSuite
             && timmyRequest.ConnectionId == timmy.ConnectionId
             && timmyRequest.ResultConnectionId == timmy.ConnectionId);
 
+        // Builds a Connections page model the way the host builds
+        // it, with the given house secret presented in the request
+        // header (or none, for a viewer who has not presented it).
+        // The suite's node secret is "suite-house-secret".
+        HomeNode.Pages.ConnectionsModel ConnectionsPageAs(string? presented)
+        {
+            var http = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            if (presented is not null)
+            {
+                http.Request.Headers["X-House-Secret"] = presented;
+            }
+            var page = new HomeNode.Pages.ConnectionsModel(
+                db, door, new HouseAuthorization("suite-house-secret"))
+            {
+                PageContext = new Microsoft.AspNetCore.Mvc.RazorPages.PageContext { HttpContext = http }
+            };
+            page.TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+                http, new StubTempDataProvider());
+            return page;
+        }
+
         // ---------- A page created invite is usable ----------
         // The Connections page is how a person in the house creates
         // an invite in the demo. The knock identifies the
@@ -1586,11 +1607,7 @@ public static class NodeSuite
         // the page stored with nobody intended could never be
         // knocked on. The page handler must record the intended
         // person its form names, and the form must offer the field.
-        var connectionsPage = new HomeNode.Pages.ConnectionsModel(db, door)
-        {
-            TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
-                new Microsoft.AspNetCore.Http.DefaultHttpContext(), new StubTempDataProvider())
-        };
+        var connectionsPage = ConnectionsPageAs("suite-house-secret");
         await connectionsPage.OnPostInviteAsync(1, 5, "Standard");
         var pageInviteRow = await db.DoorInvites.OrderByDescending(i => i.Id).FirstAsync();
         var pageInviteCode = connectionsPage.TempData["NewInviteCode"] as string;
@@ -1606,6 +1623,68 @@ public static class NodeSuite
         Check("Page invite: the Connections page invite form carries an intended person field",
             connectionsPagePath is not null
             && File.ReadAllText(connectionsPagePath).Contains("name=\"intendedPersonId\""));
+
+        // ---------- The Connections page applies the house authorization ----------
+        // The HTTP door adapter refuses every house side act
+        // without the house secret; the Connections page performs
+        // the same ceremony, so it applies the same authorization.
+        // These checks exercise the page model the way the page
+        // model checks above do: an unauthorized viewer can neither act
+        // through it nor read a pending check phrase off it, and
+        // the authorized path still works end to end.
+        Check("Door page: the house authorization accepts only the configured secret, and a node with no secret configured authorizes nothing",
+            new HouseAuthorization("suite-house-secret").Authorizes("suite-house-secret")
+            && !new HouseAuthorization("suite-house-secret").Authorizes("a wrong secret")
+            && !new HouseAuthorization("suite-house-secret").Authorizes("")
+            && !new HouseAuthorization("suite-house-secret").Authorizes(null)
+            && !new HouseAuthorization(null).Authorizes("suite-house-secret")
+            && !new HouseAuthorization(null).Authorizes(null));
+
+        using var doorPageKeys = IdentityKeypair.Generate();
+        var doorPageInvite = await door.CreateInviteAsync(householdId, 1, 6, "Standard");
+        var doorPageRequest = await door.KnockAsync(doorPageInvite, "June Alvarez",
+            "member-june-doorpage", "Stand-in Assistant", doorPageKeys.PublicKeyBase64Url);
+
+        var anonymousPage = ConnectionsPageAs(null);
+        await anonymousPage.OnGetAsync();
+        Check("Door page: a viewer who has not presented the house secret is shown no pending check phrase",
+            anonymousPage.Cards.TryGetValue(doorPageRequest.Id, out var anonymousCard)
+            && anonymousCard.CheckPhrase == ""
+            && !anonymousPage.HouseSideOpen);
+        var housePage = ConnectionsPageAs("suite-house-secret");
+        await housePage.OnGetAsync();
+        Check("Door page: the house side, having presented the secret, is shown the pending check phrase",
+            housePage.HouseSideOpen
+            && housePage.Cards.TryGetValue(doorPageRequest.Id, out var houseCard)
+            && houseCard.CheckPhrase == doorPageRequest.CheckPhrase);
+
+        var invitesBeforeAnon = await db.DoorInvites.CountAsync();
+        var anonInviteResult = await ConnectionsPageAs(null).OnPostInviteAsync(1, 6, "Standard");
+        Check("Door page: an unauthorized invite post is refused with 403 and creates no invite",
+            anonInviteResult is Microsoft.AspNetCore.Mvc.StatusCodeResult { StatusCode: 403 }
+            && await db.DoorInvites.CountAsync() == invitesBeforeAnon);
+        var anonConfirmResult = await ConnectionsPageAs(null).OnPostConfirmAsync(
+            doorPageRequest.Id, 1, 6, doorPageRequest.CheckPhrase);
+        var requestAfterAnonConfirm = await db.JoinRequests.FirstAsync(r => r.Id == doorPageRequest.Id);
+        Check("Door page: an unauthorized confirm post is refused with 403; the request stays pending and no connection is created",
+            anonConfirmResult is Microsoft.AspNetCore.Mvc.StatusCodeResult { StatusCode: 403 }
+            && requestAfterAnonConfirm.Status == "Pending"
+            && !await db.HouseConnections.AnyAsync(c => c.PersonId == 6));
+        var anonDeclineResult = await ConnectionsPageAs(null).OnPostDeclineAsync(doorPageRequest.Id, 1);
+        var requestAfterAnonDecline = await db.JoinRequests.FirstAsync(r => r.Id == doorPageRequest.Id);
+        Check("Door page: an unauthorized decline post is refused with 403; the request stays pending",
+            anonDeclineResult is Microsoft.AspNetCore.Mvc.StatusCodeResult { StatusCode: 403 }
+            && requestAfterAnonDecline.Status == "Pending");
+        var anonRevokeResult = await ConnectionsPageAs(null).OnPostRevokeAsync(timmy.ConnectionId);
+        var timmyAfterAnonRevoke = await db.HouseConnections.FirstAsync(c => c.ConnectionId == timmy.ConnectionId);
+        Check("Door page: an unauthorized revoke post is refused with 403; the connection keeps its standing",
+            anonRevokeResult is Microsoft.AspNetCore.Mvc.StatusCodeResult { StatusCode: 403 }
+            && timmyAfterAnonRevoke.Standing == ConnectionStanding.Active);
+        await ConnectionsPageAs("suite-house-secret").OnPostDeclineAsync(doorPageRequest.Id, 1);
+        var requestAfterHouseDecline = await db.JoinRequests.FirstAsync(r => r.Id == doorPageRequest.Id);
+        Check("Door page: the house side can still decline the request, and the decline is recorded",
+            requestAfterHouseDecline.Status == "Declined"
+            && !await db.HouseConnections.AnyAsync(c => c.PersonId == 6));
 
         // ---------- Door name matching is exact ----------
         var allPeople = await db.Persons.OrderBy(p => p.Id).ToListAsync();

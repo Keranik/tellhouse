@@ -28,6 +28,14 @@ public class PlansModel : PageModel
 
     public List<Plan> Plans { get; private set; } = new();
     public List<Person> People { get; private set; } = new();
+
+    // The record events the plan elements and provenance items on
+    // this page were built from, loaded once per read so each can
+    // be fenced by the audience stored on its sources.
+    private readonly Dictionary<int, Event> _sourceEvents = new();
+
+    [BindProperty(SupportsGet = true)]
+    public int? ViewerId { get; set; }
     public List<Event> OpenDecisions { get; private set; } = new();
 
     // Dinner provenance, surfaced: the stated usual meals and the
@@ -41,6 +49,54 @@ public class PlansModel : PageModel
     public Dictionary<int, List<ProvenanceItem>> ElementProvenance { get; private set; } = new();
     public string? Note => TempData["PlanNote"] as string;
 
+    // Whether a record event may be shown to this page's reader,
+    // under the audience stored on it at write time: the same rule
+    // the brief and the timeline use, and with no reader named only
+    // the house's shared entries (Open and Household classes) show.
+    private bool SourceVisible(Event source) =>
+        ViewerId is int viewer
+            ? BriefService.IsVisibleTo(source, viewer)
+            : source.SensitivityClass is SensitivityClass.Open or SensitivityClass.Household;
+
+    private static List<int> ElementSourceIds(PlanElement element)
+    {
+        if (string.IsNullOrWhiteSpace(element.SourceEventIds))
+        {
+            return new List<int>();
+        }
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<int>>(element.SourceEventIds)
+                ?? new List<int>();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new List<int>();
+        }
+    }
+
+    // Whether this page's reader may see one plan element's text.
+    // An element's words stand on the record it was built from, so
+    // they follow the stored audience of every source event: an
+    // element derived from a narrowed source shows only to readers
+    // inside that source's audience, and to no reader when any
+    // source is narrowed. An element with no source event was
+    // written by hand on this page and behaves as it always has.
+    // The view renders nothing of a hidden element: its agreements
+    // and dispose form and its re-time form with the element's
+    // words pre-filled included.
+    public bool ElementVisibleToViewer(PlanElement element)
+    {
+        foreach (var sourceId in ElementSourceIds(element))
+        {
+            if (!_sourceEvents.TryGetValue(sourceId, out var source) || !SourceVisible(source))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public async Task OnGetAsync()
     {
         Plans = await _db.Plans
@@ -49,17 +105,55 @@ public class PlansModel : PageModel
             .OrderByDescending(p => p.Id)
             .ToListAsync();
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
+        var elementSourceIds = Plans
+            .SelectMany(p => p.Elements)
+            .SelectMany(e => ElementSourceIds(e))
+            .Distinct()
+            .ToList();
+        if (elementSourceIds.Count > 0)
+        {
+            foreach (var source in await _db.Events.Where(e => elementSourceIds.Contains(e.Id)).ToListAsync())
+            {
+                _sourceEvents[source.Id] = source;
+            }
+        }
         var notes = await _db.Events
             .Where(e => e.Type == EventType.HouseholdNote && e.Details != null)
             .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync();
+        // Open decisions are record content, so they follow the
+        // stored audience of the underlying note, through the
+        // same rule the brief
+        // and timeline use: a narrowed note appears only for a
+        // reader inside its stored audience, and with no reader
+        // named only house entries show. This list also feeds the
+        // dinner form's source selector below, so a narrowed note
+        // cannot be picked as a plan source by a reader who may
+        // not see it either.
         OpenDecisions = notes
             .Where(e => ExtractionDetailsReader.GetString(e.Details, "DecisionState") == "Undecided")
+            .Where(e => SourceVisible(e))
             .ToList();
         var household = await _db.Households.FirstOrDefaultAsync();
         if (household is not null)
         {
-            ProvenanceItems = await _dinner.GetItemsAsync(household.Id);
+            // The provenance list renders tellings verbatim, so it
+            // is fenced by the same stored audience: an item whose
+            // telling the reader may not see is not listed, and an
+            // element built from it loses its provenance here and
+            // is not shown as a proposal.
+            var allItems = await _dinner.GetItemsAsync(household.Id);
+            var itemSourceIds = allItems.Select(i => i.SourceEventId).ToList();
+            if (itemSourceIds.Count > 0)
+            {
+                foreach (var source in await _db.Events.Where(e => itemSourceIds.Contains(e.Id)).ToListAsync())
+                {
+                    _sourceEvents[source.Id] = source;
+                }
+            }
+            ProvenanceItems = allItems
+                .Where(i => _sourceEvents.TryGetValue(i.SourceEventId, out var source) && SourceVisible(source))
+                .ToList();
             var byEvent = ProvenanceItems.ToDictionary(i => i.SourceEventId);
             foreach (var element in Plans.SelectMany(p => p.Elements))
             {
@@ -107,7 +201,7 @@ public class PlansModel : PageModel
     // carries that telling as its source. Words with no telling
     // behind them are refused here, on the surface, and no element
     // is written.
-    public async Task<IActionResult> OnPostAddDinnerAsync(int planId, int? sourceEventId, string mealText, int[] disposerIds)
+    public async Task<IActionResult> OnPostAddDinnerAsync(int planId, int? sourceEventId, string mealText, int[] disposerIds, int? viewerId = null)
     {
         var plan = await _db.Plans.FirstAsync(p => p.Id == planId);
         var items = await _dinner.GetItemsAsync(plan.HouseholdId);
@@ -122,19 +216,51 @@ public class PlansModel : PageModel
         if (meal is null)
         {
             TempData["PlanNote"] = "That dinner has no telling behind it in this house, so it was not proposed. The house proposes only from stated usual meals.";
-            return RedirectToPage();
+            return RedirectToPage(new { ViewerId = viewerId });
+        }
+        // The provenance list above only ever offers tellings the
+        // reader named on this page may see, but a posted form can
+        // name any telling (or match one by its words): the choice
+        // is checked here, against the reader the form carried,
+        // and a telling that reader may not see is refused whole
+        // rather than attached.
+        var mealSource = await _db.Events.FirstOrDefaultAsync(e => e.Id == meal.SourceEventId);
+        var mealVisible = mealSource is not null
+            && (viewerId is int reader
+                ? BriefService.IsVisibleTo(mealSource, reader)
+                : mealSource.SensitivityClass is SensitivityClass.Open or SensitivityClass.Household);
+        if (!mealVisible)
+        {
+            TempData["PlanNote"] = "That telling is not one the reader named here may see, so it was not used.";
+            return RedirectToPage(new { ViewerId = viewerId });
         }
         await _dinner.ProposeDinnerAsync(planId, new[] { meal.SourceEventId }, disposerIds);
         TempData["PlanNote"] = "Dinner is proposed, from a telling on the record. It settles only when everyone named has agreed.";
-        return RedirectToPage();
+        return RedirectToPage(new { ViewerId = viewerId });
     }
 
     // The provenance form: a proposal drawn from the listed
     // tellings themselves (a stated usual meal, plus any stated
     // fridge contents it draws on), each carried on the element as
     // its source.
-    public async Task<IActionResult> OnPostProposeFromProvenanceAsync(int planId, int[] sourceEventIds, int[] disposerIds)
+    public async Task<IActionResult> OnPostProposeFromProvenanceAsync(int planId, int[] sourceEventIds, int[] disposerIds, int? viewerId = null)
     {
+        // As with the dinner form above: a posted form can name
+        // any tellings, so every chosen telling is checked against
+        // the reader the form carried before anything is proposed.
+        foreach (var sourceId in sourceEventIds)
+        {
+            var source = await _db.Events.FirstOrDefaultAsync(e => e.Id == sourceId);
+            var visible = source is not null
+                && (viewerId is int reader
+                    ? BriefService.IsVisibleTo(source, reader)
+                    : source.SensitivityClass is SensitivityClass.Open or SensitivityClass.Household);
+            if (!visible)
+            {
+                TempData["PlanNote"] = "One of those tellings is not one the reader named here may see, so nothing was proposed.";
+                return RedirectToPage(new { ViewerId = viewerId });
+            }
+        }
         try
         {
             await _dinner.ProposeDinnerAsync(planId, sourceEventIds, disposerIds);
@@ -144,7 +270,7 @@ public class PlansModel : PageModel
         {
             TempData["PlanNote"] = ex.Message;
         }
-        return RedirectToPage();
+        return RedirectToPage(new { ViewerId = viewerId });
     }
 
     public async Task<IActionResult> OnPostAddListAsync(int planId, string listText, int runnerPersonId)

@@ -100,6 +100,14 @@ builder.Services.AddScoped<SealedIntakeService>();
 // 7 days, off supported); PacketAgeBound carries the tuning basis.
 builder.Services.AddSingleton(PacketAgeBound.FromConfiguration(builder.Configuration));
 
+// The house side's authorization, one instance shared by the
+// HTTP door and admin adapter below and the Connections page:
+// one secret, one check, every surface that performs a house
+// side act. See Services/HouseAuthorization.cs.
+builder.Services.AddSingleton(new HouseAuthorization(
+    Environment.GetEnvironmentVariable("HOME_NODE_HOUSE_SECRET")
+    ?? builder.Configuration.GetValue<string>("Door:HouseSecret")));
+
 // The relay loop runs only when a relay is configured
 // (Relay:BaseUrl). It polls the relay, feeds sealed intake, and
 // posts the sealed outbox. See Services/RelayLoopService.cs.
@@ -206,7 +214,13 @@ app.MapRazorPages()
 //     whoever operates the house's side of the door. Without it
 //     configured, these endpoints refuse every call: a node with
 //     no house secret has no house side, and failing closed is
-//     the honest answer. Before this gate, any caller could read
+//     the honest answer. The Connections page performs the same
+//     ceremony, so it applies the same authorization through the
+//     same HouseAuthorization check (a browser presents the
+//     secret in the page's own form instead of the header): its
+//     ceremony handlers refuse without it, and it never renders
+//     a pending check phrase to a viewer who has not presented
+//     it. Before this gate, any caller could read
 //     a pending request's check phrase off /door/card and then
 //     complete the inviter's confirmation step themselves, and a
 //     caller who knocked with their own keypair for another
@@ -219,25 +233,9 @@ app.MapRazorPages()
 //     existing credential check. A knock that cannot prove the
 //     code does not spend the invite.
 var doorVerifiers = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
-var houseSecret = Environment.GetEnvironmentVariable("HOME_NODE_HOUSE_SECRET")
-    ?? app.Configuration.GetValue<string>("Door:HouseSecret");
-bool HouseAuthorized(HttpRequest req)
-{
-    if (string.IsNullOrEmpty(houseSecret))
-    {
-        return false;
-    }
-    var provided = req.Headers["X-House-Secret"].ToString();
-    if (string.IsNullOrEmpty(provided))
-    {
-        return false;
-    }
-    var providedHash = System.Security.Cryptography.SHA256.HashData(
-        System.Text.Encoding.UTF8.GetBytes(provided));
-    var secretHash = System.Security.Cryptography.SHA256.HashData(
-        System.Text.Encoding.UTF8.GetBytes(houseSecret));
-    return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(providedHash, secretHash);
-}
+var houseAuthorization = app.Services.GetRequiredService<HouseAuthorization>();
+bool HouseAuthorized(HttpRequest req) =>
+    houseAuthorization.Authorizes(req.Headers["X-House-Secret"].ToString());
 IResult HouseDenied() => Results.Json(
     new { error = "house authorization required" }, statusCode: 403);
 // Exact name matching: a person is found by their
