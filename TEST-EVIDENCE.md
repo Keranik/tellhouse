@@ -248,3 +248,73 @@ green in full at this commit's final verification, 38
 of 38, the set having grown by two credential file
 checks; the same session exchange stays green in both
 service journeys on this tree, as recorded above.
+
+## Fourth public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Fourth public commit: suites
+
+All passing at this commit's final verification
+(October 29, 2026; totals grew again as checks were
+added, and no earlier check was removed):
+
+- Home node demo suite: 205
+- Home node suite: 155
+- Single-process build demo suite: 138
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Fourth public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: the door ceremony's house
+side now stands behind one authorization wherever it
+can be performed. The house secret check lives in a
+single shared service used by the HTTP door and admin
+adapter and by the Connections page alike, so the two
+surfaces cannot drift apart: the page's ceremony
+handlers (invite, confirm, decline, revoke) refuse
+with 403 before acting for any caller who has not
+presented the house secret, a pending request's check
+phrase is rendered only to a viewer who has presented
+it, and a node with no house secret configured fails
+closed on the page exactly as it does on the adapter.
+The authorized ceremony still works from the page end
+to end. A new driver (deploy/run_door_page_checks.py)
+walks the page the way an unauthenticated web client
+would, 15 of 15, and eight standing checks join the
+home node suite beside the page model. The
+single-process build's two remaining read surfaces now
+follow the stored audience as its brief and timeline
+already did: its promises list shows each promise to
+the readers its source telling names (and, with no
+reader named, only house-audience promises), and its
+plans page fences its open decisions, its provenance
+list, and its element text by the stored audience of
+the entries they were built from, with the dinner
+form's posted sources rechecked against the reader the
+form carries; seven standing checks join its demo
+suite. And the deployment guide's step 7 valve
+examples now present the X-House-Secret header the
+endpoint requires, as step 2 of the same guide states
+of every house-side call, so the fresh deployment
+sequence runs as written.
