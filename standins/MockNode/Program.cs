@@ -64,8 +64,11 @@ void SaveArr(string path, JsonArray a) =>
 if (!File.Exists(KeysPath))
 {
     var (kd, kx, ky) = Protocol.NewKeyPair();
-    SaveObj(KeysPath, new JsonObject { ["d"] = kd, ["x"] = kx, ["y"] = ky });
+    Protocol.WriteKeyFile(KeysPath,
+        new JsonObject { ["d"] = kd, ["x"] = kx, ["y"] = ky }
+            .ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 }
+Protocol.TightenKeyFile(KeysPath);
 var nkeys = LoadObj(KeysPath);
 string ND = nkeys["d"]!.GetValue<string>();
 string NX = nkeys["x"]!.GetValue<string>();

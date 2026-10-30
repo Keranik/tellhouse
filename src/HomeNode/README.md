@@ -133,6 +133,17 @@ outbox item acknowledged and is recorded as reported, not
 observed: the house knows the member's assistant said received,
 not that the member read anything.
 
+Completion means different things on the two paths, and the
+wording everywhere keeps them apart. An in-database delivery
+completes its entry when the delivery is written into the
+member's view on this machine; that write is the completion,
+and it is never described as the member acknowledging
+anything (the member's own Acknowledge tap on an alert in
+that view is a separate act, recorded on the delivery itself).
+A sealed delivery completes its entry only when the member's
+acknowledgement packet comes back, as above. "Acknowledged"
+is used only where an acknowledgement actually happened.
+
 ## Relay client (sealed relay contract)
 
 RelayClientService posts wire packets to POST /packets and

@@ -285,6 +285,43 @@ public static class NodeSuite
             toldEvent.ToldAtUtc == DateTimeOffset.FromUnixTimeSeconds(toldAt).UtcDateTime
             && toldEvent.RecordedAtUtc is not null && toldEvent.RecordedAtUtc > toldEvent.ToldAtUtc
             && toldEvent.ReportedNotObserved);
+
+        // ---------- a queue row damaged after intake ends, terminally ----------
+        // Processing re-parses the stored wire. A row whose stored
+        // wire was damaged after intake (a corrupted store; intake
+        // itself validates before storing, so no packet arrives
+        // this way) used to throw on every processing pass and stay
+        // queued forever: never landed, never closed. The parse
+        // failure is now a terminal rejection with a trail line,
+        // the same ending a hand-crafted bad packet gets at the
+        // open step.
+        var doomedTelling = TellingPlain(lisa, "member-lisa", "raw_telling",
+            "We're low on gauze today; there is only one left.", toldAt);
+        var doomedWire = Wire(lisa, lisaKeys, doomedTelling);
+        var doomedPacket = Packet.Parse(doomedWire);
+        var doomedReceipt = await intake.ReceiveWireAsync(doomedWire);
+        var doomedRow = await db.PacketInbox.FirstAsync(p => p.PacketId == doomedPacket.Envelope.PacketId);
+        doomedRow.WireJson = "{\"ciphertext\":\"damaged after intake\"";
+        await db.SaveChangesAsync();
+        var doomedProcessed = await intake.ProcessPacketAsync(doomedPacket.Envelope.PacketId);
+        var doomedAfter = await db.PacketInbox.FirstAsync(p => p.PacketId == doomedPacket.Envelope.PacketId);
+        Check("Corrupted store: a queue row whose stored wire no longer parses is rejected, terminally, with the damage named",
+            doomedReceipt.Accepted && !doomedProcessed.Accepted
+            && doomedAfter.Status == "Rejected"
+            && (doomedAfter.RejectionReason ?? "").Contains("no longer parses")
+            && await db.PacketTrailLines.CountAsync(t => t.PacketId == doomedPacket.Envelope.PacketId
+                && t.Outcome == "Rejected") >= 1);
+        var afterDoomed = TellingPlain(lisa, "member-lisa", "raw_telling",
+            "We're low on wipes today; there are only a few left.", toldAt);
+        var afterDoomedWire = Wire(lisa, lisaKeys, afterDoomed);
+        var afterDoomedPacket = Packet.Parse(afterDoomedWire);
+        await intake.ReceiveWireAsync(afterDoomedWire);
+        var recordedAfterDoomed = await intake.ProcessAllQueuedAsync();
+        Check("Corrupted store: a valid packet behind the damaged row still records on the next pass, and the damaged row stays rejected",
+            recordedAfterDoomed >= 1
+            && await db.Events.AnyAsync(e => e.ProvenancePacketId == afterDoomedPacket.Envelope.PacketId)
+            && (await db.PacketInbox.FirstAsync(p => p.PacketId == doomedPacket.Envelope.PacketId)).Status == "Rejected");
+
         var frontDoor = new HomeNode.Pages.FrontDoorModel(db, builder, extraction, confirmations, audience) { ViewerId = 1 };
         await frontDoor.OnGetAsync();
         Check("Intake: the front door recent list surfaces the federated event with its provenance on the event itself",
@@ -493,6 +530,47 @@ public static class NodeSuite
             && await db.PacketTrailLines.CountAsync(t => t.PacketId == receiptAckWire.PacketId
                 && t.Outcome == "Acknowledged" && (t.Reason ?? "").Contains("reported, not observed")) == 1);
 
+        // ---------- delivery honors the stored audience ----------
+        // The stored-audience gate at the delivery choke point.
+        // QueueDeliveryAsync used to gate standing, access level,
+        // and health class only, so a body stored for one person
+        // could be queued to another and opened verbatim under
+        // their key. The entry below is stored the way the record
+        // stores a Personal entry: Daniel alone.
+        var personalForDaniel = new Event
+        {
+            HouseholdId = householdId,
+            Type = EventType.HouseholdNote,
+            Body = "Personal delivery canary: words stored for Daniel alone.",
+            SubjectPersonId = 2,
+            AuthorPersonId = 2,
+            CreatedAtUtc = DateTime.UtcNow,
+            SensitivityClass = SensitivityClass.Personal,
+            AudienceRule = """{"Class":"Personal","AudiencePersonIds":[2]}"""
+        };
+        await confirmations.WriteStatementAsync(personalForDaniel, "tap");
+        Check("Audience gate: a body stored for Daniel alone is not queued to Lisa",
+            await deliveries.QueueDeliveryAsync(householdId, 3,
+                personalForDaniel.Body, "Delivery", sourceEventId: personalForDaniel.Id) is null
+            && await db.SealedOutbox.CountAsync(o => o.SourceEventId == personalForDaniel.Id) == 0);
+        Check("Audience gate: the same body is blocked on the plaintext road too, so no fallback landing carries it either",
+            await deliveries.IsDeliveryBlockedAsync(3, sourceEventId: personalForDaniel.Id));
+        var personalDelivery = await deliveries.QueueDeliveryAsync(householdId, 2,
+            personalForDaniel.Body, "Delivery", sourceEventId: personalForDaniel.Id);
+        Check("Audience gate: the person the body was stored for still receives it, verbatim under his own key",
+            personalDelivery is not null
+            && deliveries.OpenDelivery(personalDelivery, danielKeys) == personalForDaniel.Body);
+        var gatedPlan = await plans.CreatePlanAsync(householdId, "Audience gate plan", null);
+        var gatedElement = await plans.AddElementAsync(gatedPlan.Id, PlanElementKind.Task,
+            personalForDaniel.Body, Array.Empty<int>(), sourceEventIds: new[] { personalForDaniel.Id });
+        Check("Audience gate: a plan element built from a narrowed entry does not queue its words to a person outside the audience",
+            await deliveries.QueueDeliveryAsync(householdId, 3,
+                gatedElement.BodyText, "Plan", sourcePlanElementId: gatedElement.Id) is null
+            && await db.SealedOutbox.CountAsync(o => o.SourcePlanElementId == gatedElement.Id) == 0);
+        Check("Audience gate: the same element's words still queue to the person inside the audience",
+            await deliveries.QueueDeliveryAsync(householdId, 2,
+                gatedElement.BodyText, "Plan", sourcePlanElementId: gatedElement.Id) is not null);
+
         // ---------- alert routing replaces in-database delivery ----------
         var alertEvent = new Event
         {
@@ -679,6 +757,155 @@ public static class NodeSuite
             && keystoreLisaBrief.Any(l => l.Text.Contains("promised:") && l.Text.Contains("get the milk"))
             && !keystoreDanielBrief.Any(l => l.Text.Contains("Daniel promised") && l.Text.Contains("get the milk"))
             && !keystoreLisaBrief.Any(l => l.Text.Contains("Daniel promised") && l.Text.Contains("get the milk")));
+
+        // ---------- Stale-issue bound ----------
+        // One named configuration value (Intake:MaxPacketAgeDays)
+        // bounds how old a packet's issued_at may be at intake.
+        // With a tight test bound, a packet issued an hour ago is
+        // rejected at intake with the reason on the trail and
+        // records nothing; a fresh packet records. With the bound
+        // disabled, the same stale packet is accepted and records:
+        // disabled is a supported value and behaves as intake did
+        // before the bound existed.
+        string WireAt(HouseConnection connection, IdentityKeypair keys, PlainPacket plain, long issuedAt) =>
+            Packet.Create(plain, endpoint, EnvelopeClass.Session, Envelope.DeliverySession,
+                issuedAt, nodeKeys.PublicKeyBase64Url, keys).ToCanonicalJson();
+
+        Check("Stale-issue bound: opening a session for the stale-issue checks succeeds",
+            await OpenSessionAsync(lisa, lisaKeys, "member-lisa"));
+        var tightIntake = new SealedIntakeService(db, nodeKeys, builder, extraction,
+            confirmations, plans, deliveries, PacketAgeBound.FromTimeSpan(TimeSpan.FromMinutes(5)));
+        var staleAt = nowUnix() - 3600;
+        var ageStale = TellingPlain(lisa, "member-lisa", "raw_telling",
+            "A stale telling, an hour old at issue.", staleAt);
+        var ageStaleReceipt = await tightIntake.ReceiveWireAsync(WireAt(lisa, lisaKeys, ageStale, staleAt));
+        var ageStaleTrail = await db.PacketTrailLines
+            .Where(t => t.PacketId == ageStale.PacketId).OrderByDescending(t => t.Id).FirstOrDefaultAsync();
+        Check("Stale-issue bound: a packet older than the bound is rejected at intake, with the stale reason on the trail and nothing recorded",
+            !ageStaleReceipt.Accepted
+            && ageStaleReceipt.Reason != null && ageStaleReceipt.Reason.Contains("Stale packet")
+            && ageStaleTrail != null && ageStaleTrail.Outcome == "Rejected"
+            && (ageStaleTrail.Reason ?? "").Contains("Stale packet")
+            && !await db.PacketInbox.AnyAsync(p => p.PacketId == ageStale.PacketId)
+            && !await db.Events.AnyAsync(e => e.ProvenancePacketId == ageStale.PacketId));
+        var ageFresh = TellingPlain(lisa, "member-lisa", "raw_telling",
+            "A fresh telling inside the bound.", nowUnix());
+        var ageFreshReceipt = await tightIntake.ReceiveWireAsync(WireAt(lisa, lisaKeys, ageFresh, nowUnix()));
+        var ageFreshProcessed = ageFreshReceipt.Accepted
+            ? await tightIntake.ProcessPacketAsync(ageFreshReceipt.PacketId) : ageFreshReceipt;
+        Check("Stale-issue bound: a fresh packet inside the bound is accepted and records",
+            ageFreshReceipt.Accepted && ageFreshProcessed.Accepted
+            && await db.Events.AnyAsync(e => e.ProvenancePacketId == ageFresh.PacketId));
+        var openIntake = new SealedIntakeService(db, nodeKeys, builder, extraction,
+            confirmations, plans, deliveries, PacketAgeBound.Disabled);
+        var ageStaleDisabled = TellingPlain(lisa, "member-lisa", "raw_telling",
+            "A stale telling with the bound disabled.", staleAt);
+        var ageOpenReceipt = await openIntake.ReceiveWireAsync(WireAt(lisa, lisaKeys, ageStaleDisabled, staleAt));
+        var ageOpenProcessed = ageOpenReceipt.Accepted
+            ? await openIntake.ProcessPacketAsync(ageOpenReceipt.PacketId) : ageOpenReceipt;
+        Check("Stale-issue bound: with the bound disabled, the same stale packet is accepted and records, as intake behaved before the bound",
+            ageOpenReceipt.Accepted && ageOpenProcessed.Accepted
+            && await db.Events.AnyAsync(e => e.ProvenancePacketId == ageStaleDisabled.PacketId));
+        // The shipped default is days-scale, read from the shipped
+        // configuration file the application itself loads, and a
+        // configuration that names no value resolves to that same
+        // default rather than to disabled.
+        string? shippedSettings = null;
+        foreach (var candidate in new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
+            Path.Combine("src", "HomeNode", "appsettings.json"),
+            "appsettings.json",
+        })
+        {
+            if (File.Exists(candidate)) { shippedSettings = candidate; break; }
+        }
+        int shippedDays = -1;
+        if (shippedSettings != null)
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(shippedSettings));
+            if (doc.RootElement.TryGetProperty("Intake", out var intakeSection)
+                && intakeSection.TryGetProperty("MaxPacketAgeDays", out var daysEl))
+                shippedDays = daysEl.GetInt32();
+        }
+        Check("Stale-issue bound: the shipped default bound is days-scale and matches the named constant",
+            shippedSettings != null && shippedDays >= 2 && shippedDays == PacketAgeBound.DefaultMaxAgeDays
+            && PacketAgeBound.ShippedDefault.MaxAge == TimeSpan.FromDays(PacketAgeBound.DefaultMaxAgeDays)
+            && PacketAgeBound.FromConfiguration(
+                new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build()).MaxAge
+                == TimeSpan.FromDays(PacketAgeBound.DefaultMaxAgeDays));
+
+        // ---------- Hand-crafted packets with unusable bodies ----------
+        // Packet.Create refuses to build a telling whose body
+        // lacks kind, or an acknowledgement naming nothing, so
+        // these wires are composed from the protocol primitives
+        // directly, the way a hand-rolled client holding an
+        // enrolled key could send them: valid envelope, valid
+        // seal, valid signature, unusable body. Intake takes them
+        // in (the envelope is contract-shaped); processing must
+        // reject them terminally at the open step, where the
+        // plain packet is validated against the contract body
+        // shapes, never throw, and never leave them queued for
+        // the relay loop to retry on every pass.
+        string CraftWire(PlainPacket plain, IdentityKeypair keys)
+        {
+            var plainBytes = plain.CanonicalBytes();
+            var issuedAt = nowUnix();
+            long blobLength = Sealer.EphemeralPointLength + Sealer.NonceLength
+                + plainBytes.Length + Sealer.TagLength;
+            var probe = new Envelope(plain.PacketId, endpoint, plain.ConnectionId,
+                EnvelopeClass.Session, Envelope.DeliverySession, blobLength, issuedAt,
+                Base64Url.Encode(new byte[32]));
+            var blob = Sealer.Seal(plainBytes, probe.AadBytes(),
+                nodeKeys.PublicKeyBase64Url, IdentityKeypair.Generate(),
+                RandomNumberGenerator.GetBytes(Sealer.NonceLength));
+            var envelope = new Envelope(plain.PacketId, endpoint, plain.ConnectionId,
+                EnvelopeClass.Session, Envelope.DeliverySession, blob.Length, issuedAt,
+                Base64Url.Encode(SHA256.HashData(blob)));
+            var signature = Packet.Sign(envelope.CanonicalBytes(), blob, keys);
+            return new Packet(envelope, Base64Url.Encode(blob), signature).ToCanonicalJson();
+        }
+
+        using var kindlessDoc = System.Text.Json.JsonDocument.Parse("{\"text\":\"a telling with no kind\"}");
+        var kindlessPlain = new PlainPacket(PacketType.Telling, SealedDeliveryService.NewPacketId(),
+            lisa.ConnectionId, "member-lisa", NodeKeyStore.NodePartyId, nowUnix(),
+            Base64Url.Encode(RandomNumberGenerator.GetBytes(16)), kindlessDoc.RootElement.Clone(), null);
+        var kindlessReceipt = await intake.ReceiveWireAsync(CraftWire(kindlessPlain, lisaKeys));
+        SealedIntakeService.IntakeReceipt kindlessProcessed = new(false, "", "not attempted");
+        var kindlessThrew = false;
+        try
+        {
+            kindlessProcessed = await intake.ProcessPacketAsync(kindlessReceipt.PacketId);
+        }
+        catch { kindlessThrew = true; }
+        var kindlessInbox = await db.PacketInbox.FirstOrDefaultAsync(p => p.PacketId == kindlessReceipt.PacketId);
+        Check("Hand-crafted packets: a hand-crafted telling with no kind is rejected terminally at processing, without throwing or staying queued",
+            kindlessReceipt.Accepted && !kindlessThrew && !kindlessProcessed.Accepted
+            && kindlessInbox != null && kindlessInbox.Status == "Rejected");
+        using var acklessDoc = System.Text.Json.JsonDocument.Parse("{}");
+        var acklessPlain = new PlainPacket(PacketType.Acknowledgement, SealedDeliveryService.NewPacketId(),
+            lisa.ConnectionId, "member-lisa", NodeKeyStore.NodePartyId, nowUnix(),
+            Base64Url.Encode(RandomNumberGenerator.GetBytes(16)), acklessDoc.RootElement.Clone(), null);
+        var acklessReceipt = await intake.ReceiveWireAsync(CraftWire(acklessPlain, lisaKeys));
+        SealedIntakeService.IntakeReceipt acklessProcessed = new(false, "", "not attempted");
+        var acklessThrew = false;
+        try
+        {
+            acklessProcessed = await intake.ProcessPacketAsync(acklessReceipt.PacketId);
+        }
+        catch { acklessThrew = true; }
+        var acklessInbox = await db.PacketInbox.FirstOrDefaultAsync(p => p.PacketId == acklessReceipt.PacketId);
+        Check("Hand-crafted packets: a hand-crafted acknowledgement naming nothing is rejected terminally at processing, without throwing",
+            acklessReceipt.Accepted && !acklessThrew && !acklessProcessed.Accepted
+            && acklessInbox != null && acklessInbox.Status == "Rejected");
+        var afterPoison = TellingPlain(lisa, "member-lisa", "raw_telling",
+            "A good telling right after the unusable ones.", nowUnix());
+        var afterPoisonReceipt = await intake.ReceiveWireAsync(Wire(lisa, lisaKeys, afterPoison));
+        var afterPoisonProcessed = afterPoisonReceipt.Accepted
+            ? await intake.ProcessPacketAsync(afterPoisonReceipt.PacketId) : afterPoisonReceipt;
+        Check("Hand-crafted packets: a valid packet after the unusable ones in the batch still records",
+            afterPoisonReceipt.Accepted && afterPoisonProcessed.Accepted
+            && await db.Events.AnyAsync(e => e.ProvenancePacketId == afterPoison.PacketId));
 
         // ---------- /admin/propose state and audience ----------
         // The endpoint's operation (SealedDeliveryService.

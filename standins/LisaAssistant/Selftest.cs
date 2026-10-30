@@ -167,6 +167,12 @@ public static class Selftest
             new[] { Cand("pkt-a", "s1", 1005), Cand("pkt-b", "s2", 1007) }, 1008);
         Check("session hunt: the most recently issued answerable challenge wins",
             twoLive != null && twoLive.PacketId == "pkt-b" && twoLive.ClientNonce == "n2");
+        var sameSecond = SessionHunt.Choose(
+            new[] { Att("n1", 1000), Att("n2", 1000) },
+            new[] { Cand("pkt-a", "s1", 1001), Cand("pkt-b", "s2", 1001) }, 1002);
+        Check("session hunt: two knocks in one second pair the newest challenge with the newest knock, never across the two",
+            sameSecond != null && sameSecond.PacketId == "pkt-b" && sameSecond.ClientNonce == "n2"
+            && sameSecond.ServerNonce == "s2");
         var expired = SessionHunt.Choose(
             new[] { Att("n1", 1000) },
             new[] { Cand("pkt-a", "s1", 1002) }, 1002 + 111);
@@ -203,6 +209,20 @@ public static class Selftest
             Protocol.TightenKeyFile(keyPath);
             Check("a key file left group/world readable is tightened to 0600 on load",
                 File.GetUnixFileMode(keyPath) == (UnixFileMode.UserRead | UnixFileMode.UserWrite));
+            // The state file holds the live connection credential
+            // and is written through the same writer (SaveState in
+            // Program.cs) and tightened on load the same way. It
+            // used to be written with default modes, 0644 under a
+            // typical umask, credential readable by anyone local.
+            var statePath = Path.Combine(keyDir, "state.json");
+            Protocol.WriteKeyFile(statePath, "{\"credential\":\"test-only\"}");
+            Check("state file: a freshly written state file is owner read/write only (0600)",
+                File.GetUnixFileMode(statePath) == (UnixFileMode.UserRead | UnixFileMode.UserWrite));
+            File.SetUnixFileMode(statePath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            Protocol.TightenKeyFile(statePath);
+            Check("state file: a state file left group/world readable is tightened to 0600 on load",
+                File.GetUnixFileMode(statePath) == (UnixFileMode.UserRead | UnixFileMode.UserWrite));
             try { Directory.Delete(keyDir, true); } catch (IOException) { }
         }
 

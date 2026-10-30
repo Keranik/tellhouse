@@ -12,6 +12,14 @@
     <label>
         Whose brief?
         <select name="PersonId" onchange="this.form.submit()">
+            @if (Model.Viewer is null)
+            {
+                <option value="" selected>No reader named</option>
+            }
+            else
+            {
+                <option value="">No reader named</option>
+            }
             @foreach (var person in Model.People)
             {
                 if (Model.Viewer?.Id == person.Id)
@@ -67,4 +75,9 @@
     {
         <p><strong>The house says:</strong> @Model.LookupAnswer</p>
     }
+}
+else if (Model.People.Count > 0)
+{
+    <p>No reader named, so no brief is shown. A brief belongs to one
+       person; name whose brief to read above.</p>
 }

@@ -787,6 +787,106 @@ public static class DemoSuite
         Check("Runner rule: the runner completes the Restricted task without ever opening its telling",
             (await db.Events.FirstAsync(e => e.Id == runnerRestrictedTask.Id)).ConfirmationState == ConfirmationState.Done);
 
+        // The delivery side of the same boundary, and the plans
+        // page fence. A plan landing carries an element's words to
+        // its runner; the stored audience of the element's sources
+        // governs that landing on both roads, sealed and plaintext.
+        // Planted directly: an entry stored for Daniel alone,
+        // and an element whose words are that entry's own body.
+        // Timmy holds no connection, so his road is the
+        // plaintext PlanDelivery that lands on his member page.
+        var landingPersonal = new Event
+        {
+            HouseholdId = householdId,
+            Type = EventType.Task,
+            Body = "Landing canary: words stored for Daniel alone.",
+            SubjectPersonId = 2,
+            AuthorPersonId = 3,
+            CreatedAtUtc = DateTime.UtcNow,
+            Details = """{"TaskKind":"General","TaskText":"the landing canary task"}""",
+            SensitivityClass = SensitivityClass.Personal,
+            AudienceRule = """{"Class":"Personal","AudiencePersonIds":[2]}"""
+        };
+        await confirmations.WriteStatementAsync(landingPersonal, "tap");
+        var landingPlanOut = await plans.CreatePlanAsync(householdId, "Landing gate: outside runner", null);
+        var landingElementOut = await plans.AddElementAsync(landingPlanOut.Id, PlanElementKind.Task,
+            landingPersonal.Body, Array.Empty<int>(), sourceEventIds: new[] { landingPersonal.Id });
+        await plans.DesignateRunnerAsync(landingPlanOut.Id, 4, 3);
+        await plans.AcknowledgeAsync(landingPlanOut.Id, 4);
+        var timmyLandingView = await memberViews.ReceivedForAsync(4);
+        Check("Landing gate: a narrowed entry's body does not land with a runner outside its audience",
+            !timmyLandingView.Any(i => i.Text.Contains("Landing canary"))
+            && await db.PlanDeliveries.CountAsync(d => d.PlanElementId == landingElementOut.Id && d.ToPersonId == 4) == 0);
+        Check("Landing gate: the acknowledgement itself still stands; only the body landing is refused",
+            (await db.Plans.FirstAsync(p => p.Id == landingPlanOut.Id)).State == PlanState.Acknowledged);
+        var landingPlanIn = await plans.CreatePlanAsync(householdId, "Landing gate: inside runner", null);
+        var landingElementIn = await plans.AddElementAsync(landingPlanIn.Id, PlanElementKind.Task,
+            landingPersonal.Body, Array.Empty<int>(), sourceEventIds: new[] { landingPersonal.Id });
+        await plans.DesignateRunnerAsync(landingPlanIn.Id, 2, 3);
+        await plans.AcknowledgeAsync(landingPlanIn.Id, 2);
+        var danielLandingView = await memberViews.ReceivedForAsync(2);
+        Check("Landing gate: the same words still land with a runner inside the audience",
+            danielLandingView.Any(i => i.Text == landingPersonal.Body)
+            && await db.PlanDeliveries.CountAsync(d => d.PlanElementId == landingElementIn.Id && d.ToPersonId == 2) == 1);
+
+        // The plans page fence: an element's words stand on the
+        // record it was built from, so they show only to readers
+        // inside that record's stored audience. Before this
+        // fence, the page showed every element's words to every
+        // reader and to no reader, pre-filled into the re-time
+        // form included.
+        var fencingPlan = await plans.CreatePlanAsync(householdId, "Element fencing", null);
+        var fencingRestricted = await plans.AddElementAsync(fencingPlan.Id, PlanElementKind.Task,
+            "Fencing canary: the restricted element words.", Array.Empty<int>(),
+            sourceEventIds: new[] { q38RestrictedTask.Id });
+        var fencingPersonal = await plans.AddElementAsync(fencingPlan.Id, PlanElementKind.Task,
+            "Fencing canary: the personal element words.", Array.Empty<int>(),
+            sourceEventIds: new[] { landingPersonal.Id });
+        var fencingOpen = await plans.AddElementAsync(fencingPlan.Id, PlanElementKind.Task,
+            "Fencing canary: the hand-written element words.", Array.Empty<int>());
+        async Task<HomeNode.Pages.PlansModel> PlansAs(int? viewerId)
+        {
+            var page = new HomeNode.Pages.PlansModel(db, plans)
+            {
+                TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+                    new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+                    new PassthroughTempDataProvider()),
+                ViewerId = viewerId
+            };
+            await page.OnGetAsync();
+            return page;
+        }
+        bool ElementShown(HomeNode.Pages.PlansModel page, PlanElement element)
+            => page.ElementVisibleToViewer(
+                page.Plans.First(p => p.Id == fencingPlan.Id).Elements.First(e => e.Id == element.Id));
+        var plansNoReader = await PlansAs(null);
+        Check("Plans fence: with no reader named, narrowed elements hide and hand-written elements show",
+            !ElementShown(plansNoReader, fencingRestricted)
+            && !ElementShown(plansNoReader, fencingPersonal)
+            && ElementShown(plansNoReader, fencingOpen));
+        var plansLisa = await PlansAs(3);
+        Check("Plans fence: the Restricted element shows to its route reader, the Personal element does not",
+            ElementShown(plansLisa, fencingRestricted)
+            && !ElementShown(plansLisa, fencingPersonal));
+        var plansDaniel = await PlansAs(2);
+        Check("Plans fence: the Personal element shows to the person it was stored for; the Restricted element does not show to its backup (delivery naming is not readership)",
+            ElementShown(plansDaniel, fencingPersonal)
+            && !ElementShown(plansDaniel, fencingRestricted));
+        var plansTimmy = await PlansAs(4);
+        Check("Plans fence: a child outside both audiences sees neither narrowed element",
+            !ElementShown(plansTimmy, fencingRestricted)
+            && !ElementShown(plansTimmy, fencingPersonal)
+            && ElementShown(plansTimmy, fencingOpen));
+        var fencingElementsBefore = await db.PlanElements.CountAsync(e => e.PlanId == fencingPlan.Id);
+        await plansDaniel.OnPostAddDinnerAsync(fencingPlan.Id, landingPersonal.Id,
+            "Gate canary dinner", new[] { 2, 3 }, viewerId: 4);
+        Check("Plans fence: the dinner form cannot plant an element on a source the named reader may not see",
+            await db.PlanElements.CountAsync(e => e.PlanId == fencingPlan.Id) == fencingElementsBefore);
+        await plansDaniel.OnPostAddDinnerAsync(fencingPlan.Id, landingPersonal.Id,
+            "Gate canary dinner", new[] { 2, 3 }, viewerId: 2);
+        Check("Plans fence: the same source plants fine for a reader inside its audience",
+            await db.PlanElements.CountAsync(e => e.PlanId == fencingPlan.Id) == fencingElementsBefore + 1);
+
         // The 24-hour lapse, exercised through the same entry point
         // the LapseService timer calls in the running app. Times are
         // fixed offsets from one sweep instant so the checks are
@@ -949,6 +1049,33 @@ public static class DemoSuite
         Check("Audience: the front door reading as a child shows neither restricted nor personal entries",
             !FrontDoorHas(frontDoorTimmy, "a restricted entry naming its route")
             && !FrontDoorHas(frontDoorTimmy, "a personal journal entry"));
+
+        // The no-reader landing on the timeline and the brief: a
+        // bare visit names nobody, so it gets the house view only,
+        // never the first person's. Both pages used to default to
+        // the first person in the house, which handed a bare visit
+        // Margaret's full view, the Restricted health entry
+        // included.
+        var timelineNoReader = new HomeNode.Pages.TimelineModel(db, confirmations) { ActorId = null };
+        await timelineNoReader.OnGetAsync();
+        Check("Audience: the timeline with no reader named stays on nobody's view",
+            timelineNoReader.ActorId is null);
+        Check("Audience: the timeline with no reader named shows house entries and no narrowed content",
+            timelineNoReader.Events.Count > 0
+            && timelineNoReader.Events.All(e => e.SensitivityClass is SensitivityClass.Open or SensitivityClass.Household)
+            && !TimelineHas(timelineNoReader, "a restricted entry naming its route")
+            && !TimelineHas(timelineNoReader, "a personal journal entry")
+            && !TimelineHas(timelineNoReader, "no stored audience"));
+        Check("Audience: the timeline with no reader named shows no deliveries",
+            timelineNoReader.Deliveries.Count == 0);
+        var briefNoReader = new HomeNode.Pages.BriefModel(db, briefs, lookup) { PersonId = null };
+        await briefNoReader.OnGetAsync();
+        Check("Audience: the brief with no reader named belongs to nobody and holds no lines",
+            briefNoReader.Viewer is null && briefNoReader.Lines.Count == 0);
+        var briefLisaPage = new HomeNode.Pages.BriefModel(db, briefs, lookup) { PersonId = 3 };
+        await briefLisaPage.OnGetAsync();
+        Check("Audience: the brief page named for Lisa still builds her brief",
+            briefLisaPage.Viewer?.Id == 3 && briefLisaPage.Lines.Count > 0);
 
         // The medication order line in the briefs, per person: the
         // heart pills item is assigned to Lisa, so her brief carries

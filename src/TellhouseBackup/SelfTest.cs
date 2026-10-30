@@ -50,6 +50,20 @@ public static class SelfTest
             Check("keystore-file-left-readable-is-tightened-to-0600-on-load",
                 File.GetUnixFileMode(loosePath) == (UnixFileMode.UserRead | UnixFileMode.UserWrite),
                 "mode=" + Convert.ToString((int)File.GetUnixFileMode(loosePath), 8));
+            // The open-check path reads through Load, not
+            // LoadOrCreate, and it must tighten the same way: a
+            // loosened keystore used to survive every backup
+            // verification at 0644 because Load read it as found.
+            var looseLoadPath = Path.Combine(work, "keystore-loose-load", "content-key.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(looseLoadPath)!);
+            File.Copy(keystorePath, looseLoadPath);
+            File.SetUnixFileMode(looseLoadPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            var loadedLoose = ContentKeyStore.Load(looseLoadPath);
+            Check("keystore-load-path-tightens-a-loosened-keystore-to-0600",
+                File.GetUnixFileMode(looseLoadPath) == (UnixFileMode.UserRead | UnixFileMode.UserWrite)
+                && loadedLoose.KeyBase64 == ks.KeyBase64,
+                "mode=" + Convert.ToString((int)File.GetUnixFileMode(looseLoadPath), 8));
         }
 
         // 1. Word list integrity and phrase round trip.
@@ -364,6 +378,65 @@ public static class SelfTest
                 File.Exists(liveReady) && liveRefused && holderPerson == 1 && liveAnnouncements == 0,
                 $"holder ready={File.Exists(liveReady)} refused={liveRefused} holder person rows={holderPerson} restore announcements={liveAnnouncements}");
         }
+
+        // The liveness lock is the reset protection mechanism.
+        // Lock files in the node's own format are planted beside a
+        // destination database; no real node runs here, which is the
+        // point: the guard reads the artifact, not the process, so
+        // it works the same when the node lives in another container
+        // sharing the database directory.
+        void PlantLock(string targetDb, DateTime heartbeatUtc, string instance)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var payload = "{\"format\":\"tellhouse-node-liveness\",\"version\":1,\"instanceId\":\"" + instance
+                + "\",\"processId\":4242,\"machineName\":\"selftest\",\"startedAtUtc\":\""
+                + heartbeatUtc.AddMinutes(-5).ToString("O", inv)
+                + "\",\"heartbeatAtUtc\":\"" + heartbeatUtc.ToString("O", inv) + "\"}";
+            File.WriteAllText(NodeLiveness.LockPathFor(targetDb), payload);
+        }
+
+        var q42Dest = Path.Combine(work, "q42.db");
+        File.Copy(db, q42Dest);
+        var q42Before = Crypto.Sha256Hex(File.ReadAllBytes(q42Dest));
+        PlantLock(q42Dest, DateTime.UtcNow, "selftest-live-instance");
+        bool q42Refused = Throws(() => Program.RestoreFromPhrase(backupPath, phrase, q42Dest, "demo-reset"));
+        Check("live-node-lock-refuses-reset-and-leaves-the-database-untouched",
+            q42Refused && Crypto.Sha256Hex(File.ReadAllBytes(q42Dest)) == q42Before,
+            $"refused={q42Refused}");
+        bool q42OverrideOk = !Throws(() => Program.RestoreFromPhrase(backupPath, phrase, q42Dest, "demo-reset", true));
+        var q42AuditPath = NodeLiveness.AuditLogPathFor(q42Dest);
+        var q42Audit = File.Exists(q42AuditPath) ? File.ReadAllText(q42AuditPath) : "";
+        Check("live-node-override-resets-and-logs-the-override",
+            q42OverrideOk && q42Audit.Contains("override-live-node") && q42Audit.Contains("selftest-live-instance"),
+            $"override restored={q42OverrideOk} audit recorded={q42Audit.Contains("selftest-live-instance")}");
+        PlantLock(q42Dest, DateTime.UtcNow.AddMinutes(-10), "selftest-stale-instance");
+        bool q42StaleOk = !Throws(() => Program.RestoreFromPhrase(backupPath, phrase, q42Dest, "demo-reset"));
+        Check("stale-lock-lets-the-reset-proceed-and-is-removed",
+            q42StaleOk && !File.Exists(NodeLiveness.LockPathFor(q42Dest)),
+            $"restored={q42StaleOk} lock still present={File.Exists(NodeLiveness.LockPathFor(q42Dest))}");
+        File.WriteAllText(NodeLiveness.LockPathFor(q42Dest), "this is not a lock file {{{");
+        bool q42CorruptOk = !Throws(() => Program.RestoreFromPhrase(backupPath, phrase, q42Dest, "demo-reset"));
+        Check("unreadable-lock-never-blocks-a-reset", q42CorruptOk, $"restored={q42CorruptOk}");
+        try { File.Delete(NodeLiveness.LockPathFor(q42Dest)); } catch { }
+
+        // The at-rest unseal swap takes the same refusal, and the
+        // same logged override.
+        var q42SealDbPath = Path.Combine(work, "q42-seal.db");
+        File.Copy(db, q42SealDbPath);
+        var q42SealedPath = Path.Combine(work, "q42-seal.db.thsealed");
+        AtRestFileSeal.SealFile(q42SealDbPath, q42SealedPath, ks);
+        File.Delete(q42SealDbPath);
+        PlantLock(q42SealDbPath, DateTime.UtcNow, "selftest-live-instance");
+        bool q42UnsealRefused = Throws(() => AtRestFileSeal.UnsealFile(q42SealedPath, q42SealDbPath, ks));
+        Check("live-node-lock-refuses-at-rest-unseal",
+            q42UnsealRefused && !File.Exists(q42SealDbPath),
+            $"refused={q42UnsealRefused} destination written={File.Exists(q42SealDbPath)}");
+        bool q42UnsealOverrideOk = !Throws(() => AtRestFileSeal.UnsealFile(q42SealedPath, q42SealDbPath, ks, true));
+        var q42SealAudit = File.Exists(NodeLiveness.AuditLogPathFor(q42SealDbPath))
+            ? File.ReadAllText(NodeLiveness.AuditLogPathFor(q42SealDbPath)) : "";
+        Check("live-node-override-unseals-and-logs-the-override",
+            q42UnsealOverrideOk && File.Exists(q42SealDbPath) && q42SealAudit.Contains("at-rest unseal"),
+            $"unsealed={q42UnsealOverrideOk} destination exists={File.Exists(q42SealDbPath)}");
 
         // Demo reset through the same machinery. The fixture record IS
         // the seeded demonstration state for this proof: it carries two

@@ -34,7 +34,9 @@
     </label>
 </form>
 <p>Open decisions are listed as the reader named here may see them,
-   under the audience stored on each note.</p>
+   under the audience stored on each note. Plan entries built from the
+   record follow the same rule: an entry built from a note written for
+   named people shows only to readers that note names.</p>
 
 <h2>Start a plan</h2>
 <form method="post" asp-page-handler="CreatePlan">
@@ -71,6 +73,10 @@
 
     @foreach (var element in plan.Elements)
     {
+        if (!Model.ElementVisibleToViewer(element))
+        {
+            continue;
+        }
         var required = HomeNode.Services.PlanAssemblyService.RequiredDisposers(element);
         <h3>@element.Kind: @element.BodyText</h3>
         <p>Standing: @element.State</p>
@@ -137,6 +143,7 @@
     <h3>Add to this plan</h3>
     <form method="post" asp-page-handler="AddDinner">
         <input type="hidden" name="planId" value="@plan.Id" />
+        <input type="hidden" name="viewerId" value="@Model.ViewerId" />
         @if (Model.OpenDecisions.Count > 0)
         {
             <label>

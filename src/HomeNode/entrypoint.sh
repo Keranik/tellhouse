@@ -135,6 +135,13 @@ if [ "$DEPLOY_MODE" = "fresh" ]; then
             exit 1
         fi
         PHRASE_CAPTURE="$KS_DIR/.phrase-capture"
+        # The capture and the stored phrase file hold this
+        # deployment's recovery phrase in cleartext, so both are
+        # created owner only (0600) rather than with the shell's
+        # default mode: pre-create them tight, because a redirect
+        # into an existing file keeps that file's mode.
+        ( umask 077 && : > "$PHRASE_CAPTURE" )
+        ( umask 077 && : > "$KS_DIR/deployment-recovery-phrase.txt" )
         if ! dotnet "$BACKUP_DLL" backup --db "$DB_PATH" --keystore "$KS_DIR/content-keystore.json" --out "$KS_DIR/deployment-snapshot.thb" > "$PHRASE_CAPTURE" 2>&1; then
             cat "$PHRASE_CAPTURE" >&2
             rm -f "$PHRASE_CAPTURE"
@@ -142,6 +149,7 @@ if [ "$DEPLOY_MODE" = "fresh" ]; then
             exit 1
         fi
         awk 'NF { line = $0 } END { print line }' "$PHRASE_CAPTURE" > "$KS_DIR/deployment-recovery-phrase.txt"
+        chmod 600 "$KS_DIR/deployment-recovery-phrase.txt" 2>/dev/null || true
         grep -vxF -f "$KS_DIR/deployment-recovery-phrase.txt" "$PHRASE_CAPTURE" || true
         rm -f "$PHRASE_CAPTURE"
         echo "entrypoint: this deployment's sealed backup is at $KS_DIR/deployment-snapshot.thb; its fresh recovery phrase is stored only in $KS_DIR/deployment-recovery-phrase.txt"
@@ -151,6 +159,10 @@ else
     # Never overwrite an existing key file.
     if [ ! -f "$KS_DIR/node-content-key.txt" ] && [ -f "$DEMO_SEED_DIR/node-keys/node-content-key.txt" ]; then
         cp "$DEMO_SEED_DIR/node-keys/node-content-key.txt" "$KS_DIR/node-content-key.txt"
+        # The copy carries the image file's wider mode; the app
+        # tightens its key file on load, and the copy is tightened
+        # here too so the key is never the readable file on disk.
+        chmod 600 "$KS_DIR/node-content-key.txt" 2>/dev/null || true
         echo "entrypoint: copied the demo node content key into $KS_DIR"
     fi
 

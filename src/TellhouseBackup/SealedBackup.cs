@@ -210,7 +210,7 @@ public static class Restore
         ["PacketNonceUses"] = new[] { "ConnectionId", "PacketNonce" },
     };
 
-    public static void RestoreToFreshNode(CanonicalExport.Export export, BackupFile backup, string destDbPath, string pathLabel)
+    public static void RestoreToFreshNode(CanonicalExport.Export export, BackupFile backup, string destDbPath, string pathLabel, bool overrideLiveNode = false)
     {
         var dir = Path.GetDirectoryName(Path.GetFullPath(destDbPath))!;
         Directory.CreateDirectory(dir);
@@ -223,6 +223,15 @@ public static class Restore
         var preservedSeen = new List<CanonicalExport.TableExport>();
         if (File.Exists(destDbPath))
         {
+            // The liveness lock is checked ahead of the holder
+            // probe below. The probe only sees processes in this
+            // container's namespace; the lock is the guard that also
+            // covers a node running in another container that shares
+            // this database directory. A fresh lock refuses the swap
+            // (or forces the logged override) before anything reads
+            // or checkpoints the live file.
+            NodeLiveness.AssertResetAllowed(destDbPath, overrideLiveNode,
+                "restore (" + pathLabel + ")");
             StoppedDb.Prepare(destDbPath);
             preservedSeen = CaptureSeenTables(destDbPath);
             // The capture read through a pooled connection, and a
@@ -526,8 +535,12 @@ public static class AtRestFileSeal
         public Crypto.SealedBlob Payload { get; set; } = new("", "", "");
     }
 
-    public static void SealFile(string dbPath, string sealedPath, ContentKeyStore keyStore)
+    public static void SealFile(string dbPath, string sealedPath, ContentKeyStore keyStore, bool overrideLiveNode = false)
     {
+        // Reset protection: sealing reads the node's database
+        // as a stopped file, so it takes the same live-node
+        // refusal as a restore.
+        NodeLiveness.AssertResetAllowed(dbPath, overrideLiveNode, "at-rest seal");
         // Seal the checkpointed database. Reading the main
         // file alone sealed an empty shell whenever the
         // node's recent rows were still in its write-ahead log,
@@ -547,8 +560,11 @@ public static class AtRestFileSeal
         File.WriteAllText(sealedPath, JsonSerializer.Serialize(sealedFile, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    public static void UnsealFile(string sealedPath, string dbPath, ContentKeyStore keyStore)
+    public static void UnsealFile(string sealedPath, string dbPath, ContentKeyStore keyStore, bool overrideLiveNode = false)
     {
+        // Unsealing swaps the database file, so it takes the
+        // same live-node refusal as a restore, ahead of any work.
+        NodeLiveness.AssertResetAllowed(dbPath, overrideLiveNode, "at-rest unseal");
         var sealedFile = JsonSerializer.Deserialize<SealedFile>(File.ReadAllText(sealedPath))
                          ?? throw new InvalidOperationException("sealed file is unreadable");
         if (sealedFile.ContentKeyId != keyStore.KeyId) throw new InvalidOperationException("sealed file belongs to a different household content key");

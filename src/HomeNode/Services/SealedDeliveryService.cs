@@ -42,22 +42,29 @@ public class SealedDeliveryService
 
     public static string NewPacketId() => $"pkt-{Guid.NewGuid():N}";
 
-    // Whether a delivery to this person is blocked by the access
-    // level of the connection they hold. Blocked is
+    // Whether a delivery to this person is blocked. Blocked is
     // different from unreachable: a person with no connection at
-    // all is not blocked, and their delivery takes the house layer
-    // fallback their callers already had. A person who holds a
-    // connection is blocked when that connection may not receive
-    // this material (it stands KnockOnly or Revoked, its level is
-    // KnockOnly, or the material is health class and its level
-    // excludes health entries, as every offered level does). A
-    // blocked delivery must not fall back to a plaintext row
+    // all is not blocked by their connection, and their delivery
+    // takes the house layer fallback their callers already had.
+    // A delivery is blocked when the person must not receive
+    // this material on ANY path:
+    //   the stored audience of the material's source does not
+    //     name them (below), or
+    //   the connection they hold may not receive this material
+    //     (it stands KnockOnly or Revoked, its level is KnockOnly,
+    //     or the material is health class and its level excludes
+    //     health entries, as every offered level does).
+    // A blocked delivery must not fall back to a plaintext row
     // either: the fallback would deliver through the member view
-    // exactly what the level was promised the connection cannot
-    // hear. Callers that have a fallback consult this first.
+    // exactly what the gate was promised the person cannot hear.
+    // Callers that have a fallback consult this first.
     public async Task<bool> IsDeliveryBlockedAsync(
         int toPersonId, int? sourceEventId = null, int? sourcePlanElementId = null)
     {
+        if (await IsOutsideStoredAudienceAsync(toPersonId, sourceEventId, sourcePlanElementId))
+        {
+            return true;
+        }
         var connection = await _db.HouseConnections
             .Where(c => c.PersonId == toPersonId && c.Standing != ConnectionStanding.Revoked)
             .OrderByDescending(c => c.CreatedAtUtc)
@@ -102,6 +109,100 @@ public class SealedDeliveryService
             }
         }
         return false;
+    }
+
+    // The stored-audience gate for delivery. QueueProposalAsync
+    // has long enforced the audience for proposal deliveries,
+    // but the general delivery path never did: it
+    // gated standing, access level, and health class only, so a
+    // body stored for one person could be queued to another and
+    // opened verbatim under their key, and a plan landing could
+    // carry a narrowed entry's words to a runner outside the
+    // audience. The rule now, at this choke point: when the
+    // delivery carries source material (a source event, or a plan
+    // element and the events it was built from), the recipient
+    // must be inside the stored audience of every source event,
+    // where "inside" for delivery means the read audience
+    // (BriefService.IsVisibleTo) or the person the stored rule
+    // names as the delivery backup. The backup is not a reader,
+    // but the rule names them to receive the delivery when the
+    // route cannot, so delivering to them is the rule's own
+    // terms. A plan element's named participants (its required
+    // disposers and its assignee) are likewise inside for that
+    // element: the element's words are the proposal addressed to
+    // them, and the runner still receives only the element's own
+    // words, never the telling behind them (the Q38 projection
+    // boundary is unchanged; a runner outside the audience of the
+    // underlying telling gets no delivery of words copied from
+    // it). A delivery with no source material names nobody's
+    // record and is not gated here.
+    public async Task<bool> IsOutsideStoredAudienceAsync(
+        int toPersonId, int? sourceEventId = null, int? sourcePlanElementId = null)
+    {
+        var sourceEvents = new List<Event>();
+        if (sourceEventId is int eventId)
+        {
+            var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+            if (ev is not null)
+            {
+                sourceEvents.Add(ev);
+            }
+        }
+        var elementParticipants = new List<int>();
+        if (sourcePlanElementId is int elementId)
+        {
+            var element = await _db.PlanElements.FirstOrDefaultAsync(e => e.Id == elementId);
+            if (element is not null)
+            {
+                elementParticipants.AddRange(PlanAssemblyService.RequiredDisposers(element));
+                if (element.AssigneePersonId is int assignee)
+                {
+                    elementParticipants.Add(assignee);
+                }
+                foreach (var id in PlanAssemblyService.SourceEventIds(element))
+                {
+                    var ev = await _db.Events.FirstOrDefaultAsync(e => e.Id == id);
+                    if (ev is not null)
+                    {
+                        sourceEvents.Add(ev);
+                    }
+                }
+            }
+        }
+        if (sourceEvents.Count == 0 || elementParticipants.Contains(toPersonId))
+        {
+            return false;
+        }
+        return sourceEvents.Any(ev => !IsInDeliveryAudience(ev, toPersonId));
+    }
+
+    private static bool IsInDeliveryAudience(Event ev, int personId) =>
+        BriefService.IsVisibleTo(ev, personId) || RuleNamesBackup(ev, personId);
+
+    // The stored rule's backup is a delivery term, not a read
+    // term: BriefService.IsVisibleTo rightly leaves the backup
+    // unable to READ the entry, while the confirmation dispatcher
+    // delivers to them when the route names nobody. Delivery
+    // honors the rule's own naming.
+    private static bool RuleNamesBackup(Event ev, int personId)
+    {
+        if (string.IsNullOrWhiteSpace(ev.AudienceRule))
+        {
+            return false;
+        }
+        try
+        {
+            using var doc = JsonDocument.Parse(ev.AudienceRule);
+            return doc.RootElement.ValueKind == JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("BackupPersonId", out var backup)
+                && backup.ValueKind == JsonValueKind.Number
+                && backup.TryGetInt32(out var backupId)
+                && backupId == personId;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     public async Task<SealedOutboxItem?> QueueDeliveryAsync(

@@ -337,6 +337,24 @@ public class PlanAssemblyService
         {
             return;
         }
+        // The stored audience governs the landing itself, on both
+        // roads out of here: a landing whose source events were
+        // stored for named people does not carry its words to a
+        // person outside that audience, sealed or plaintext. The
+        // runner keeps the brief projection of the task's basic
+        // details (Q38); what they never receive outside the
+        // audience is the body itself. IsDeliveryBlockedAsync
+        // below carries the same gate for the roads that consult
+        // it; it is stated here as well so this choke point fails
+        // closed on its own terms.
+        {
+            var audienceGate = new SealedDeliveryService(_db, _nodeKeys);
+            if (await audienceGate.IsOutsideStoredAudienceAsync(
+                    toPersonId, sourcePlanElementId: element.Id))
+            {
+                return;
+            }
+        }
         // Home node routing: a person who holds an Active
         // connection is a remote member; the landing leaves as a
         // sealed packet in the outbox, deduped by a one-way

@@ -87,11 +87,14 @@ public class TimelineModel : PageModel
         }
 
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
-        if (ActorId is null && People.Count > 0)
-        {
-            ActorId = People[0].Id;
-        }
 
+        // No reader named means the house view only: the landing
+        // shows what any reader may see (Open and Household
+        // entries) and nothing written for named people, matching
+        // the front door, the promises page, and the plans page.
+        // Defaulting to the first person here would hand a bare
+        // visit that person's full view, Restricted entries
+        // included.
         var allEvents = await _db.Events
             .Include(e => e.AuthorPerson)
             .Include(e => e.SubjectPerson)

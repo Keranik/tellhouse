@@ -287,6 +287,17 @@ def main():
           and fresh_phrase != toy_phrase and toy_phrase not in fresh_phrase
           and fresh_phrase not in node_log
           and "fresh deploy mode" in node_log)
+    # Key files: the entrypoint writes the
+    # phrase file itself (through shell redirects), and a
+    # redirect's default mode left this deployment's recovery
+    # phrase world-readable at 0644. The entrypoint now creates
+    # it owner only; pin the mode here where the file is born.
+    import stat as stat_mod
+    phrase_mode = stat_mod.S_IMODE(os.stat(phrase_path).st_mode) if phrase_path.exists() else -1
+    key_mode = stat_mod.S_IMODE(os.stat(key_path).st_mode) if key_path.exists() else -1
+    check("fresh deployment's recovery phrase file and node key file are owner only (0600), not the shell default",
+          phrase_mode == 0o600 and key_mode == 0o600,
+          f"phrase mode={oct(phrase_mode) if phrase_mode >= 0 else phrase_mode} key mode={oct(key_mode) if key_mode >= 0 else key_mode}")
     check("fresh node record is the seeded fictional day with no connections yet (no ceremony state rode in)",
           persons0 == 6 and conns0 == 0, f"persons={persons0} conns={conns0}")
 

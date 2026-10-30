@@ -27,6 +27,46 @@ public static class Protocol
     }
     public static string Hex(byte[] b) => Convert.ToHexString(b).ToLowerInvariant();
 
+    // The node key file holds this double's private key, so it
+    // gets the same handling the real stand-ins give theirs:
+    // created owner read/write only (0600) whatever
+    // the process umask says, and a key file left readable by an
+    // older build is tightened on load, on platforms that carry
+    // file modes. A test double's keys are toy material, but the
+    // handling stays consistent with the product it stands in for.
+    public static void WriteKeyFile(string path, string contents)
+    {
+        var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+        using (var stream = new FileStream(path, options))
+        using (var writer = new StreamWriter(stream))
+        {
+            writer.Write(contents);
+        }
+        TightenKeyFile(path);
+    }
+
+    public static void TightenKeyFile(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+        try
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
     // Canonical serialization (contract section 2): UTF-8 JSON, no
     // whitespace, object keys sorted ordinal recursively, arrays in
     // order, strings escaped only as quote, backslash, or a six

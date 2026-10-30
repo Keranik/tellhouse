@@ -20,6 +20,7 @@ import json
 import os
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -438,6 +439,21 @@ def main():
         outbox = json.load(open(os.path.join(stores["lisa"], "outbox.json")))
         check("outbox entry is marked unrecorded",
               len(outbox) >= 1 and all(o["record_state"] == "unrecorded" for o in outbox), outbox[:1])
+
+        # Credential file modes, end to end through the real
+        # programs: each stand-in's state file holds its live
+        # connection credential, and the node double's key file
+        # holds its private key. All are written owner only
+        # (0600) by the programs themselves during this run.
+        def mode(path):
+            return stat.S_IMODE(os.stat(path).st_mode)
+        check("credential files: both stand-ins' state files are owner only (0600) after the run",
+              mode(os.path.join(stores["lisa"], "state.json")) == 0o600
+              and mode(os.path.join(stores["daniel"], "state.json")) == 0o600,
+              oct(mode(os.path.join(stores["lisa"], "state.json"))))
+        check("credential files: the node double's key file is owner only (0600) after the run",
+              mode(os.path.join(stores["node"], "node-keys.json")) == 0o600,
+              oct(mode(os.path.join(stores["node"], "node-keys.json"))))
     finally:
         for p in procs.values():
             try:

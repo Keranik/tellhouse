@@ -35,6 +35,7 @@ string OutboxPath = Path.Combine(storeDir, "outbox.json");
 string InboxPath = Path.Combine(storeDir, "inbox.json");
 string SentPath = Path.Combine(storeDir, "sent.json");
 string RefusalsPath = Path.Combine(storeDir, "refusals.json");
+string RecoveriesPath = Path.Combine(storeDir, "session-recoveries.json");
 string SeenPath = Path.Combine(storeDir, "seen-nonces.json");
 string HeldPath = Path.Combine(storeDir, "held.json");
 string InvitePath = Path.Combine(storeDir, "pending-invite.json");
@@ -45,8 +46,14 @@ string scriptPath = Environment.GetEnvironmentVariable("SCRIPT_PATH")
 
 JsonObject LoadJson(string path, JsonObject fallback) =>
     File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path))!.AsObject() : fallback;
-void SaveJson(string path, JsonObject obj) =>
-    File.WriteAllText(path, obj.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+// The state file holds this assistant's live connection
+// credential, so it is written through the key file writer:
+// created owner read/write only (0600) whatever the umask says,
+// and tightened again on every write, so a state file an older
+// build left readable is repaired the next time state is saved.
+void SaveState(JsonObject state) =>
+    Protocol.WriteKeyFile(StatePath,
+        state.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 JsonArray LoadArr(string path) =>
     File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path))!.AsArray() : new JsonArray();
 void SaveArr(string path, JsonArray arr) =>
@@ -64,6 +71,20 @@ if (!File.Exists(KeysPath))
             .ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 }
 Protocol.TightenKeyFile(KeysPath);
+// The same tightening on load for the two files that carry
+// credential material: the state file (the live connection
+// credential) and a pending invite (the raw code a connection
+// is minted from). Either may have been left readable by an
+// older build; both are read at startup, so both are tightened
+// at startup.
+if (File.Exists(StatePath))
+{
+    Protocol.TightenKeyFile(StatePath);
+}
+if (File.Exists(InvitePath))
+{
+    Protocol.TightenKeyFile(InvitePath);
+}
 var keys = LoadJson(KeysPath, new JsonObject());
 string KD = keys["d"]!.GetValue<string>();
 string KX = keys["x"]!.GetValue<string>();
@@ -394,7 +415,7 @@ async Task<(bool ok, int httpStatus, object payload)> SessionOpenCoreAsync()
     while (attempts.Count > 5) attempts.RemoveAt(0);
     state["open_attempts"] = attempts;
     state["open_sent_at"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-    SaveJson(StatePath, state);
+    SaveState(state);
     var wire = BuildForNode(plain, "knock", packetId);
     var (status, respBody) = await RelaySend(wire);
     if (status == 0)
@@ -415,7 +436,11 @@ async Task<(bool ok, int httpStatus, object payload)> SessionAnswerCoreAsync()
         return (false, 409, new { error = "no session open in progress" });
     var nodePubRaw = Protocol.UnB64Url(state["node_public_key"]!.GetValue<string>());
     var (nx, ny) = Protocol.XYFromPubRaw(nodePubRaw);
-    var latest = attempts.MaxBy(a => a.SentAt)!;
+    // The latest attempt is the last one sent (list order);
+    // MaxBy would return the FIRST maximal attempt on a
+    // same-second tie, which is the superseded knock (see
+    // SessionHunt in Protocol.cs).
+    var latest = attempts[^1];
     var candidates = new List<SessionHunt.Candidate>();
     SessionHunt.Choice? choice = null;
     long settleUntil = 0;
@@ -514,7 +539,7 @@ async Task<(bool ok, int httpStatus, object payload)> SessionAnswerCoreAsync()
         state["session_open_at"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     state["pending_client_nonce"] = null;
     state["open_attempts"] = new JsonArray();
-    SaveJson(StatePath, state);
+    SaveState(state);
     if (status == 202)
     {
         // The proof this exchange sent is what the held packets
@@ -533,6 +558,28 @@ async Task<(bool ok, int httpStatus, object payload)> SessionAnswerCoreAsync()
     });
 }
 
+// Silent session recovery lives here, as one mechanism with
+// this auto session family: RecordSessionRecovery is the audit
+// trail for it (a store file beside sent.json, plus the console),
+// written for recovery events and never shown in a presented
+// result. The recovery itself is not a new path: it is this same
+// exchange, run at the moment a presented send needs it.
+void RecordSessionRecovery(string what)
+{
+    try
+    {
+        var log = LoadArr(RecoveriesPath);
+        log.Add(new JsonObject
+        {
+            ["at"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            ["event"] = what
+        });
+        SaveArr(RecoveriesPath, log);
+    }
+    catch { /* the audit write never blocks a send */ }
+    Console.WriteLine("session-recovery: " + what);
+}
+
 // Ensure a session proof is fresh enough for a session class
 // telling, running the real open and answer exchange when it is
 // not. A recorded proof younger than 20 minutes is fresh (the node
@@ -543,7 +590,19 @@ async Task<(bool ok, int httpStatus, object payload)> SessionAnswerCoreAsync()
 // unrecorded exactly as it does without auto session, which is the
 // honest relay stopped behavior. The semaphore keeps concurrent
 // triggers from racing two opens.
-async Task<bool> EnsureSessionAsync()
+//
+// forceExchange: a presented send must not trust the
+// recorded proof's age. The proof records when this stand-in last
+// SENT a proof the relay accepted; whether the node still holds
+// that session is not observable from here, and after a node reset
+// it does not, while the recorded proof still looks fresh. So a
+// presented send runs the real exchange first, every time: if the
+// node has forgotten the session, the exchange silently
+// re-establishes it on the node's current record and the send
+// lands; if the exchange itself fails, the caller does not send
+// on the doubtful proof at all. Background callers (the
+// keepalive) keep the freshness shortcut.
+async Task<bool> EnsureSessionAsync(bool forceExchange = false)
 {
     await sessionGate.WaitAsync();
     try
@@ -552,7 +611,7 @@ async Task<bool> EnsureSessionAsync()
         if (state["joined"]?.GetValue<bool>() != true)
             return false;
         var openNode = state["session_open_at"];
-        if (openNode != null
+        if (!forceExchange && openNode != null
             && SessionFreshness.IsFresh(openNode.GetValue<long>(),
                 DateTimeOffset.UtcNow.ToUnixTimeSeconds()))
             return true;
@@ -679,12 +738,15 @@ if (AutoJoinEnabled())
             if (!File.Exists(InvitePath))
             {
                 var phrase = Environment.GetEnvironmentVariable("STANDIN_INVITE_CHECK_PHRASE");
-                SaveJson(InvitePath, new JsonObject
+                // The pending invite carries the raw invite code,
+                // so the file is written owner only, like the key
+                // and state files.
+                Protocol.WriteKeyFile(InvitePath, new JsonObject
                 {
                     ["code"] = inviteCode,
                     ["check_phrase"] = string.IsNullOrWhiteSpace(phrase)
                         ? "issued by the node door" : phrase
-                });
+                }.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             }
             var selfUrl = Environment.GetEnvironmentVariable("SELF_URL")
                 ?? "http://127.0.0.1:5000";
@@ -818,7 +880,7 @@ app.MapPost("/act/join-begin", async () =>
     state["connection_id"] = parsed["connection_id"]!.GetValue<string>();
     state["credential"] = credential;
     state["joined"] = false;
-    SaveJson(StatePath, state);
+    SaveState(state);
     return Results.Json(new { knocked = true, connection_id = state["connection_id"]!.GetValue<string>() });
 });
 
@@ -843,7 +905,7 @@ app.MapPost("/act/join-complete", async () =>
     // Only the derived credential stays.
     if (File.Exists(InvitePath)) File.Delete(InvitePath);
     state["invite_disposed"] = true;
-    SaveJson(StatePath, state);
+    SaveState(state);
     return Results.Json(new { joined = true, invite_disposed = true });
 });
 
@@ -881,12 +943,20 @@ app.MapPost("/trigger/test-send", async (HttpRequest req) =>
         // what is addressed to him, and acknowledge from receipt.
         // The trigger carries no content for this either.
         // His poll acknowledgements are session class, so in
-        // auto session mode a fresh proof is ensured before
-        // the self poll runs.
+        // auto session mode the session is confirmed through
+        // the real exchange before the self poll runs (the
+        // recorded proof's age cannot show whether the node
+        // still holds the session, for example after a reset).
         var receiveState = LoadJson(StatePath, new JsonObject());
-        if (AutoSessionEnabled() && receiveState["joined"]?.GetValue<bool>() == true
-            && !await EnsureSessionAsync())
-            return Results.Json(new { error = "session could not be reopened; receive not attempted, because its acknowledgements are session class and the node would refuse them" }, statusCode: 502);
+        if (AutoSessionEnabled() && receiveState["joined"]?.GetValue<bool>() == true)
+        {
+            if (!await EnsureSessionAsync(forceExchange: true))
+            {
+                RecordSessionRecovery("presented receive: the session exchange failed; receive not attempted on a doubtful proof");
+                return Results.Json(new { error = "session could not be reopened; receive not attempted, because its acknowledgements are session class and the node would refuse them" }, statusCode: 502);
+            }
+            RecordSessionRecovery("presented receive: session confirmed through the exchange before polling");
+        }
         var selfUrl = Environment.GetEnvironmentVariable("SELF_URL") ?? "http://127.0.0.1:7413";
         try
         {
@@ -911,9 +981,24 @@ app.MapPost("/trigger/test-send", async (HttpRequest req) =>
     // proof made the node refuse it with "No open session" while
     // this trigger (and the front door reading its answer)
     // reported the telling as sent.
+    //
+    // Silent session recovery: a presented send in auto
+    // session mode confirms its session through the real exchange
+    // first (forceExchange), because the recorded proof's age
+    // cannot show whether the node still holds the session; after
+    // a node reset it does not, and the exchange is what silently
+    // re-establishes it on the node's current record. The user
+    // never sees a dead-session refusal: they see the send's real
+    // result. If the exchange fails, the telling is not sent on
+    // the doubtful proof at all (the stale-proof rule above).
     var sessionReady = true;
     if (AutoSessionEnabled())
-        sessionReady = await EnsureSessionAsync();
+    {
+        sessionReady = await EnsureSessionAsync(forceExchange: true);
+        RecordSessionRecovery(sessionReady
+            ? "presented send: session confirmed through the exchange before sending"
+            : "presented send: the session exchange failed; the telling was not sent on a doubtful proof");
+    }
     var actDef = script["acts"]![act]!.AsObject();
     var packetId = NewPacketId();
     var plain = MakePlain("telling",
@@ -923,13 +1008,45 @@ app.MapPost("/trigger/test-send", async (HttpRequest req) =>
     var (status, respBody) = sessionReady
         ? await RelaySend(wire)
         : (0, "session could not be reopened");
+    // The refused send itself: if the relay refuses this
+    // send, the session is re-opened through the real exchange
+    // and the SAME packet is retried exactly once. The same
+    // packet, never a second one: if the first attempt was taken
+    // in and only its answer was lost, the retry meets the
+    // relay's duplicate protection (409), which reads as the send
+    // standing exactly once. A second refusal falls through to
+    // the honest queued outcome below; there is no third attempt
+    // and nothing is presented as sent that was not accepted.
+    var retried = false;
+    var sendAccepted = status >= 200 && status < 300;
+    if (AutoSessionEnabled() && sessionReady && !sendAccepted && status != 409)
+    {
+        RecordSessionRecovery($"presented send: the relay refused the send (status {status}); "
+            + "re-opening the session and retrying the same packet once");
+        retried = true;
+        if (await EnsureSessionAsync(forceExchange: true))
+        {
+            var retry = await RelaySend(wire);
+            status = retry.status;
+            respBody = retry.body;
+            sendAccepted = (status >= 200 && status < 300) || status == 409;
+            RecordSessionRecovery(sendAccepted
+                ? $"presented send: the single retry was accepted (status {status}); the telling stands sent exactly once"
+                : $"presented send: the single retry was also refused (status {status}); the error surfaces and nothing is presented as sent");
+        }
+        else
+        {
+            RecordSessionRecovery("presented send: the recovery exchange failed; the send was not retried");
+        }
+    }
     var sent = LoadArr(SentPath);
-    // Only a relay acceptance (a 2xx answer) is a send.
+    // Only a relay acceptance (a 2xx answer, or the duplicate
+    // backstop on the single recovery retry) is a send.
     // A relay refusal, an unreachable relay, or a session that
     // could not be reopened all land in the same honest place:
     // the telling stays in this stand-in's own outbox, marked
     // unrecorded, and the answer says so.
-    if (status == 0 || status < 200 || status >= 300)
+    if (!sendAccepted)
     {
         QueueLocal(wire, act);
         sent.Add(new JsonObject
@@ -938,14 +1055,16 @@ app.MapPost("/trigger/test-send", async (HttpRequest req) =>
             ["result"] = "queued locally, unrecorded", ["at"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         });
         SaveArr(SentPath, sent);
-        return Results.Json(new { act, packet_id = packetId, result = "queued locally, unrecorded", detail = !sessionReady ? "session could not be reopened; the telling was not sent on a stale session" : "the relay did not accept the packet; the telling was not sent" }, statusCode: 202);
+        return Results.Json(new { act, packet_id = packetId, result = "queued locally, unrecorded", detail = !sessionReady ? "session could not be reopened; the telling was not sent on a stale session" : retried ? "the relay did not accept the packet, even after the one session recovery retry; the telling was not sent" : "the relay did not accept the packet; the telling was not sent" }, statusCode: 202);
     }
-    sent.Add(new JsonObject
+    var sentEntry = new JsonObject
     {
         ["act"] = act, ["packet_id"] = packetId,
         ["result"] = respBody, ["at"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
         ["wire"] = wire.DeepClone()
-    });
+    };
+    if (retried) sentEntry["recovered_by_retry"] = true;
+    sent.Add(sentEntry);
     SaveArr(SentPath, sent);
     return Results.Json(new { act, packet_id = packetId, relay_status = status, relay_result = respBody });
 });

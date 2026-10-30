@@ -27,6 +27,11 @@ public class PlansModel : PageModel
     public List<Plan> Plans { get; private set; } = new();
     public List<Person> People { get; private set; } = new();
 
+    // The record events the plan elements on this page were built
+    // from, loaded once per read so each element's text can be
+    // fenced by the audience stored on its sources.
+    private readonly Dictionary<int, Event> _sourceEvents = new();
+
     [BindProperty(SupportsGet = true)]
     public int? ViewerId { get; set; }
     public List<Event> OpenDecisions { get; private set; } = new();
@@ -40,6 +45,18 @@ public class PlansModel : PageModel
             .OrderByDescending(p => p.Id)
             .ToListAsync();
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
+        var sourceIds = Plans
+            .SelectMany(p => p.Elements)
+            .SelectMany(e => PlanAssemblyService.SourceEventIds(e))
+            .Distinct()
+            .ToList();
+        if (sourceIds.Count > 0)
+        {
+            foreach (var source in await _db.Events.Where(e => sourceIds.Contains(e.Id)).ToListAsync())
+            {
+                _sourceEvents[source.Id] = source;
+            }
+        }
         var notes = await _db.Events
             .Where(e => e.Type == EventType.HouseholdNote && e.Details != null)
             .OrderByDescending(e => e.CreatedAtUtc)
@@ -61,6 +78,35 @@ public class PlansModel : PageModel
             .ToList();
     }
 
+    // Whether this page's reader may see one plan element's text.
+    // An element's words stand on the record it was built from, so
+    // they follow the stored audience of every source event: an
+    // element derived from a narrowed source shows only to readers
+    // inside that source's audience, and to no reader when any
+    // source is narrowed. An element with no source event was
+    // written by hand on this page and behaves as it always has.
+    // The view renders nothing of a hidden element, its agreements
+    // and dispose form and its re-time form with the element's
+    // words pre-filled included.
+    public bool ElementVisibleToViewer(PlanElement element)
+    {
+        foreach (var sourceId in PlanAssemblyService.SourceEventIds(element))
+        {
+            if (!_sourceEvents.TryGetValue(sourceId, out var source))
+            {
+                return false;
+            }
+            var visible = ViewerId is int viewer
+                ? BriefService.IsVisibleTo(source, viewer)
+                : BriefService.IsVisibleWithNoReader(source);
+            if (!visible)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public async Task<IActionResult> OnPostCreatePlanAsync(string label, string? anchorTime)
     {
         var household = await _db.Households.FirstAsync();
@@ -77,15 +123,33 @@ public class PlansModel : PageModel
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostAddDinnerAsync(int planId, int? sourceEventId, string mealText, int[] disposerIds)
+    public async Task<IActionResult> OnPostAddDinnerAsync(int planId, int? sourceEventId, string mealText, int[] disposerIds, int? viewerId = null)
     {
+        // The source selector above only ever offers decisions the
+        // reader named on the page may see, but a posted form can
+        // name any event id: the choice is checked here, against
+        // the reader the form carried, and a source that reader
+        // may not see is refused whole rather than attached.
+        if (sourceEventId is int sourceId)
+        {
+            var source = await _db.Events.FirstOrDefaultAsync(e => e.Id == sourceId);
+            var sourceVisible = source is not null
+                && (viewerId is int reader
+                    ? BriefService.IsVisibleTo(source, reader)
+                    : BriefService.IsVisibleWithNoReader(source));
+            if (!sourceVisible)
+            {
+                TempData["PlanNote"] = "That decision is not one the reader named here may see, so it was not used.";
+                return RedirectToPage(new { ViewerId = viewerId });
+            }
+        }
         await _plans.AddElementAsync(
             planId, PlanElementKind.MealProposal,
             string.IsNullOrWhiteSpace(mealText) ? "Dinner" : mealText.Trim(),
             disposerIds,
             sourceEventIds: sourceEventId is int id ? new[] { id } : null);
         TempData["PlanNote"] = "Dinner is proposed. It settles only when everyone named has agreed.";
-        return RedirectToPage();
+        return RedirectToPage(new { ViewerId = viewerId });
     }
 
     public async Task<IActionResult> OnPostAddListAsync(int planId, string listText, int runnerPersonId)

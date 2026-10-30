@@ -118,6 +118,12 @@ public sealed class ContentKeyStore
     public static ContentKeyStore Load(string path)
     {
         if (!File.Exists(path)) throw new InvalidOperationException("no household content key at " + path);
+        // The open-check path reads the same keystore LoadOrCreate
+        // reads, so it gets the same treatment: a keystore left
+        // group or world readable is tightened on load here too.
+        // Before this, Load read the file as it found it, and the
+        // loosened mode survived every backup verification.
+        TightenKeyFile(path);
         return JsonSerializer.Deserialize<ContentKeyStore>(File.ReadAllText(path))
                ?? throw new InvalidOperationException("keystore file is unreadable");
     }

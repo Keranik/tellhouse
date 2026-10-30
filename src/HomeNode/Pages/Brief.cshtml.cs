@@ -35,8 +35,12 @@ public class BriefModel : PageModel
     public async Task<IActionResult> OnGetAsync()
     {
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
-        var id = PersonId ?? People.FirstOrDefault()?.Id;
-        if (id is not int viewerId)
+        // A brief belongs to one named person. With no reader
+        // named there is no brief at all: the page shows the
+        // reader picker and a plain note, never the first person's
+        // brief. That default handed a bare visit the first
+        // person's full view, Restricted entries included.
+        if (PersonId is not int viewerId)
         {
             return Page();
         }

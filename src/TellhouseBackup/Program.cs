@@ -57,18 +57,22 @@ public static class Program
         return 0;
     }
 
+    private static bool HasFlag(string[] args, string name) => args.Contains("--" + name);
+
     // The one restore path. Opens the backup first; only a successful open
     // reaches the restore, so a wrong key leaves no destination file.
-    public static void RestoreFromPhrase(string backupPath, string phrase, string destDb, string pathLabel)
+    public static void RestoreFromPhrase(string backupPath, string phrase, string destDb, string pathLabel,
+        bool overrideLiveNode = false)
     {
         var backup = SealedBackup.Read(backupPath);
         var export = SealedBackup.OpenWithPhrase(backup, phrase);
-        Restore.RestoreToFreshNode(export, backup, destDb, pathLabel);
+        Restore.RestoreToFreshNode(export, backup, destDb, pathLabel, overrideLiveNode);
     }
 
     private static int RestoreCmd(string[] args, string pathLabel)
     {
-        RestoreFromPhrase(Opt(args, "backup"), Opt(args, "phrase"), Opt(args, "dest-db"), pathLabel);
+        RestoreFromPhrase(Opt(args, "backup"), Opt(args, "phrase"), Opt(args, "dest-db"), pathLabel,
+            HasFlag(args, "override-live-node"));
         Console.WriteLine("restore complete onto fresh node database: " + Opt(args, "dest-db") + " path=" + pathLabel);
         return 0;
     }
@@ -111,7 +115,7 @@ public static class Program
     private static int SealDb(string[] args)
     {
         var ks = ContentKeyStore.Load(Opt(args, "keystore"));
-        AtRestFileSeal.SealFile(Opt(args, "db"), Opt(args, "out"), ks);
+        AtRestFileSeal.SealFile(Opt(args, "db"), Opt(args, "out"), ks, HasFlag(args, "override-live-node"));
         Console.WriteLine("database file sealed at rest: " + Opt(args, "out"));
         return 0;
     }
@@ -119,7 +123,7 @@ public static class Program
     private static int UnsealDb(string[] args)
     {
         var ks = ContentKeyStore.Load(Opt(args, "keystore"));
-        AtRestFileSeal.UnsealFile(Opt(args, "sealed"), Opt(args, "dest-db"), ks);
+        AtRestFileSeal.UnsealFile(Opt(args, "sealed"), Opt(args, "dest-db"), ks, HasFlag(args, "override-live-node"));
         Console.WriteLine("database file unsealed: " + Opt(args, "dest-db"));
         return 0;
     }
@@ -132,13 +136,14 @@ public static class Program
         Console.WriteLine("  keygen-content --keystore <file>");
         Console.WriteLine("  backup --db <file> --keystore <file> --out <file>   (prints the recovery phrase once)");
         Console.WriteLine("  demo-snapshot --db <file> --keystore <file> --out <file>");
-        Console.WriteLine("  restore --backup <file> --phrase \"<words>\" --dest-db <file>");
-        Console.WriteLine("  demo-reset --backup <file> --phrase \"<words>\" --dest-db <file>");
+        Console.WriteLine("  restore --backup <file> --phrase \"<words>\" --dest-db <file> [--override-live-node]");
+        Console.WriteLine("  demo-reset --backup <file> --phrase \"<words>\" --dest-db <file> [--override-live-node]");
         Console.WriteLine("  open-check --backup <file> --keystore <file> | --phrase \"<words>\"");
         Console.WriteLine("  verify --before <db> --after <db>");
         Console.WriteLine("  export --db <file> --out <file>");
-        Console.WriteLine("  seal-db --db <file> --keystore <file> --out <file>");
-        Console.WriteLine("  unseal-db --sealed <file> --keystore <file> --dest-db <file>");
+        Console.WriteLine("  seal-db --db <file> --keystore <file> --out <file> [--override-live-node]");
+        Console.WriteLine("  unseal-db --sealed <file> --keystore <file> --dest-db <file> [--override-live-node]");
+        Console.WriteLine("  (--override-live-node forces a file swap a live node is holding, and logs the override beside the database)");
         Console.WriteLine("  selftest [--workdir <dir>]");
     }
 }

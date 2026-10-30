@@ -70,7 +70,14 @@ builder.Services.AddSingleton(new HttpClient(new SocketsHttpHandler
         return new System.Net.Sockets.NetworkStream(sock, ownsSocket: true);
     }
 })
-{ Timeout = TimeSpan.FromSeconds(10) });
+// 30 seconds, not 10: a Test Send trigger call now carries the
+// stand-in's session recovery inside it. In auto session
+// mode the stand-in confirms its session through the real
+// exchange before it sends, which takes a few seconds on a
+// healthy loop; the timeout must cover that exchange plus the
+// send, or the front door would report a timeout on a send that
+// is in fact landing.
+{ Timeout = TimeSpan.FromSeconds(30) });
 builder.Services.AddScoped<TestSendService>(sp =>
 {
     var options = sp.GetRequiredService<IOptions<DemoOptions>>().Value;
@@ -88,6 +95,11 @@ builder.Services.AddScoped<DoorService>();
 builder.Services.AddScoped<SealedDeliveryService>();
 builder.Services.AddScoped<SealedIntakeService>();
 
+// The stale-issue bound for sealed intake is one named
+// configuration value (Intake:MaxPacketAgeDays, shipped default
+// 7 days, off supported); PacketAgeBound carries the tuning basis.
+builder.Services.AddSingleton(PacketAgeBound.FromConfiguration(builder.Configuration));
+
 // The relay loop runs only when a relay is configured
 // (Relay:BaseUrl). It polls the relay, feeds sealed intake, and
 // posts the sealed outbox. See Services/RelayLoopService.cs.
@@ -99,6 +111,13 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration.GetValue<string>("Relay:Bas
 // The one timer in the system: it runs the 24-hour lapse on
 // unanswered proposals (see Services/LapseService.cs).
 builder.Services.AddHostedService<LapseService>();
+
+// While the node runs it holds a liveness lock beside its
+// database, so the backup and reset tooling can refuse (or demand
+// a logged override for) a file swap against a live node, across
+// containers wherever the database directory is shared. See
+// Services/NodeLivenessService.cs.
+builder.Services.AddHostedService<NodeLivenessService>();
 
 // The shared record lives in one SQLite file beside the app. Delete the
 // file to start over; the app creates it and seeds the demo household on

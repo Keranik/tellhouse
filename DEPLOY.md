@@ -331,7 +331,41 @@ never run demo-reset onto a database a running node has open,
 because a running node keeps working on the file it opened and
 cannot see a file swapped under it. The entrypoint's restore
 is safe on this point by construction, since it runs before
-the app starts. As part of the swap, the restore tool deletes
+the app starts.
+
+The stop is enforced, not just advised, wherever the reset
+runs against the node's actual database directory. While the
+node runs it holds a liveness lock beside its database (the
+database file's path plus ".liveness"), a small file carrying
+its instance id and a heartbeat it refreshes every 10
+seconds; a clean stop removes it. The reset tool (restore,
+demo-reset, and the at-rest seal-db and unseal-db commands,
+which also replace or read the database as a stopped file)
+reads that lock before it touches the database:
+
+- A fresh heartbeat (60 seconds old or less) means a live
+  node holds the database: the command refuses and changes
+  nothing. Passing --override-live-node forces the swap
+  anyway and appends the override, with the lock's instance
+  details, to the audit log beside the database (the database
+  path plus ".reset-audit.log"), so a forced reset is itself
+  on record.
+- An older heartbeat means the node is treated as stopped (a
+  hard kill leaves the lock behind), the stale lock is
+  removed, and the reset proceeds. An unreadable lock file
+  never blocks a reset.
+
+What this enforces, per deployment shape, stated plainly: in
+one container or on one host, the reset runs in the node's
+own directory and the lock is enforced. Across containers,
+the lock is enforced whenever the reset command runs against
+the database directory the node writes to, for example with
+that directory shared through a volume, because the lock sits
+in that directory. What no file mechanism can see is a reset
+performed outside the tool: copying a restored file over the
+database by hand, or resetting a copied database and copying
+it back. Against those, the stop-first rule above remains the
+protection, and it is procedure, not mechanism. As part of the swap, the restore tool deletes
 the destination's journal sidecar files (the -wal, -shm, and
 -journal files) before moving the restored file into place:
 those files belong to the stopped node's old database file,
@@ -354,6 +388,27 @@ reset-demo.sh, in this repository, is neither the boot path
 nor the deployed reset. It is the local packaging lifecycle
 tool for the frozen monolith package. Do not present it as
 the deployed product's reset mechanism.
+
+## The intake bound for old packets
+
+One named setting bounds how old a sealed packet may be when
+the node takes it in: Intake:MaxPacketAgeDays, in the node's
+appsettings.json (or the Intake__MaxPacketAgeDays environment
+variable). The shipped value is 7, meaning a packet whose
+issue time is more than 7 days before it reaches the node is
+rejected at intake, with the reason written on the node's
+packet trail. Setting the value to off (or 0) disables the
+bound entirely, and intake then behaves exactly as it did
+before the bound existed.
+
+The default is days on purpose. Legitimate store-and-forward
+traffic is never old: the relay holds a packet for minutes,
+and a member's assistant drains its own queue at its next
+session, so even a long weekend away lands far inside 7 days.
+The bound exists to retire packets from an earlier era of the
+record, for example a packet captured before a reset and
+replayed long after; a tighter bound would endanger real
+traffic and buy nothing.
 
 ## What was verified locally
 

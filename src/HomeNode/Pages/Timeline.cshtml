@@ -7,12 +7,21 @@
 <h1>Family timeline</h1>
 <p>The shared record for the house, newest first, as the person you are
    acting as may read it. An entry written for named people appears only
-   to them.</p>
+   to them. With no reader named, only entries written for the whole
+   house are shown.</p>
 
 <form method="get">
     <label>
         Acting as
         <select name="ActorId" onchange="this.form.submit()">
+            @if (Model.ActorId is null)
+            {
+                <option value="" selected>No reader named (house entries only)</option>
+            }
+            else
+            {
+                <option value="">No reader named (house entries only)</option>
+            }
             @foreach (var person in Model.People)
             {
                 if (Model.ActorId == person.Id)
@@ -74,7 +83,7 @@ else
                         }
                     </td>
                     <td>
-                        @if (item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed && !item.RecordPending)
+                        @if (Model.ActorId is not null && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed && !item.RecordPending)
                         {
                             <form method="post" asp-page-handler="Confirm">
                                 <input type="hidden" name="eventId" value="@item.Id" />
@@ -87,7 +96,7 @@ else
                                 <button type="submit">Decline</button>
                             </form>
                         }
-                        else if (item.RecordPending && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
+                        else if (Model.ActorId is not null && item.RecordPending && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
                         {
                             <form method="post" asp-page-handler="Close">
                                 <input type="hidden" name="eventId" value="@item.Id" />

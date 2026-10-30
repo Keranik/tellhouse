@@ -474,6 +474,17 @@ public static class Protocol
 //   among the rest, the most recently issued challenge is the
 //   node's outstanding one, and it pairs with the open attempt
 //   sent most recently before it was issued.
+//
+// Timestamps are whole seconds, so two knocks sent inside one
+// second, and the two challenges they draw, carry identical
+// times and cannot be ordered by time at all (this
+// tie was the intermittent session
+// exchange failure; the proof came out built across the two
+// exchanges and the node rejected it). Order, not time, breaks
+// the tie: attempts are recorded in the order the knocks were
+// sent and candidates in the order the relay delivered them,
+// which is the order the node issued them, so among equals the
+// LAST attempt and the LAST candidate are the current pair.
 public static class SessionHunt
 {
     public sealed record Attempt(string ClientNonce, long SentAt);
@@ -487,16 +498,30 @@ public static class SessionHunt
         IReadOnlyList<Candidate> candidates, long now)
     {
         if (attempts.Count == 0) return null;
-        var latest = attempts.MaxBy(a => a.SentAt)!;
+        // The latest attempt is the last one sent (list order),
+        // not the greatest SentAt: on a tie MaxBy returns the
+        // FIRST maximal element, which is the superseded knock.
+        var latest = attempts[^1];
         Candidate? best = null;
         foreach (var c in candidates)
         {
             if (!IsAnswerable(latest, c, now)) continue;
-            if (best == null || c.IssuedAt > best.IssuedAt) best = c;
+            // >=, not >: on an IssuedAt tie the later delivered
+            // candidate is the later issued one, and it, not the
+            // superseded first delivery, is the node's
+            // outstanding challenge.
+            if (best == null || c.IssuedAt >= best.IssuedAt) best = c;
         }
         if (best == null) return null;
-        var paired = attempts.Where(a => a.SentAt <= best.IssuedAt + 2)
-                             .MaxBy(a => a.SentAt) ?? latest;
+        // The attempt the outstanding challenge answers is the
+        // most recent knock sent before it was issued, again in
+        // list order so a same-second tie pairs the newest
+        // challenge with the newest knock, never across the two.
+        Attempt paired = latest;
+        foreach (var a in attempts)
+        {
+            if (a.SentAt <= best.IssuedAt + 2) paired = a;
+        }
         return new Choice(best.PacketId, best.ServerNonce, paired.ClientNonce);
     }
 }

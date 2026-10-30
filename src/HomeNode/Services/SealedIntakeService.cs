@@ -63,6 +63,7 @@ public class SealedIntakeService
     private readonly ConfirmationService _confirmations;
     private readonly PlanAssemblyService _plans;
     private readonly SealedDeliveryService _deliveries;
+    private readonly PacketAgeBound _ageBound;
 
     public SealedIntakeService(
         AppDbContext db,
@@ -71,7 +72,8 @@ public class SealedIntakeService
         ExtractionService extraction,
         ConfirmationService confirmations,
         PlanAssemblyService plans,
-        SealedDeliveryService deliveries)
+        SealedDeliveryService deliveries,
+        PacketAgeBound? ageBound = null)
     {
         _db = db;
         _nodeKeys = nodeKeys;
@@ -80,6 +82,12 @@ public class SealedIntakeService
         _confirmations = confirmations;
         _plans = plans;
         _deliveries = deliveries;
+        // The stale-issue bound. Program.cs registers the
+        // instance built from configuration (Intake:MaxPacketAgeDays);
+        // a caller that constructs this service by hand gets the
+        // shipped default, which is also what the configuration
+        // falls back to.
+        _ageBound = ageBound ?? PacketAgeBound.ShippedDefault;
     }
 
     public record IntakeReceipt(bool Accepted, string PacketId, string? Reason);
@@ -156,6 +164,22 @@ public class SealedIntakeService
             SeenAtUtc = DateTime.UtcNow
         });
         await _db.SaveChangesAsync();
+
+        // The stale-issue bound, a node policy next to the
+        // seen registry (the packet_id is consumed either way, like
+        // every other rejection past this point, so a re-posted
+        // copy of a stale packet meets the replay rule rather than
+        // landing). The check sits before the cryptographic steps:
+        // an era-old packet is refused without paying for its
+        // verification, and the reason goes on the trail like every
+        // other intake refusal. When the bound is disabled this is
+        // a no-op and intake behaves exactly as before. See
+        // PacketAgeBound for the one named value and its basis.
+        if (_ageBound.Rejects(envelope.IssuedAt, DateTime.UtcNow))
+        {
+            return await Reject("Stale packet rejected: issued_at is older than the intake bound of "
+                + _ageBound.Describe() + " (Intake:MaxPacketAgeDays).");
+        }
 
         // Step 4: length and hash recomputed from the blob.
         var blob = packet.CiphertextBytes();
@@ -239,7 +263,6 @@ public class SealedIntakeService
         }
         var connection = await _db.HouseConnections
             .FirstAsync(c => c.ConnectionId == inbox.ConnectionId);
-        var packet = Packet.Parse(inbox.WireJson);
 
         async Task<IntakeReceipt> Reject(string reason)
         {
@@ -248,6 +271,25 @@ public class SealedIntakeService
             await _db.SaveChangesAsync();
             await TrailAsync(packetId, inbox.ConnectionId, "Rejected", reason);
             return new IntakeReceipt(false, packetId, reason);
+        }
+
+        // The stored wire is re-parsed here, and a parse failure
+        // is a terminal rejection like any other malformed packet:
+        // the row was validated before it was stored, so wire that
+        // no longer parses was damaged after intake (a corrupted
+        // store), and leaving it queued would retry the same throw
+        // on every processing pass forever, never landing and never
+        // closing. The hand-crafted shape is already refused this
+        // way at the open step below; the stored shape gets the
+        // same ending.
+        Packet packet;
+        try
+        {
+            packet = Packet.Parse(inbox.WireJson);
+        }
+        catch (Exception ex) when (ex is ProtocolException or JsonException or FormatException or CryptographicException or InvalidOperationException)
+        {
+            return await Reject("The stored wire no longer parses as a contract packet; the queue row was damaged after intake: " + ex.Message);
         }
 
         // Step 6 and the plain half of step 7: Packet.Open runs
