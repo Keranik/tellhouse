@@ -1,10 +1,12 @@
 # Test evidence summary
 
 What was run against the code in this repository, and what
-it showed. Two public commits are covered, each verified on
+it showed. Three public commits are covered, each verified on
 its own exact tree: the first public commit (75b6ed3,
-October 29, 2026) and the deployment wiring follow-up
-commit built on top of it (October 29, 2026).
+October 29, 2026), the deployment wiring follow-up
+commit built on top of it (October 29, 2026), and the
+third public commit built on top of that (October 29,
+2026), covered in the final sections below.
 
 ## Build
 
@@ -162,3 +164,87 @@ recorded 191 of 191 in every standalone and merged
 rerun. The figures above
 are from the verification runs made after those fixes,
 on the tree this commit carries.
+
+## Third public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Third public commit: suites
+
+All passing at this commit's final verification
+(October 29, 2026; totals grew again as checks were
+added, and no earlier check was removed):
+
+- Home node demo suite: 205
+- Home node suite: 147
+- Single-process build demo suite: 131
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38 at this commit's
+  final verification (see the honest note below)
+- Stand-in session recovery checks: 10 of 10
+
+## Third public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks (the set
+  grew by one exercise in this commit), in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries, beyond the follow-up: reset
+protection is now a mechanism, not only an instruction.
+The home node keeps a liveness lock beside its database,
+renewed while it runs; the reset and restore tooling
+refuses to swap a database that a live node holds, an
+operator override is possible and is written to an audit
+log when used, a lock left behind by a stopped node does
+not block, and an unreadable lock never blocks. Session
+recovery on the stand-ins: when a send is refused
+because the session is gone, the stand-in re-opens its
+session through the real exchange and retries the send
+exactly once, then reports the result as it stands; a
+second refusal surfaces as an error, and nothing is
+recorded by a refused attempt. A tunable bound on packet
+age (one named setting, off when unset, seven days as
+shipped) lets the house refuse packets issued long
+before they arrived. And an adversarial round over the
+same ground as the earlier reviews found and fixed,
+each with a standing check added: the timeline and the
+brief, opened with no reader named, opened as the first
+member of the house instead of the house-only view, so a
+restricted entry was visible to an unnamed visitor; a
+delivery could be queued to a member outside the
+audience stored for its source entry, on the sealed
+road and on the plan landing road alike; the plans page
+showed plan element words and its forms to readers
+outside the audience of the entries the words came
+from; a damaged row in the sending queue was retried
+forever instead of being refused for good; and several
+credential files (a backup key store opened for reading,
+the node double's key file, and the stand-ins' state
+files, which hold a live connection credential) were
+left readable by other users instead of being tightened
+to owner only. The two limits stated for the follow-up
+stand, narrowed by one: the reset guard now acts
+wherever the reset tool can see the node's own files,
+including a volume shared between containers, and the
+written stop-first instruction remains the protection
+only where no files are shared at all. The stand-in
+protocol checks driver, whose session timing checks
+were not reliably green in the follow-up's record, is
+green in full at this commit's final verification, 38
+of 38, the set having grown by two credential file
+checks; the same session exchange stays green in both
+service journeys on this tree, as recorded above.
