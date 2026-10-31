@@ -438,3 +438,55 @@ words. The single-process build's matching page and
 notes carry the same wording. The stored record is
 unchanged, and so are the values the settle form
 posts; only the words a reader sees moved.
+
+## Seventh public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Seventh public commit: suites
+
+All passing at this commit's final verification
+(October 31, 2026; no suite grew or shrank in this
+commit, because the change is presentation only:
+navigation layout and its client script, with no
+change to what any page does):
+
+- Home node demo suite: 207
+- Home node suite: 155
+- Single-process build demo suite: 138
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Seventh public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: on narrow screens the
+sidebar leaves the page and becomes a modal navigation
+drawer. The slim top bar carries a house button;
+tapping it slides the full list of the house's places
+in from the left over a dimmed backdrop, and following
+a place closes it. A bottom navigation bar pins the
+four most-visited places (Front door, Family timeline,
+Daily Summary, Private Inbox) as icons only, each one
+named for assistive technology instead of shown as a
+text label. Above the breakpoint nothing changes: the
+fixed sidebar is the only navigation, exactly as
+before, and the desktop rendering is unchanged.
