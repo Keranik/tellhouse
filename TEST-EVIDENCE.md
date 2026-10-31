@@ -379,3 +379,62 @@ that words are needed because the record holds only
 what a person wrote, where before a blank field was
 quietly filled with a stock label. Two standing checks
 in the home node demo suite pin that refusal.
+
+## Sixth public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Sixth public commit: suites
+
+All passing at this commit's final verification
+(October 30, 2026; no suite grew or shrank in this
+commit, because the change is wording on the surface
+and the checks that pin surface wording were updated
+to the new words):
+
+- Home node demo suite: 207
+- Home node suite: 155
+- Single-process build demo suite: 138
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Sixth public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: the surface's word for what
+a person takes on has changed, everywhere a reader
+meets it. The list in the sidebar is now My Claims.
+Its table reads Claimed by, Claim, For whom, Due,
+Status, and Settle; a settled claim reads Done, a
+claim that did not happen reads Still unclaimed, and
+a claim its person let go reads Released. Nothing on
+the surface calls an undone claim broken, and nothing
+frames it as a failure of the person: a claim cannot
+be handed to someone, so what it asks of them was
+theirs from the start, and letting one go is
+logistics, not a verdict. The daily summary's open
+section is now Claims still open, and its lines begin
+Claimed by. The notes the surface answers with when
+a claim cannot be settled speak of claims in the same
+words. The single-process build's matching page and
+notes carry the same wording. The stored record is
+unchanged, and so are the values the settle form
+posts; only the words a reader sees moved.
