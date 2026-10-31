@@ -490,3 +490,54 @@ named for assistive technology instead of shown as a
 text label. Above the breakpoint nothing changes: the
 fixed sidebar is the only navigation, exactly as
 before, and the desktop rendering is unchanged.
+
+## Eighth public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Eighth public commit: suites
+
+All passing at this commit's final verification
+(October 31, 2026; no suite grew or shrank in this
+commit, because the change is presentation only: brand
+assets and the layout references that show them):
+
+- Home node demo suite: 207
+- Home node suite: 155
+- Single-process build demo suite: 138
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Eighth public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: the Tellhouse logo. The
+mark (a wide roof over bold T and H letters, navy and
+coral) now sits in the sidebar brand beside the
+Tellhouse wordmark, which is also the identity header
+of the mobile navigation drawer, and in the mobile
+top bar's house spot, where tapping it opens that
+drawer. On this shell's dark ground the mark is shown
+in its white and coral variant so it stays legible;
+the site icons are the brand's own favicon set (an
+SVG icon and an ICO icon) and its apple touch icon.
+The assets are the brand kit's files, used as
+delivered.
