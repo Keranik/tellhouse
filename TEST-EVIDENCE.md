@@ -318,3 +318,64 @@ examples now present the X-House-Secret header the
 endpoint requires, as step 2 of the same guide states
 of every house-side call, so the fresh deployment
 sequence runs as written.
+
+## Fifth public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Fifth public commit: suites
+
+All passing at this commit's final verification
+(October 30, 2026; the home node demo suite grew by
+two checks, and no earlier check was removed):
+
+- Home node demo suite: 207
+- Home node suite: 155
+- Single-process build demo suite: 138
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Fifth public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: the home node's face is
+reshelled. Every house surface now sits in one app
+shell, a fixed sidebar carrying the house's places, a
+top bar, and a roomy content canvas, in a single dark
+gray theme whose colors, type, and spacing were
+measured and set deliberately, with keyboard focus
+visible on every interactive element. Alongside the
+shell, every public page's wording passed a full
+plain-words review: labels a first-time reader can
+understand cold (the deliveries page is now the
+Private Inbox, the brief is now the Daily Summary),
+insider terms replaced or explained where they stood,
+the scaffold error page replaced with the product's
+own words, the seeded people's descriptions reworded
+so children are spoken for by their parents and never
+speak to the record themselves, and the relay's readme
+now names its view as the relay operator's surface.
+One behavior changed with the wording: the plan forms
+now refuse a blank name and create nothing, answering
+that words are needed because the record holds only
+what a person wrote, where before a blank field was
+quietly filled with a stock label. Two standing checks
+in the home node demo suite pin that refusal.
