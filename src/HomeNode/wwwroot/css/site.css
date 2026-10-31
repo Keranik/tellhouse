@@ -523,10 +523,12 @@ textarea:focus-visible, input:focus-visible,
    sliding in from the left over a scrim; the slim top bar
    carries the house button that opens it; a bottom
    navigation bar pins the four most-visited places. The
-   spec followed, with sources and the one named conflict
-   (bottom bar labels), is at hidden_files/mobile-nav-oct31/
-   spec-followed.md. Above the breakpoint none of this
-   exists: the fixed rail is the only navigation. */
+   pattern follows the Material 3 navigation drawer and
+   navigation bar specs, with one named deviation: the
+   bottom bar is icons only, each destination named for
+   assistive technology instead of shown as a text label.
+   Above the breakpoint none of this exists: the fixed
+   rail is the only navigation. */
 
 /* Desktop: the mobile furniture is not rendered at all. */
 .app-drawer-toggle { display: none; }
@@ -617,7 +619,7 @@ textarea:focus-visible, input:focus-visible,
   .app-main { margin-left: 0; }
 
   /* Slim top app bar: house button, page name, demo chip.
-     The chip stays in the bar (standing honesty ruling). */
+     The demo chip stays visible in the bar on every page. */
   .app-topbar {
     padding: 0.25rem 1rem 0.25rem 0.5rem;
     gap: 0.5rem;

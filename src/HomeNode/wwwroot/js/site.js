@@ -10,8 +10,7 @@
 // starts at the left screen edge; closed by the scrim, a
 // left swipe, Escape, or following a destination. While it
 // is open, focus lives inside the drawer; on close, focus
-// returns to the button that opened it. Spec:
-// hidden_files/mobile-nav-oct31/spec-followed.md.
+// returns to the button that opened it.
 (function () {
     var toggle = document.querySelector("[data-drawer-toggle]");
     var drawer = document.getElementById("app-sidebar");
