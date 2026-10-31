@@ -173,14 +173,14 @@ public class ConfirmationService
         if (outcome is not (nameof(PromiseState.Kept) or nameof(PromiseState.Broken) or nameof(PromiseState.Released)))
         {
             throw new InvalidOperationException(
-                $"A closing link sets Kept, Broken, or Released; '{outcome}' is not a closing outcome.");
+                $"A claim can be closed only as Done, Still unclaimed, or Released; '{outcome}' is not one of those.");
         }
         var promise = await _db.Promises.FirstOrDefaultAsync(p => p.Id == promiseId)
-            ?? throw new InvalidOperationException($"Promise {promiseId} does not exist.");
+            ?? throw new InvalidOperationException("That claim cannot be found.");
         if (promise.State != PromiseState.Made)
         {
             throw new InvalidOperationException(
-                $"Promise {promiseId} is {promise.State}; only a Made promise can be closed.");
+                "That claim is no longer open, so it cannot be closed.");
         }
         var closingEvent = await LoadEventAsync(closingEventId);
         promise.State = Enum.Parse<PromiseState>(outcome);

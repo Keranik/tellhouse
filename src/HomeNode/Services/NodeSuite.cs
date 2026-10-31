@@ -741,7 +741,7 @@ public static class NodeSuite
             && keystoreEvent.AuthorPersonId == 3 && keystoreEvent.SubjectPersonId == 2);
         var keystorePromise = keystoreEvent is null ? null
             : await db.Promises.FirstOrDefaultAsync(p => p.SourceEventId == keystoreEvent.Id);
-        Check("Live authorship: the promise born of that telling names the speaker as its maker, and the audit rows credit the speaker, not Daniel",
+        Check("Live authorship: the claim born of that telling names the speaker as the person who took it on, and the audit rows credit the speaker, not Daniel",
             keystorePromise is not null && keystorePromise.PromisorPersonId == 3
             && keystoreEvent is not null
             && await db.EventAudits.CountAsync(a => a.EventId == keystoreEvent.Id
@@ -752,11 +752,11 @@ public static class NodeSuite
         var keystoreToday = DateOnly.FromDateTime(DateTime.Today);
         var keystoreLisaBrief = await keystoreBriefs.BuildBriefAsync(3, keystoreToday);
         var keystoreDanielBrief = await keystoreBriefs.BuildBriefAsync(2, keystoreToday);
-        Check("Live authorship: the speaker can see her own telling, and no brief reads it as Daniel's promise",
+        Check("Live authorship: the speaker can see her own telling, and no brief reads it as Daniel's claim",
             keystoreEvent is not null && BriefService.IsVisibleTo(keystoreEvent, 3)
-            && keystoreLisaBrief.Any(l => l.Text.Contains("promised:") && l.Text.Contains("get the milk"))
-            && !keystoreDanielBrief.Any(l => l.Text.Contains("Daniel promised") && l.Text.Contains("get the milk"))
-            && !keystoreLisaBrief.Any(l => l.Text.Contains("Daniel promised") && l.Text.Contains("get the milk")));
+            && keystoreLisaBrief.Any(l => l.Text.Contains("Claimed by") && l.Text.Contains("get the milk"))
+            && !keystoreDanielBrief.Any(l => l.Text.Contains("Claimed by Daniel") && l.Text.Contains("get the milk"))
+            && !keystoreLisaBrief.Any(l => l.Text.Contains("Claimed by Daniel") && l.Text.Contains("get the milk")));
 
         // ---------- Stale-issue bound ----------
         // One named configuration value (Intake:MaxPacketAgeDays)
@@ -1486,8 +1486,8 @@ public static class NodeSuite
         var reviewBriefLines = await reviewBriefs.BuildBriefAsync(2,
             DateOnly.FromDateTime(reviewDueWall));
         var reviewBriefLine = reviewBriefLines.FirstOrDefault(l =>
-            l.Section == "Promises still open" && l.Text.Contains("pick up the parcel"));
-        Check("Household clock: a promise due 90 minutes from now, household time, reads as still to come in the brief, not as past",
+            l.Section == "Claims still open" && l.Text.Contains("pick up the parcel"));
+        Check("Household clock: a claim due 90 minutes from now, household time, reads as still to come in the brief, not as past",
             reviewBriefLine is not null && reviewBriefLine.Text.Contains("For later.")
             && !reviewBriefLine.Text.Contains("it was for"));
 
@@ -2025,7 +2025,7 @@ public static class NodeSuite
         await seedDb.Database.EnsureCreatedAsync();
         DbSeeder.Seed(seedDb);
 
-        Check("Seeded record: pristine counts hold at 6 persons, 16 events, 23 audits, 1 promise",
+        Check("Seeded record: pristine counts hold at 6 persons, 16 events, 23 audits, 1 claim",
             await seedDb.Persons.CountAsync() == 6
             && await seedDb.Events.CountAsync() == 16
             && await seedDb.EventAudits.CountAsync() == 23

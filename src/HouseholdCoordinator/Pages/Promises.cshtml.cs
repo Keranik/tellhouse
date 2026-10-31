@@ -6,14 +6,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HouseholdCoordinator.Pages;
 
-// The household's promises, as first-class records: who promised what,
-// in their words, and how it closed, listed as the named reader may
-// see them under each promise's stored audience. Closing a promise happens here
-// the way closing works: a person says the closing words into
-// the record (a HouseholdNote of their own), and the dispatcher links
-// that telling to the promise. The house never closes a promise on a
-// clock, and an open promise past its time reads "still open", never
-// "broken".
+// The household's claims, as records in their own right: who took
+// what on, in their words, and how it settled, listed as the named
+// reader may see them under each claim's stored audience. Settling
+// a claim happens here the way settling works: a person says the
+// closing words into the record (a HouseholdNote of their own), and
+// the dispatcher links that telling to the claim. The house never
+// settles a claim on a clock, and an open claim past its time reads
+// "still open"; nothing on this surface reads "broken".
 public class PromisesModel : PageModel
 {
     private readonly AppDbContext _db;
@@ -88,7 +88,7 @@ public class PromisesModel : PageModel
             HouseholdId = promise.HouseholdId,
             Type = EventType.HouseholdNote,
             Body = string.IsNullOrWhiteSpace(closingWords)
-                ? $"{closer.DisplayName.Split(' ')[0]} closed the promise."
+                ? $"{closer.DisplayName.Split(' ')[0]} closed the claim."
                 : closingWords.Trim(),
             SubjectPersonId = promise.PromisorPersonId,
             AuthorPersonId = closer.Id,
@@ -98,7 +98,7 @@ public class PromisesModel : PageModel
         };
         await _confirmations.WriteStatementAsync(closingEvent, "tap");
         await _confirmations.ClosePromiseAsync(promiseId, closingEvent.Id, closerPersonId, outcome, "tap");
-        TempData["PromiseNote"] = "Closed by a person, in their words, and linked to the promise.";
+        TempData["PromiseNote"] = "Settled by a person, in their words, and linked to the claim.";
         return RedirectToPage();
     }
 }

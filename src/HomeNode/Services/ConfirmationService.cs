@@ -136,7 +136,7 @@ public class ConfirmationService
     // The plain words a refused release is reported in, shared by the
     // exception below and any surface that presents the refusal.
     public const string ReleasedOnlyByPromiseeMessage =
-        "A promise can be released only by the person it was made to; a promise made to the house can be released only by the person who made it.";
+        "A claim can be released only by the person it was made to; a claim made to the house can be released only by the person who took it on.";
 
     // A person closes a promise by saying so, in their own words, in a
     // closing telling that is itself on the record. Kept, Broken, and
@@ -156,14 +156,14 @@ public class ConfirmationService
         if (outcome is not (nameof(PromiseState.Kept) or nameof(PromiseState.Broken) or nameof(PromiseState.Released)))
         {
             throw new InvalidOperationException(
-                $"A promise can be closed only as Kept, Broken, or Released; '{outcome}' is not one of those.");
+                $"A claim can be closed only as Done, Still unclaimed, or Released; '{outcome}' is not one of those.");
         }
         var promise = await _db.Promises.FirstOrDefaultAsync(p => p.Id == promiseId)
-            ?? throw new InvalidOperationException("That promise cannot be found.");
+            ?? throw new InvalidOperationException("That claim cannot be found.");
         if (promise.State != PromiseState.Made)
         {
             throw new InvalidOperationException(
-                "That promise is no longer open, so it cannot be closed.");
+                "That claim is no longer open, so it cannot be closed.");
         }
         if (outcome == nameof(PromiseState.Released)
             && closerPersonId != promise.PromiseePersonId

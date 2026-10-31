@@ -1,13 +1,14 @@
 @page "/Promises"
 @model HomeNode.Pages.PromisesModel
 @{
-    ViewData["Title"] = "Promises";
+    ViewData["Title"] = "My Claims";
 }
 
-<h1>Promises</h1>
-<p>What one person has asked another for, or been promised, kept as a
-   record in its own right. A promise closes only when a person says
-   so, in words that join the record.</p>
+<h1>My Claims</h1>
+<p>Things a person has taken on themselves, in their own words, kept
+   as a record in its own right. Nobody is handed a claim: a person
+   takes it on themselves. A claim is settled only when a person
+   says so, in words that join the record.</p>
 
 @if (Model.Note is not null)
 {
@@ -33,13 +34,13 @@
         </select>
     </label>
 </form>
-<p>Promises are listed only for the reader named here, and only the
-   ones that reader is meant to see, as set when each promise was
+<p>Claims are listed only for the reader named here, and only the
+   ones that reader is meant to see, as set when each claim was
    recorded.</p>
 
 @if (Model.Promises.Count == 0)
 {
-    <p>No promises on the record yet.</p>
+    <p>No claims on the record yet.</p>
 }
 else
 {
@@ -47,12 +48,12 @@ else
     <table class="table">
         <thead>
             <tr>
-                <th>Who promised</th>
-                <th>Promised</th>
-                <th>To whom</th>
+                <th>Claimed by</th>
+                <th>Claim</th>
+                <th>For whom</th>
                 <th>Due</th>
                 <th>Status</th>
-                <th>Close</th>
+                <th>Settle</th>
             </tr>
         </thead>
         <tbody>
@@ -70,10 +71,10 @@ else
                                 <text>Still open</text>
                                 break;
                             case HomeNode.Data.PromiseState.Kept:
-                                <text>Kept, closed by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                <text>Done, closed by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
                                 break;
                             case HomeNode.Data.PromiseState.Broken:
-                                <text>Closed as broken by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                <text>Still unclaimed, closed by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
                                 break;
                             case HomeNode.Data.PromiseState.Released:
                                 <text>Released by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
@@ -83,11 +84,11 @@ else
                     <td>
                         @if (promise.State == HomeNode.Data.PromiseState.Made)
                         {
-                            <p>Close a promise only in your own name, with the words that were actually said.</p>
+                            <p>Settle a claim only in your own name, with the words that were actually said.</p>
                             <form method="post" asp-page-handler="Close" data-promisor="@promise.PromisorPersonId" data-promisee="@(promise.PromiseePersonId?.ToString() ?? "")">
                                 <input type="hidden" name="promiseId" value="@promise.Id" />
                                 <label>
-                                    Closed by
+                                    Settled by
                                     <select name="closerPersonId">
                                         @foreach (var person in Model.People)
                                         {
@@ -98,8 +99,8 @@ else
                                 <label>
                                     Outcome
                                     <select name="outcome">
-                                        <option value="Kept">Kept</option>
-                                        <option value="Broken">Broken</option>
+                                        <option value="Kept">Done</option>
+                                        <option value="Broken">Still unclaimed</option>
                                         <option value="Released">Released</option>
                                     </select>
                                 </label>
@@ -107,7 +108,7 @@ else
                                     The closing words
                                     <input type="text" name="closingWords" placeholder="What the person said" />
                                 </label>
-                                <button type="submit">Close this promise</button>
+                                <button type="submit">Settle this claim</button>
                             </form>
                         }
                     </td>
@@ -121,9 +122,10 @@ else
 @section Scripts {
     <script>
         // Released is offered only when it can apply to the closer
-        // chosen in the same form: the promisee, or the maker when
-        // the promise was made to the house. The server enforces the
-        // same rule on submit; this only keeps the form honest.
+        // chosen in the same form: the person the claim was for, or
+        // the person who took it on when the claim was for the
+        // house. The server enforces the same rule on submit; this
+        // only keeps the form honest.
         document.querySelectorAll('form[data-promisor]').forEach(function (form) {
             var closer = form.querySelector('select[name="closerPersonId"]');
             var outcome = form.querySelector('select[name="outcome"]');

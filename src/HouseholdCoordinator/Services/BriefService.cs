@@ -79,8 +79,8 @@ public class BriefService
                 : promise.DueText is not null ? $" For {promise.DueText}." : "";
             lines.Add(new BriefLine
             {
-                Section = "Promises still open",
-                Text = $"{maker} promised: {promise.CommitmentText}.{due}"
+                Section = "Claims still open",
+                Text = $"Claimed by {maker}: {promise.CommitmentText}.{due}"
             });
         }
 

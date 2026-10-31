@@ -276,7 +276,7 @@ public static class DemoSuite
             && commit.WrittenEvents[0].AuthorPersonId == 2
             && GetStr(commit.WrittenEvents[0], "CommitmentText") == "I'll be home by three"
             && GetStr(commit.WrittenEvents[0], "DueText") == "three");
-        Check("A Promise is born with the Commitment, due 3:00 PM resolved", commit.PromisesBorn.Count == 1
+        Check("A claim is born with the Commitment, due 3:00 PM resolved", commit.PromisesBorn.Count == 1
             && commit.PromisesBorn[0].PromisorPersonId == 2
             && commit.PromisesBorn[0].State == PromiseState.Made
             && commit.PromisesBorn[0].DueAtLocal == new DateTime(2026, 10, 27, 15, 0, 0)
@@ -443,7 +443,7 @@ public static class DemoSuite
         await confirmations.WriteStatementAsync(closing, "voice");
         await confirmations.ClosePromiseAsync(bornPromise.Id, closing.Id, 2, nameof(PromiseState.Kept), "voice");
         var closedPromise = await db.Promises.FirstAsync(p => p.Id == bornPromise.Id);
-        Check("Promise closes only by a person's linked closing telling",
+        Check("A claim settles only by a person's linked closing telling",
             closedPromise.State == PromiseState.Kept
             && closedPromise.ClosedByEventId == closing.Id && closedPromise.ClosedByPersonId == 2);
 
@@ -1516,16 +1516,16 @@ public static class DemoSuite
         var eventsBeforeEmpty = await db.Events.CountAsync();
         await promisesPage.OnPostCloseAsync(pagePromise.Id, 2, "Kept", "   ");
         var pagePromiseAfterEmpty = await db.Promises.FirstAsync(p => p.Id == pagePromise.Id);
-        Check("Promise page: a close with no closing words writes no event and leaves the promise open",
+        Check("Claims page: a close with no closing words writes no event and leaves the claim open",
             await db.Events.CountAsync() == eventsBeforeEmpty
             && pagePromiseAfterEmpty.State == PromiseState.Made
             && pagePromiseAfterEmpty.ClosedByEventId is null);
-        Check("Promise page: a close with no closing words says the words are needed",
-            promisesPage.Note == "A promise closes in the closer's own words, so the words are needed.");
+        Check("Claims page: a close with no closing words says the words are needed",
+            promisesPage.Note == "A claim is settled in the closer's own words, so the words are needed.");
         await promisesPage.OnPostCloseAsync(pagePromise.Id, 2, "Kept", "The plants are watered, like I said.");
         var pagePromiseAfterWords = await db.Promises.FirstAsync(p => p.Id == pagePromise.Id);
         var pageClosingEvent = await db.Events.FirstAsync(e => e.Id == pagePromiseAfterWords.ClosedByEventId);
-        Check("Promise page: a close with words closes the promise and the closing event body is exactly the closer's words",
+        Check("Claims page: a close with words settles the claim and the closing event body is exactly the closer's words",
             pagePromiseAfterWords.State == PromiseState.Kept
             && pagePromiseAfterWords.ClosedByPersonId == 2
             && pageClosingEvent.Body == "The plants are watered, like I said.");
@@ -1534,7 +1534,7 @@ public static class DemoSuite
         var eventsBeforeRefused = await db.Events.CountAsync();
         await promisesPage.OnPostCloseAsync(pageReleasePromise.Id, 1, "Released", "Letting this one go.");
         var pageReleaseAfter = await db.Promises.FirstAsync(p => p.Id == pageReleasePromise.Id);
-        Check("Promise page: a release by anyone but the promisee is refused with a plain note, no event written, promise still open",
+        Check("Claims page: a release by anyone but the person the claim was made to is refused with a plain note, no event written, claim still open",
             await db.Events.CountAsync() == eventsBeforeRefused
             && pageReleaseAfter.State == PromiseState.Made
             && promisesPage.Note == ConfirmationService.ReleasedOnlyByPromiseeMessage);
@@ -1543,14 +1543,14 @@ public static class DemoSuite
         var strangerClosing = await ClosingWords(1, 2, "Margaret says let the gate go.");
         var strangerThrew = await CloseThrew(namedPromise, strangerClosing, 1, nameof(PromiseState.Released));
         var namedAfterRefusal = await db.Promises.FirstAsync(p => p.Id == namedPromise.Id);
-        Check("Promise service: Released by a person who is not the promisee is refused and the promise stays open",
+        Check("Claim service: Released by anyone but the person the claim was made to is refused and the claim stays open",
             strangerThrew
             && namedAfterRefusal.State == PromiseState.Made
             && namedAfterRefusal.ClosedByEventId is null);
         var promiseeClosing = await ClosingWords(3, 2, "Do not worry about the gate, take your time.");
         await confirmations.ClosePromiseAsync(namedPromise.Id, promiseeClosing.Id, 3, nameof(PromiseState.Released), "tap");
         var namedAfterRelease = await db.Promises.FirstAsync(p => p.Id == namedPromise.Id);
-        Check("Promise service: Released by the promisee closes the promise",
+        Check("Claim service: Released by the person the claim was made to settles the claim",
             namedAfterRelease.State == PromiseState.Released
             && namedAfterRelease.ClosedByPersonId == 3
             && namedAfterRelease.ClosedByEventId == promiseeClosing.Id);
@@ -1559,12 +1559,12 @@ public static class DemoSuite
         var thirdClosing = await ClosingWords(3, 2, "Lisa says let the porch go.");
         var thirdThrew = await CloseThrew(housePromise, thirdClosing, 3, nameof(PromiseState.Released));
         var houseAfterRefusal = await db.Promises.FirstAsync(p => p.Id == housePromise.Id);
-        Check("Promise service: a house promise released by a third person is refused and stays open",
+        Check("Claim service: a house claim released by a third person is refused and stays open",
             thirdThrew && houseAfterRefusal.State == PromiseState.Made);
         var makerClosing = await ClosingWords(2, 2, "I am letting the porch sweeping go.");
         await confirmations.ClosePromiseAsync(housePromise.Id, makerClosing.Id, 2, nameof(PromiseState.Released), "tap");
         var houseAfterRelease = await db.Promises.FirstAsync(p => p.Id == housePromise.Id);
-        Check("Promise service: a house promise released by its maker closes the promise",
+        Check("Claim service: a house claim released by the person who took it on settles the claim",
             houseAfterRelease.State == PromiseState.Released
             && houseAfterRelease.ClosedByPersonId == 2
             && houseAfterRelease.ClosedByEventId == makerClosing.Id);
@@ -1573,7 +1573,7 @@ public static class DemoSuite
         var witnessClosing = await ClosingWords(1, 2, "Daniel was home by six, I saw him come in.");
         await confirmations.ClosePromiseAsync(witnessedPromise.Id, witnessClosing.Id, 1, nameof(PromiseState.Kept), "tap");
         var witnessedAfter = await db.Promises.FirstAsync(p => p.Id == witnessedPromise.Id);
-        Check("Promise service: Kept stated by a witnessing third circle member still closes the promise",
+        Check("Claim service: Done stated by a witnessing third circle member still settles the claim",
             witnessedAfter.State == PromiseState.Kept
             && witnessedAfter.ClosedByPersonId == 1
             && witnessedAfter.ClosedByEventId == witnessClosing.Id);
@@ -1869,17 +1869,17 @@ public static class DemoSuite
         };
         promisesPageC.ViewerId = 3;
         await promisesPageC.OnGetAsync();
-        Check("Stored audience: /Promises for Lisa lists the promise named to her but not the maker-only promise",
+        Check("Stored audience: /Promises for Lisa lists the claim named to her but not the maker-only claim",
             promisesPageC.Promises.Any(p => p.Id == namedPromiseC.Id)
             && !promisesPageC.Promises.Any(p => p.Id == makerOnlyPromise.Id));
         promisesPageC.ViewerId = 2;
         await promisesPageC.OnGetAsync();
-        Check("Stored audience: /Promises for the maker lists both the maker-only and the named promise",
+        Check("Stored audience: /Promises for the maker lists both the maker-only and the named claim",
             promisesPageC.Promises.Any(p => p.Id == makerOnlyPromise.Id)
             && promisesPageC.Promises.Any(p => p.Id == namedPromiseC.Id));
         promisesPageC.ViewerId = null;
         await promisesPageC.OnGetAsync();
-        Check("Stored audience: /Promises with no reader named shows the Household promise and neither narrowed promise",
+        Check("Stored audience: /Promises with no reader named shows the Household claim and neither narrowed claim",
             promisesPageC.Promises.Any(p => p.Id == housePromiseC.Id)
             && !promisesPageC.Promises.Any(p => p.Id == makerOnlyPromise.Id)
             && !promisesPageC.Promises.Any(p => p.Id == namedPromiseC.Id));

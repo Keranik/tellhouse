@@ -267,7 +267,7 @@ public static class DemoSuite
             && commit.WrittenEvents[0].AuthorPersonId == 2
             && GetStr(commit.WrittenEvents[0], "CommitmentText") == "I'll be home by three"
             && GetStr(commit.WrittenEvents[0], "DueText") == "three");
-        Check("A Promise is born with the Commitment, due 3:00 PM resolved", commit.PromisesBorn.Count == 1
+        Check("A claim is born with the Commitment, due 3:00 PM resolved", commit.PromisesBorn.Count == 1
             && commit.PromisesBorn[0].PromisorPersonId == 2
             && commit.PromisesBorn[0].State == PromiseState.Made
             && commit.PromisesBorn[0].DueAtLocal == new DateTime(2026, 10, 27, 15, 0, 0)
@@ -434,7 +434,7 @@ public static class DemoSuite
         await confirmations.WriteStatementAsync(closing, "voice");
         await confirmations.ClosePromiseAsync(bornPromise.Id, closing.Id, 2, nameof(PromiseState.Kept), "voice");
         var closedPromise = await db.Promises.FirstAsync(p => p.Id == bornPromise.Id);
-        Check("Promise closes only by a person's linked closing telling",
+        Check("A claim settles only by a person's linked closing telling",
             closedPromise.State == PromiseState.Kept
             && closedPromise.ClosedByEventId == closing.Id && closedPromise.ClosedByPersonId == 2);
 
