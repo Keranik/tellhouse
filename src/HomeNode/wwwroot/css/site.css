@@ -140,6 +140,7 @@ strong { color: var(--ink); }
 
 .app-brand:hover { color: var(--ink); text-decoration: none; }
 .app-brand-mark { color: var(--accent); display: inline-flex; }
+.app-brand-mark img, .app-drawer-toggle img { display: block; }
 
 .app-nav { display: flex; flex-direction: column; gap: 2px; }
 
