@@ -67,7 +67,7 @@ public class BriefService
             var stateNote = ev.RecordPending
                 ? " (not yet closed by a person)"
                 : ev.ConfirmationState == ConfirmationState.Proposed
-                    ? " (waiting on a person's answer)"
+                    ? " (waiting for a person to confirm)"
                     : "";
             lines.Add(new BriefLine
             {
@@ -120,7 +120,7 @@ public class BriefService
         {
             var maker = promise.PromisorPersonId == personId ? "You" : promise.PromisorPerson?.DisplayName.Split(' ')[0];
             var due = promise.DueAtLocal is { } dueAt && dueAt < now
-                ? $" Still open; it was for {dueAt:h:mm tt}."
+                ? $" Still open; it was for {dueAt:dddd, MMM d, h:mm tt}."
                 : promise.DueText is not null ? $" For {promise.DueText}." : "";
             lines.Add(new BriefLine
             {

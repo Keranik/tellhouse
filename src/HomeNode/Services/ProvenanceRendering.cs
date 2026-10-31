@@ -16,24 +16,16 @@ public static class ProvenanceRendering
 {
     public static bool IsFederated(Event ev) => !string.IsNullOrWhiteSpace(ev.ProvenanceOrigin);
 
-    // One plain sentence: where the telling came from, which
-    // connection carried it, and which packet it arrived in. Parts
-    // the node did not record are left out rather than guessed.
+    // One plain sentence: where the telling came from. The
+    // connection and packet identifiers stay in the record's own
+    // fields; they are protocol working details and are not printed
+    // on the reader surfaces.
     public static string? Describe(Event ev)
     {
         if (!IsFederated(ev))
         {
             return null;
         }
-        var parts = new List<string> { $"Came via {ev.ProvenanceOrigin}" };
-        if (!string.IsNullOrWhiteSpace(ev.ProvenanceConnection))
-        {
-            parts.Add($"connection {ev.ProvenanceConnection}");
-        }
-        if (!string.IsNullOrWhiteSpace(ev.ProvenancePacketId))
-        {
-            parts.Add($"packet {ev.ProvenancePacketId}");
-        }
-        return string.Join(", ", parts) + ".";
+        return $"Came via {ev.ProvenanceOrigin}.";
     }
 }

@@ -170,7 +170,7 @@ public class FrontDoorModel : PageModel
         }
         else if (result.Output.ClarificationNeeded)
         {
-            TempData["PipelineNote"] = "Nothing was written down yet. The house is asking first.";
+            TempData["PipelineNote"] = "Nothing was written down yet. Please answer the question above first.";
         }
         else if (result.ProposedEvent is not null)
         {
@@ -190,7 +190,7 @@ public class FrontDoorModel : PageModel
             // only to the person entitled to answer it, when they
             // read as themselves below.
             TempData["PipelineNote"] = (TempData["PipelineNote"] as string ?? "")
-                + " One entry is held at its narrowest audience while the house asks the person it belongs to.";
+                + " One entry will stay visible to as few people as possible until the person who should decide answers.";
         }
         return RedirectToPage();
     }
@@ -204,9 +204,21 @@ public class FrontDoorModel : PageModel
     public async Task<IActionResult> OnPostTestSendAsync(string standInName)
     {
         var result = await _testSend.TriggerAsync(standInName);
-        var packet = result.PacketId is null ? "" : $" Packet {result.PacketId}.";
-        TempData["TestSendNote"] =
-            $"Test Send from Agent ({result.StandInName}): {result.Status}.{packet} {result.Note}";
+        // The note reports the result in the page's own
+        // plain words; the packet id and the stand-in's raw status and
+        // note stay off the visitor surface. The sent wording is the
+        // finding's rewrite verbatim; the other statuses get the same
+        // form in plain words, because "done" for a send that did not
+        // happen would be a false claim.
+        TempData["TestSendNote"] = result.Status switch
+        {
+            "sent" =>
+                $"Test Send from Agent ({result.StandInName}): done. Any new entry appears in the record below.",
+            "queued-unrecorded" or "unreachable" =>
+                $"Test Send from Agent ({result.StandInName}): the assistant cannot reach the house, so nothing appears here.",
+            _ =>
+                $"Test Send from Agent ({result.StandInName}): that assistant is not connected to this house, so nothing was sent."
+        };
         return RedirectToPage();
     }
 
@@ -224,17 +236,17 @@ public class FrontDoorModel : PageModel
         }
         var request = await _audience.ProposeByTellingAsync(
             household.Id, holderPersonId, actorPersonId, parsed,
-            $"Set the audience default to {parsed}.", "tap", DateTime.UtcNow);
+            $"Set the sharing default to {parsed}.", "tap", DateTime.UtcNow);
         TempData["ReadBackText"] = request.ReadBackText;
         if (request.State == AudienceDefaultRequestState.PendingReadBack)
         {
             TempData["PendingDefaultRequestId"] = request.Id;
             TempData["PendingDefaultHolderId"] = holderPersonId;
-            TempData["DefaultNote"] = "The house read it back. Nothing is set until the holder says yes.";
+            TempData["DefaultNote"] = "Here is the change to check. Nothing is set until that person says yes.";
         }
         else
         {
-            TempData["DefaultNote"] = "Recorded as a proposal to the holder. It is not applied; only the holder can set their own default.";
+            TempData["DefaultNote"] = "Saved as a suggestion for that person. Nothing changes; only they can set their own default.";
         }
         return RedirectToPage();
     }
@@ -262,8 +274,8 @@ public class FrontDoorModel : PageModel
         {
             await _audience.AnswerAskAsync(askId, actorPersonId, choice, null, DateTime.UtcNow);
             TempData["DefaultNote"] = choice == "Household"
-                ? "Answered. The entry takes the audience it would have had."
-                : "Answered. The entry stays at its narrowest audience.";
+                ? "Answered. The entry is now shared with the whole house."
+                : "Answered. The entry stays visible to as few people as possible.";
         }
         return RedirectToPage();
     }
@@ -321,7 +333,7 @@ public class FrontDoorModel : PageModel
                 Label = row is not null
                     ? row.Value.ToString()
                     : effective is not null
-                        ? $"{effective} until set"
+                        ? $"{effective} (not yet set)"
                         : "No default set"
             });
         }

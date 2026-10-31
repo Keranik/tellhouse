@@ -156,14 +156,14 @@ public class ConfirmationService
         if (outcome is not (nameof(PromiseState.Kept) or nameof(PromiseState.Broken) or nameof(PromiseState.Released)))
         {
             throw new InvalidOperationException(
-                $"A closing link sets Kept, Broken, or Released; '{outcome}' is not a closing outcome.");
+                $"A promise can be closed only as Kept, Broken, or Released; '{outcome}' is not one of those.");
         }
         var promise = await _db.Promises.FirstOrDefaultAsync(p => p.Id == promiseId)
-            ?? throw new InvalidOperationException($"Promise {promiseId} does not exist.");
+            ?? throw new InvalidOperationException("That promise cannot be found.");
         if (promise.State != PromiseState.Made)
         {
             throw new InvalidOperationException(
-                $"Promise {promiseId} is {promise.State}; only a Made promise can be closed.");
+                "That promise is no longer open, so it cannot be closed.");
         }
         if (outcome == nameof(PromiseState.Released)
             && closerPersonId != promise.PromiseePersonId

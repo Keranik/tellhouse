@@ -126,7 +126,7 @@ public class ConnectionsModel : PageModel
         try
         {
             var connection = await _door.ConfirmJoinAsync(joinRequestId, inviterPersonId, personId, checkPhrase);
-            TempData["Note"] = $"Join confirmed. Connection {connection.ConnectionId} is active; its packets are now checked against that enrollment on every intake.";
+            TempData["Note"] = $"Join confirmed. Connection {connection.ConnectionId} is active; everything it sends is now checked against this connection.";
         }
         catch (InvalidOperationException ex)
         {

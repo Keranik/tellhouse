@@ -68,7 +68,7 @@ public class TimelineModel : PageModel
     public async Task<IActionResult> OnPostCloseAsync(int eventId, int actorId)
     {
         await _confirmations.CloseRecordPendingAsync(eventId, actorId, "tap");
-        TempData["TimelineNote"] = "Closed. The audit trail names the person who closed it.";
+        TempData["TimelineNote"] = "Closed. The record names the person who closed it.";
         return RedirectToPage(new { ActorId = actorId });
     }
 

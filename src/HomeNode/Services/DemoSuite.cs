@@ -472,7 +472,7 @@ public static class DemoSuite
         Check("Lookup answers with the stated time named", danielWhere.StartsWith("At 2:03 PM, Daniel said:")
             && danielWhere.Contains("Domino's"));
         var nobodyWhere = await lookup.AnswerWhereaboutsAsync(1, 3);
-        Check("Lookup with nothing on the record says so", nobodyWhere == "I don't have that written down.");
+        Check("Lookup with nothing on the record says so", nobodyWhere == "That is not in the record.");
 
         // The in-demo delivery path (member views on the house layer;
         // the product's cross-channel delivery stays unbuilt, by
@@ -563,7 +563,7 @@ public static class DemoSuite
         var danielCounterView = await memberViews.ReceivedForAsync(2);
         var margaretCounterView = await memberViews.ReceivedForAsync(1);
         Check("Counter: the words land with the other disposer, as a counter carry",
-            lisaCounterView.Any(i => i.Source == "Counter" && i.Text == counterWords));
+            lisaCounterView.Any(i => i.Source == "Plan (counter proposal)" && i.Text == counterWords));
         Check("Counter: the words do not land back with the counterer or anyone else",
             !danielCounterView.Any(i => i.Text == counterWords)
             && !margaretCounterView.Any(i => i.Text == counterWords));
@@ -589,7 +589,7 @@ public static class DemoSuite
         Check("Counter: a wordless counter stores no words and carries nothing",
             wordlessRow.CounterText is null
             && wordlessElement.BodyText == "Pizza"
-            && !lisaWordlessView.Any(i => i.Source == "Counter" && i.Text == "Pizza"));
+            && !lisaWordlessView.Any(i => i.Source == "Plan (counter proposal)" && i.Text == "Pizza"));
 
         // Delivery of a re-time: the re-timed dessert entry is routed
         // to the person it affects (Margaret, the element's assignee)
@@ -604,7 +604,7 @@ public static class DemoSuite
         await plans.RetimeElementAsync(dessert.Id, "The neighbors come for dessert at eight thirty", 3);
         var margaretAfterRetime = await memberViews.ReceivedForAsync(1);
         Check("Delivery: the re-timed entry lands in the affected person's view at the new time",
-            margaretAfterRetime.Any(i => i.Source == "Change" && i.Text.Contains("eight thirty")));
+            margaretAfterRetime.Any(i => i.Source == "Plan (changed)" && i.Text.Contains("eight thirty")));
         var danielAfterRetime = await memberViews.ReceivedForAsync(2);
         Check("Delivery: the re-timed entry lands with the affected person only",
             !danielAfterRetime.Any(i => i.Text.Contains("eight thirty")));
@@ -630,12 +630,28 @@ public static class DemoSuite
         Check("Page: the Plans retime handler re-times the entry in the new words",
             pageDessertAfter.BodyText == "June brings dessert over at eight thirty");
         Check("Page: the handler's re-time lands with the affected person only",
-            margaretPageView.Any(i => i.Source == "Change" && i.Text.Contains("June brings dessert over at eight thirty"))
+            margaretPageView.Any(i => i.Source == "Plan (changed)" && i.Text.Contains("June brings dessert over at eight thirty"))
             && !danielPageView.Any(i => i.Text.Contains("June brings dessert")));
         await plansPage.OnPostRetimeAsync(pageDessert.Id, "   ", 3);
         var pageDessertBlank = await db.PlanElements.FirstAsync(e => e.Id == pageDessert.Id);
         Check("Page: blank re-time words change nothing",
             pageDessertBlank.BodyText == "June brings dessert over at eight thirty");
+
+        // One behavior change rides with the wording batch: a blank
+        // plan name, dinner, or list is refused in plain words and
+        // creates nothing, where the handlers used to fill in words
+        // nobody wrote ("A plan", "Dinner", "The list").
+        var plansBeforeBlank = await db.Plans.CountAsync();
+        await plansPage.OnPostCreatePlanAsync("   ", null);
+        Check("Blank plan fields: a blank plan name is refused and no plan is created",
+            plansPage.Note == "Words are needed: the record holds only what a person wrote."
+            && await db.Plans.CountAsync() == plansBeforeBlank);
+        var elementsBeforeBlank = await db.PlanElements.CountAsync();
+        await plansPage.OnPostAddDinnerAsync(pagePlan.Id, null, "  ", new[] { 2, 3 });
+        await plansPage.OnPostAddListAsync(pagePlan.Id, "", 2);
+        Check("Blank plan fields: a blank dinner or list is refused and no element is created",
+            plansPage.Note == "Words are needed: the record holds only what a person wrote."
+            && await db.PlanElements.CountAsync() == elementsBeforeBlank);
 
         // The disposal form's counter words travel the page handler
         // into the Agreement row, verbatim.

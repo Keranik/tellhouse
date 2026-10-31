@@ -107,24 +107,38 @@ public class PlansModel : PageModel
         return true;
     }
 
+    // One behavior change rides with the wording batch, ruled with it:
+    // a blank field is refused and nothing is created, on all
+    // three create handlers below. The record holds only what a
+    // person wrote; it never fills in words nobody entered.
+    private const string BlankWordsNote =
+        "Words are needed: the record holds only what a person wrote.";
+
     public async Task<IActionResult> OnPostCreatePlanAsync(string label, string? anchorTime)
     {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            TempData["PlanNote"] = BlankWordsNote;
+            return RedirectToPage();
+        }
         var household = await _db.Households.FirstAsync();
         DateTime? anchor = null;
         if (TimeOnly.TryParse(anchorTime, out var time))
         {
             anchor = DateTime.Today.Add(time.ToTimeSpan());
         }
-        await _plans.CreatePlanAsync(
-            household.Id,
-            string.IsNullOrWhiteSpace(label) ? "A plan" : label.Trim(),
-            anchor);
+        await _plans.CreatePlanAsync(household.Id, label.Trim(), anchor);
         TempData["PlanNote"] = "Plan started. Add what it needs, piece by piece.";
         return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostAddDinnerAsync(int planId, int? sourceEventId, string mealText, int[] disposerIds, int? viewerId = null)
     {
+        if (string.IsNullOrWhiteSpace(mealText))
+        {
+            TempData["PlanNote"] = BlankWordsNote;
+            return RedirectToPage(new { ViewerId = viewerId });
+        }
         // The source selector above only ever offers decisions the
         // reader named on the page may see, but a posted form can
         // name any event id: the choice is checked here, against
@@ -139,13 +153,13 @@ public class PlansModel : PageModel
                     : BriefService.IsVisibleWithNoReader(source));
             if (!sourceVisible)
             {
-                TempData["PlanNote"] = "That decision is not one the reader named here may see, so it was not used.";
+                TempData["PlanNote"] = "That decision is not visible to the reader named here, so it was not used.";
                 return RedirectToPage(new { ViewerId = viewerId });
             }
         }
         await _plans.AddElementAsync(
             planId, PlanElementKind.MealProposal,
-            string.IsNullOrWhiteSpace(mealText) ? "Dinner" : mealText.Trim(),
+            mealText.Trim(),
             disposerIds,
             sourceEventIds: sourceEventId is int id ? new[] { id } : null);
         TempData["PlanNote"] = "Dinner is proposed. It settles only when everyone named has agreed.";
@@ -154,9 +168,14 @@ public class PlansModel : PageModel
 
     public async Task<IActionResult> OnPostAddListAsync(int planId, string listText, int runnerPersonId)
     {
+        if (string.IsNullOrWhiteSpace(listText))
+        {
+            TempData["PlanNote"] = BlankWordsNote;
+            return RedirectToPage();
+        }
         await _plans.AddElementAsync(
             planId, PlanElementKind.ShoppingList,
-            string.IsNullOrWhiteSpace(listText) ? "The list" : listText.Trim(),
+            listText.Trim(),
             Array.Empty<int>(),
             assigneePersonId: runnerPersonId);
         TempData["PlanNote"] = "The list is on the plan for the runner.";
@@ -168,7 +187,7 @@ public class PlansModel : PageModel
         var plan = await _db.Plans.FirstAsync(p => p.Id == planId);
         if (plan.AnchorAtLocal is not { } anchor)
         {
-            TempData["PlanNote"] = "This plan has no anchor time, so no leave-by can be worked out.";
+            TempData["PlanNote"] = "This plan has no start time, so no leave-by can be worked out.";
             return RedirectToPage();
         }
         var durations = new List<(string, int)>();
@@ -190,7 +209,7 @@ public class PlansModel : PageModel
     public async Task<IActionResult> OnPostDisposeAsync(int elementId, int personId, string disposal, string? counterText)
     {
         await _plans.RecordDisposalAsync(elementId, personId, Enum.Parse<PlanDisposal>(disposal), counterText);
-        TempData["PlanNote"] = "Answer recorded. An element settles only when everyone named has agreed in the same round.";
+        TempData["PlanNote"] = "Answer recorded. An item settles only when everyone named has agreed in the same round.";
         return RedirectToPage();
     }
 
@@ -204,7 +223,7 @@ public class PlansModel : PageModel
         if (!string.IsNullOrWhiteSpace(newText))
         {
             await _plans.RetimeElementAsync(elementId, newText.Trim(), actorPersonId);
-            TempData["PlanNote"] = "The entry was re-timed in the new words, and the new wording went to the person it affects.";
+            TempData["PlanNote"] = "The entry was re-timed in the new words, and the new wording is on the record for the person it affects.";
         }
         return RedirectToPage();
     }
@@ -214,7 +233,7 @@ public class PlansModel : PageModel
         try
         {
             await _plans.AcknowledgeAsync(planId, runnerPersonId);
-            TempData["PlanNote"] = "The runner has the plan. Prepared and routed are not done; the plan says what is still owed.";
+            TempData["PlanNote"] = "The runner has the plan. Having the plan is not the same as it being done; the plan still shows what is owed.";
         }
         catch (InvalidOperationException ex)
         {

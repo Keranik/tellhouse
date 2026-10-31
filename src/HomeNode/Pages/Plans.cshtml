@@ -5,13 +5,14 @@
 }
 
 <h1>Plans</h1>
-<p>The house proposes; people dispose. An element settles only when
-   everyone it names has agreed, in the same round, and the runner's
-   acknowledgement is a separate act that never counts as agreement.</p>
+<p>People decide. An item settles only when everyone it names has
+   agreed, in the same round (everyone answering the same wording), and
+   the runner (the person who will go and do it) saying they have the
+   plan is a separate act that never counts as agreement.</p>
 
 @if (Model.Note is not null)
 {
-    <p><strong>@Model.Note</strong></p>
+    <p>@Model.Note</p>
 }
 
 <form method="get">
@@ -33,37 +34,39 @@
         </select>
     </label>
 </form>
-<p>Open decisions are listed as the reader named here may see them,
-   under the audience stored on each note. Plan entries built from the
-   record follow the same rule: an entry built from a note written for
-   named people shows only to readers that note names.</p>
+<p>Open decisions are listed only for the reader named here, and only
+   the ones that reader is meant to see. An entry built from a note
+   written for named people shows only to the readers that note names.</p>
 
+<div class="panel">
 <h2>Start a plan</h2>
 <form method="post" asp-page-handler="CreatePlan">
     <label>Plan name <input type="text" name="label" placeholder="Tonight" /></label>
-    <label>Anchored at <input type="time" name="anchorTime" /></label>
+    <label>Plan starts at <input type="time" name="anchorTime" /></label>
     <button type="submit">Start the plan</button>
 </form>
+</div>
 
 @if (Model.OpenDecisions.Count > 0)
 {
     <h2>Open decisions the record is holding</h2>
-    <ul>
+    <ul class="record-list">
         @foreach (var decision in Model.OpenDecisions)
         {
-            <li>@decision.Body</li>
+            <li class="record-item">@decision.Body</li>
         }
     </ul>
 }
 
 @foreach (var plan in Model.Plans)
 {
+    <div class="panel plan-panel">
     <h2>@plan.Label</h2>
     <p>
-        Standing: @plan.State
+        Status: @HomeNode.Data.StateWording.ForPlan(plan.State)
         @if (plan.AnchorAtLocal is { } anchor)
         {
-            <text> &middot; anchored at @anchor.ToString("h:mm tt")</text>
+            <text> &middot; starts at @anchor.ToString("h:mm tt")</text>
         }
         @if (plan.RunnerPerson is not null)
         {
@@ -79,14 +82,14 @@
         }
         var required = HomeNode.Services.PlanAssemblyService.RequiredDisposers(element);
         <h3>@element.Kind: @element.BodyText</h3>
-        <p>Standing: @element.State</p>
+        <p>Status: @HomeNode.Data.StateWording.ForElement(element.State)</p>
         @if (required.Count > 0)
         {
             <ul>
                 @foreach (var agreement in element.Agreements.OrderBy(a => a.Round).ThenBy(a => a.AtUtc))
                 {
                     <li>
-                        Round @agreement.Round: @(agreement.Person?.DisplayName ?? "") said @agreement.Disposal
+                        Round @agreement.Round: @(agreement.Person?.DisplayName ?? "") answered @HomeNode.Data.StateWording.ForDisposal(agreement.Disposal)
                         @if (agreement.CounterText is not null)
                         {
                             <text> &middot; in their words: &ldquo;@agreement.CounterText&rdquo;</text>
@@ -111,11 +114,11 @@
                     <select name="disposal">
                         <option value="Agreed">Agreed</option>
                         <option value="Declined">Declined</option>
-                        <option value="Countered">Countered</option>
+                        <option value="Countered">Propose a change</option>
                     </select>
                 </label>
                 <label>
-                    A counter, in your own words (only when countering)
+                    A change, in your own words (only when proposing a change)
                     <input type="text" name="counterText" placeholder="What you propose instead, word for word" />
                 </label>
                 <button type="submit">Record the answer</button>
@@ -205,4 +208,5 @@
         </label>
         <button type="submit">Acknowledge the plan</button>
     </form>
+    </div>
 }

@@ -5,10 +5,9 @@
 }
 
 <h1>Family timeline</h1>
-<p>The shared record for the house, newest first, as the person you are
-   acting as may read it. An entry written for named people appears only
-   to them. With no reader named, only entries written for the whole
-   house are shown.</p>
+<p>The shared record for the house, newest first, in the view of the
+   reader named below. Picking a name in this demo shows that person's
+   view; entries for named people appear only there.</p>
 
 <form method="get">
     <label>
@@ -39,7 +38,7 @@
 
 @if (Model.Note is not null)
 {
-    <p><strong>@Model.Note</strong></p>
+    <p>@Model.Note</p>
 }
 
 @if (Model.Events.Count == 0)
@@ -48,6 +47,7 @@
 }
 else
 {
+    <div class="panel panel-table">
     <table class="table">
         <thead>
             <tr>
@@ -67,7 +67,7 @@ else
                     <td>@Model.ToHouseholdTime(item.CreatedAtUtc).ToString("MMM d, h:mm tt")</td>
                     <td>@(item.AuthorPerson?.DisplayName ?? "Told to the house")</td>
                     <td>@(item.SubjectPerson?.DisplayName ?? "")</td>
-                    <td>@item.Type</td>
+                    <td>@HomeNode.Data.EventKindWording.For(item.Type)</td>
                     <td>
                         @item.Body
                         @if (HomeNode.Services.ProvenanceRendering.Describe(item) is { } provenance)
@@ -101,7 +101,7 @@ else
                             <form method="post" asp-page-handler="Close">
                                 <input type="hidden" name="eventId" value="@item.Id" />
                                 <input type="hidden" name="actorId" value="@Model.ActorId" />
-                                <button type="submit">Close this entry</button>
+                                <button type="submit">Close and confirm this entry</button>
                             </form>
                         }
                     </td>
@@ -109,20 +109,22 @@ else
             }
         </tbody>
     </table>
+    </div>
 }
 
 @if (Model.Deliveries.Count > 0)
 {
-    <h2>Passed on by the house</h2>
-    <p>What the house has passed on to the person you are acting as, and
-       to no one else: a delivery shows only to the person it was
-       delivered to, in the words that were confirmed.</p>
+    <div class="panel panel-table">
+    <h2>Delivered to this reader</h2>
+    <p>Deliveries for the person named above, in the words that were
+       confirmed. Picking that person's name in this demo shows this
+       list.</p>
     <table class="table">
         <thead>
             <tr>
                 <th>When</th>
                 <th>To</th>
-                <th>Words carried</th>
+                <th>Words carried, word for word</th>
             </tr>
         </thead>
         <tbody>
@@ -142,8 +144,10 @@ else
             }
         </tbody>
     </table>
+    </div>
 }
 
+<div class="panel panel-table">
 <h2>Household supplies</h2>
 @if (Model.Supplies.Count == 0)
 {
@@ -159,7 +163,7 @@ else
                 <th>On hand</th>
                 <th>Runs out</th>
                 <th>Order by</th>
-                <th>Picks it up</th>
+                <th>Orders it</th>
             </tr>
         </thead>
         <tbody>
@@ -176,3 +180,4 @@ else
         </tbody>
     </table>
 }
+</div>

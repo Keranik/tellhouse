@@ -178,7 +178,7 @@ public class DoorService
             request.ClaimedName,
             request.ClaimedPartyId,
             request.ProviderClaim,
-            "self-asserted",
+            "their own claim, not checked",
             level,
             LevelConsequencesFor(level),
             request.CheckPhrase,
@@ -189,8 +189,8 @@ public class DoorService
 
     public static string LevelConsequencesFor(string level) => level switch
     {
-        "Standard" => "Can drop one liners and ask questions this person's level allows, and receive deliveries meant for them. Cannot hear health related entries, cannot invite others, cannot change anyone's access.",
-        "KnockOnly" => "Can present a join or re-confirmation request and nothing else. No packets, no questions, no deliveries.",
+        "Standard" => "Can leave short notes and ask questions at this level, and receive what is addressed to them. Cannot see health related entries, invite others, or change anyone's access.",
+        "KnockOnly" => "Can send a join or re-confirmation request and nothing else. No notes, no questions, nothing delivered.",
         _ => $"Level {level}, as the inviter named it. The house enforces this person's permissions on every request at this level."
     };
 
@@ -208,7 +208,7 @@ public class DoorService
         }
         if (!string.Equals(request.CheckPhrase, checkPhraseHeard.Trim(), StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("The check phrase does not match. This is not their person's request.");
+            throw new InvalidOperationException("The check phrase does not match. This is not that person's request.");
         }
         // Re-enrollment replaces, never duplicates: a
         // member who joins again with a new key takes over the one
@@ -281,7 +281,7 @@ public class DoorService
         var request = await LoadPendingAsync(joinRequestId);
         if (request.DoorInvite!.InviterPersonId != inviterPersonId)
         {
-            throw new InvalidOperationException("Only the named inviter can dispose of this join.");
+            throw new InvalidOperationException("Only the named inviter can decline this join.");
         }
         request.Status = "Declined";
         request.DecidedByPersonId = inviterPersonId;

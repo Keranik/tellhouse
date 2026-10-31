@@ -5,13 +5,13 @@
 }
 
 <h1>Promises</h1>
-<p>What a person who needs support has asked for or been promised, kept
-   as first-class records. A promise closes only when a person says so,
-   in words that join the record.</p>
+<p>What one person has asked another for, or been promised, kept as a
+   record in its own right. A promise closes only when a person says
+   so, in words that join the record.</p>
 
 @if (Model.Note is not null)
 {
-    <p><strong>@Model.Note</strong></p>
+    <p>@Model.Note</p>
 }
 
 <form method="get">
@@ -33,8 +33,9 @@
         </select>
     </label>
 </form>
-<p>Promises are listed as the reader named here may see them, under
-   the audience stored on the telling that made each promise.</p>
+<p>Promises are listed only for the reader named here, and only the
+   ones that reader is meant to see, as set when each promise was
+   recorded.</p>
 
 @if (Model.Promises.Count == 0)
 {
@@ -42,15 +43,16 @@
 }
 else
 {
+    <div class="panel panel-table">
     <table class="table">
         <thead>
             <tr>
                 <th>Who promised</th>
                 <th>Promised</th>
                 <th>To whom</th>
-                <th>When</th>
-                <th>Standing</th>
-                <th></th>
+                <th>Due</th>
+                <th>Status</th>
+                <th>Close</th>
             </tr>
         </thead>
         <tbody>
@@ -81,6 +83,7 @@ else
                     <td>
                         @if (promise.State == HomeNode.Data.PromiseState.Made)
                         {
+                            <p>Close a promise only in your own name, with the words that were actually said.</p>
                             <form method="post" asp-page-handler="Close" data-promisor="@promise.PromisorPersonId" data-promisee="@(promise.PromiseePersonId?.ToString() ?? "")">
                                 <input type="hidden" name="promiseId" value="@promise.Id" />
                                 <label>
@@ -112,6 +115,7 @@ else
             }
         </tbody>
     </table>
+    </div>
 }
 
 @section Scripts {

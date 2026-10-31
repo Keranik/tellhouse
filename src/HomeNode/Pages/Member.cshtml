@@ -1,23 +1,22 @@
 @page "/Member"
 @model HomeNode.Pages.MemberModel
 @{
-    ViewData["Title"] = "What landed with you";
+    ViewData["Title"] = "Private Inbox";
 }
 
-<h1>What landed with you</h1>
-<p>This is one person's view of the house: what the house has
-   delivered to them, and nothing that was delivered to anyone else.
-   On the record pages, a delivery appears
-   only in the view of the person it was delivered to, and an entry
-   written for named people appears only to them.</p>
-<p><em>Demo note: on this one computer, this view stands in for
+<h1>Private Inbox</h1>
+<p>Pick a person to see their private inbox: the alerts and plan
+   updates delivered to them, and nothing delivered to anyone else.
+   Open it when you want to check what arrived for someone, or to
+   acknowledge an alert.</p>
+<p class="note-panel"><strong>Demo note:</strong> on this one computer, this view stands in for
    delivery. In the product design, a routed telling reaches a person
    through their own assistant, in their own channel; that delivery
-   is not part of this demo.</em></p>
+   is not part of this demo.</p>
 
 <form method="get">
     <label>
-        Looking as
+        Whose inbox?
         <select name="personId">
             @foreach (var person in Model.People)
             {
@@ -30,15 +29,15 @@
 
 @if (Model.Member is not null)
 {
-    <h2>Landed with @Model.Member.DisplayName</h2>
+    <h2>Private inbox for @Model.Member.DisplayName</h2>
     @if (Model.Received.Count == 0)
     {
-        <p>Nothing has landed here yet.</p>
+        <p>Nothing has been delivered to this person's inbox yet.</p>
     }
-    <ul>
+    <ul class="record-list">
         @foreach (var item in Model.Received)
         {
-            <li>
+            <li class="record-item">
                 <strong>@item.Source:</strong> @item.Text
                 <br />@item.Note
                 @if (item.Provenance is not null)
@@ -49,7 +48,7 @@
                 {
                     if (item.ClosedAtUtc is DateTime closedAt)
                     {
-                        <br /><span>Acknowledged @closedAt.ToString("yyyy-MM-dd HH:mm") UTC.</span>
+                        <br /><span>Acknowledged @closedAt.ToString("MMM d, h:mm tt").</span>
                     }
                     else
                     {

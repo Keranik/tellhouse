@@ -76,7 +76,7 @@ public class PlanAssemblyService
         var parts = string.Join(", ", statedDurations.Select(d => $"{d.Label} {d.Minutes} minutes"));
         return await AddElementAsync(
             planId, PlanElementKind.LeaveBy,
-            $"Leave by {leaveBy:h:mm tt}. From what was stated: anchor {anchorAtLocal:h:mm tt}, less {parts}.",
+            $"Leave by {leaveBy:h:mm tt}. From what was stated: start time {anchorAtLocal:h:mm tt}, less {parts}.",
             Array.Empty<int>());
     }
 
@@ -94,12 +94,12 @@ public class PlanAssemblyService
         var element = await _db.PlanElements
             .Include(e => e.Agreements)
             .FirstOrDefaultAsync(e => e.Id == elementId)
-            ?? throw new InvalidOperationException($"Plan element {elementId} does not exist.");
+            ?? throw new InvalidOperationException($"Plan item {elementId} does not exist.");
         var required = RequiredDisposers(element);
         if (required.Count > 0 && !required.Contains(personId))
         {
             throw new InvalidOperationException(
-                $"Person {personId} is not one of the people this element requires an answer from.");
+                $"Person {personId} is not one of the people this item requires an answer from.");
         }
         var currentRound = element.Agreements.Count == 0 ? 1 : element.Agreements.Max(a => a.Round);
         if (element.Agreements.Any(a => a.Round == currentRound && a.Disposal == PlanDisposal.Countered))
@@ -109,7 +109,7 @@ public class PlanAssemblyService
         if (element.Agreements.Any(a => a.Round == currentRound && a.PersonId == personId))
         {
             throw new InvalidOperationException(
-                $"Person {personId} has already answered this element in round {currentRound}.");
+                $"Person {personId} has already answered this item in round {currentRound}.");
         }
         var words = disposal == PlanDisposal.Countered && !string.IsNullOrWhiteSpace(counterText)
             ? counterText
@@ -289,7 +289,7 @@ public class PlanAssemblyService
         if (blocking)
         {
             throw new InvalidOperationException(
-                "The runner cannot acknowledge yet: an element is still waiting on someone's answer.");
+                "The runner cannot acknowledge yet: an item is still waiting on someone's answer.");
         }
         plan.RunnerPersonId = runnerPersonId;
         plan.State = PlanState.Acknowledged;
@@ -314,7 +314,7 @@ public class PlanAssemblyService
     public async Task<PlanElement> RetimeElementAsync(int elementId, string newBodyText, int actorPersonId)
     {
         var element = await _db.PlanElements.FirstOrDefaultAsync(e => e.Id == elementId)
-            ?? throw new InvalidOperationException($"Plan element {elementId} does not exist.");
+            ?? throw new InvalidOperationException($"Plan item {elementId} does not exist.");
         element.BodyText = newBodyText;
         await _db.SaveChangesAsync();
         if (element.AssigneePersonId is int affectedPersonId)

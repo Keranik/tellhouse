@@ -61,7 +61,7 @@ public record RunnerTaskProjection(
             {
                 "Pickup" => subjectFirst is not null ? $"Pick {subjectFirst} up" : "A pickup",
                 "Errand" => "An errand",
-                _ => "A task"
+                _ => "A task (no details recorded)"
             };
         if (kind == "Pickup" && subjectFirst is not null
             && !what.Contains(subjectFirst, StringComparison.OrdinalIgnoreCase))

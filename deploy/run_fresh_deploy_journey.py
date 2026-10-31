@@ -541,7 +541,7 @@ def main():
     lisa_state = json.loads((lisa_store / "state.json").read_text())
     note = re.search(r"Test Send from Agent \(LisaStandIn\): ([a-z-]+)", page)
     check("website Test Send fires Lisa's stand-in through the fresh relay; telling lands with provenance",
-          status == 200 and note and note.group(1) == "sent"
+          status == 200 and note and note.group(1) == "done"
           and sql(node_db, f"select count(*) from Events where {origin_col}='conn-lisa-01'")[0][0] > prov_before
           and lisa_state.get("session_open_at") is not None,
           f"status={status} note={note.group(0) if note else None}")
@@ -612,7 +612,7 @@ def main():
     outbox = json.loads((lisa_store / "outbox.json").read_text()) \
         if (lisa_store / "outbox.json").exists() else []
     check("with the relay down the Test Send queues unrecorded in Lisa's outbox and nothing lands",
-          status == 200 and "queued" in page
+          status == 200 and "cannot reach the house" in page
           and any(e.get("record_state") == "unrecorded" for e in outbox)
           and sql(node_db, "select count(*) from Events")[0][0] == events_before_outage,
           f"status={status} outbox={len(outbox)}")

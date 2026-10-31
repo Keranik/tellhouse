@@ -338,7 +338,7 @@ def main():
         sent_arr = json.loads((lisa_store / "sent.json").read_text())
         sent_tail = str(sent_arr[-1])[:200] if sent_arr else "empty"
     check("website Test Send control fires Lisa's stand-in through the real relay; telling lands with provenance",
-          status == 200 and note and note.group(1) == "sent"
+          status == 200 and note and note.group(1) == "done"
           and sql(node_db, f"select count(*) from Events where {origin_col}='conn-lisa-01'")[0][0] > prov_before
           and lisa_state.get("session_open_at") is not None,
           f"status={status} note={note.group(0) if note else None} sent={sent_tail} "
@@ -418,7 +418,7 @@ def main():
     outbox = json.loads((lisa_store / "outbox.json").read_text()) \
         if (lisa_store / "outbox.json").exists() else []
     check("with the relay down the Test Send queues unrecorded in Lisa's outbox and nothing lands",
-          status == 200 and "queued" in page
+          status == 200 and "cannot reach the house" in page
           and any(e.get("record_state") == "unrecorded" for e in outbox)
           and sql(node_db, "select count(*) from Events")[0][0] == events_before_outage,
           f"status={status} outbox={len(outbox)}")

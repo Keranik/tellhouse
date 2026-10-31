@@ -192,8 +192,8 @@ public static class NodeSuite
         Check("Door: a knock spends the invite; the same code knocks never twice",
             await ThrowsAsync(() => door.KnockAsync(invite, "Lisa Ellis", "member-lisa", "Stand-in Assistant", lisaKeys.PublicKeyBase64Url)));
         var card = await door.GetInviterCardAsync(lisaRequest.Id);
-        Check("Door: the inviter card names the joiner, the provider labeled self-asserted, the check phrase, and the protocol fingerprint",
-            card.ClaimedName == "Lisa Ellis" && card.ProviderClaimLabel == "self-asserted"
+        Check("Door: the inviter card names the joiner, the provider labeled as their own claim, not checked, the check phrase, and the protocol fingerprint",
+            card.ClaimedName == "Lisa Ellis" && card.ProviderClaimLabel == "their own claim, not checked"
             && card.CheckPhrase == lisaRequest.CheckPhrase
             && card.Fingerprint == lisaKeys.Fingerprint
             && card.Fingerprint == DoorService.FingerprintOf(lisaKeys.PublicKeyBase64Url));
@@ -280,7 +280,7 @@ public static class NodeSuite
             toldEvent.ProvenanceOrigin == "Lisa's assistant"
             && toldEvent.ProvenanceConnection == lisa.ConnectionId
             && ProvenanceRendering.Describe(toldEvent)
-                == $"Came via Lisa's assistant, connection {lisa.ConnectionId}, packet {tellPacket.Envelope.PacketId}.");
+                == "Came via Lisa's assistant.");
         Check("Intake: told time is the packet's told_at; recorded time is when the node took it in, and they differ",
             toldEvent.ToldAtUtc == DateTimeOffset.FromUnixTimeSeconds(toldAt).UtcDateTime
             && toldEvent.RecordedAtUtc is not null && toldEvent.RecordedAtUtc > toldEvent.ToldAtUtc

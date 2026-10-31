@@ -1,45 +1,28 @@
 @page "/"
 @model HomeNode.Pages.FrontDoorModel
 @{
-    ViewData["Title"] = "Your front door";
+    ViewData["Title"] = "Front door";
 }
 
-<style>
-    .front-door { font-size: 1.5rem; line-height: 1.5; }
-    .front-door h1 { font-size: 2.6rem; }
-    .front-door .say-box {
-        border: 2px solid #444; border-radius: 12px; padding: 1.2rem;
-        margin: 1.2rem 0; background: #fafafa;
-    }
-    .front-door .reply {
-        border: 2px solid #2c5f2d; border-radius: 12px; padding: 1.2rem;
-        margin: 1.2rem 0; background: #f2f8f2;
-    }
-    .front-door li { margin-bottom: 1rem; }
-    .front-door .state { font-weight: 600; }
-    .front-door select, .front-door textarea, .front-door button {
-        font-size: 1.3rem; margin-top: 0.5rem;
-    }
-    .front-door textarea { width: 100%; }
-</style>
-
 <div class="front-door">
-    <h1>Your front door</h1>
+    <div class="hero">
+        <h1>Front door</h1>
 
-    @if (Model.Household is not null)
-    {
-        <p>@Model.Household.Name. Tell the house.</p>
-    }
+        @if (Model.Household is not null)
+        {
+            <p class="house-name">@Model.Household.Name. Tell the house.</p>
+        }
 
-    <p>Talk here. Say what you need, ask a question, or add a note for the house.
-       What you say is recorded in the shared record. An entry meant for
-       named people is shown only to them; the rest is the house's shared
-       day, here for everyone in the circle to read and add to.</p>
+        <p class="lead">Talk here. Say what happened, ask a question, or leave a note for the house.
+           What you say goes into the shared record. An entry meant for
+           named people is shown only to them; the rest can be read and
+           added to by everyone in the house.</p>
+    </div>
 
     @if (Model.HouseReply is not null)
     {
-        <div class="reply">
-            <p><strong>The house says:</strong> @Model.HouseReply</p>
+        <div class="panel panel-reply">
+            <p><strong>House reply:</strong> @Model.HouseReply</p>
             @if (Model.PipelineNote is not null)
             {
                 <p>@Model.PipelineNote</p>
@@ -64,57 +47,59 @@
                             }
                         </select>
                     </label>
-                    <input type="hidden" name="eventId" value="@proposedId" />
-                    <button type="submit" formaction="?handler=Confirm">Yes, do it</button>
-                    <button type="submit" formaction="?handler=Decline">No, don't</button>
+                    <div class="form-actions">
+                        <button type="submit" formaction="?handler=Confirm" class="primary">Yes, confirm it</button>
+                        <button type="submit" formaction="?handler=Decline">No, don't</button>
+                    </div>
                 </form>
             }
         </div>
     }
 
-    <div class="say-box">
-        <p><strong>Say a thing, or ask a question.</strong></p>
-        <p>Type what you would say. Voice capture is a later step; a typed
-           telling travels the same road a spoken one will.</p>
+    <div class="hero-input">
+        <h3 class="panel-title">Say a thing, or ask a question.</h3>
+        <p>Type what you would say out loud. It is written into the record
+           in the same way a spoken note would be. A telling is a note,
+           message, or question you add to the house.</p>
         <form method="post" asp-page-handler="Tell">
-            <label>
-                Who is telling the house?
-                <select name="speakerId">
-                    @foreach (var person in Model.People)
-                    {
-                        <option value="@person.Id">@person.DisplayName</option>
-                    }
-                    <option value="">Someone in passing (no name)</option>
-                </select>
-            </label>
-            <br />
+            <div class="speaker-row">
+                <label>
+                    Who is telling the house?
+                    <select name="speakerId">
+                        @foreach (var person in Model.People)
+                        {
+                            <option value="@person.Id">@person.DisplayName</option>
+                        }
+                        <option value="">No name given</option>
+                    </select>
+                </label>
+            </div>
             <label>
                 Tell the house
                 <textarea name="telling" rows="3" placeholder="Say it the way you would say it out loud."></textarea>
             </label>
-            <br />
-            <button type="submit">Tell the house</button>
+            <div class="form-actions">
+                <button type="submit" class="primary">Tell the house</button>
+            </div>
         </form>
     </div>
 
-    <div class="say-box">
-        <p><strong>Test Send from Agent.</strong></p>
-        <p>Ask a family member's assistant to send its own telling to
-           the house, through the same sealed path every assistant
-           uses, and watch it land in the record below with where it
-           came from. This button carries no words of yours: the
-           assistant sends its own telling, in its own words. If the
-           relay is stopped, the telling waits in the assistant's own
-           outbox, marked unrecorded, and nothing lands here.</p>
+    <div class="panel">
+        <h3 class="panel-title">Test send from a family assistant.</h3>
+        <p>Ask a family member's assistant to add a note to the house
+           record, and watch it appear in the record below with a note
+           of where it came from. The assistant writes the note itself,
+           in its own words, and this button adds no words of yours. If
+           the assistant cannot reach the house, nothing appears here.</p>
         @if (Model.TestSendNote is not null)
         {
             <p>@Model.TestSendNote</p>
         }
         @if (Model.StandIns.Count == 0)
         {
-            <p>No assistant trigger is configured on this home base
-               right now, so there is nothing to press. The control
-               appears here whenever an assistant is connected.</p>
+            <p>No family assistant is connected to this house right now,
+               so there is nothing to press. This section appears whenever
+               an assistant is connected.</p>
         }
         else
         {
@@ -122,40 +107,43 @@
                 @Html.AntiForgeryToken()
                 @foreach (var standIn in Model.StandIns)
                 {
-                    <button type="submit" formaction="?handler=TestSend" name="standInName" value="@standIn.Name">Test Send from Agent: @standIn.PersonName via @standIn.Name</button>
+                    <button type="submit" formaction="?handler=TestSend" name="standInName" value="@standIn.Name">Test send: @standIn.PersonName's assistant sends a note</button>
                 }
             </form>
         }
     </div>
 
-    <div class="say-box">
-        <p><strong>Audience defaults.</strong></p>
-        <p>Each person may hold one standing default for their
-           unspecified tellings: Private, Household, or Ask. A default
-           is set by telling, with a read-back, by its holder only, and
-           it never widens anything: it applies to tellings from then
-           on, and nothing already written changes.</p>
+    <div class="panel">
+        <h3 class="panel-title">Audience defaults.</h3>
+        <p>Each person can choose who usually sees notes they add when
+           they do not name anyone: only them (Private), the whole house
+           (Household), or be asked each time (Ask). Only that person
+           can set or change their own choice, the change is shown back
+           to them to check first, and it only affects notes added
+           afterwards.</p>
         @if (Model.DefaultNote is not null)
         {
-            <p><strong>@Model.DefaultNote</strong></p>
+            <p>@Model.DefaultNote</p>
         }
         @if (Model.ReadBackText is not null)
         {
-            <div class="reply">
-                <p><strong>The house reads back:</strong> @Model.ReadBackText</p>
+            <div class="panel panel-reply">
+                <p><strong>Check this change:</strong> @Model.ReadBackText</p>
                 @if (Model.PendingDefaultRequestId is int requestId)
                 {
                     <form method="post">
                         @Html.AntiForgeryToken()
                         <input type="hidden" name="requestId" value="@requestId" />
                         <input type="hidden" name="actorPersonId" value="@Model.PendingDefaultHolderId" />
-                        <button type="submit" formaction="?handler=ConfirmDefault">Yes, set it</button>
-                        <button type="submit" formaction="?handler=DeclineDefault">No, don't</button>
+                        <div class="form-actions">
+                            <button type="submit" formaction="?handler=ConfirmDefault" class="primary">Yes, set it</button>
+                            <button type="submit" formaction="?handler=DeclineDefault">No, don't</button>
+                        </div>
                     </form>
                 }
             </div>
         }
-        <ul>
+        <ul class="default-list">
             @foreach (var row in Model.Defaults)
             {
                 <li>@row.Person.DisplayName: @row.Label</li>
@@ -171,7 +159,6 @@
                     }
                 </select>
             </label>
-            <br />
             <label>
                 Set the default for
                 <select name="holderPersonId">
@@ -181,29 +168,30 @@
                     }
                 </select>
             </label>
-            <br />
             <label>
                 Default
                 <select name="value">
                     <option value="Private">Private</option>
                     <option value="Household">Household</option>
-                    <option value="Ask">Ask</option>
+                    <option value="Ask">Ask each time</option>
                 </select>
             </label>
-            <br />
-            <button type="submit">Tell the house</button>
+            <div class="form-actions">
+                <button type="submit" class="primary">Tell the house</button>
+            </div>
         </form>
         <p>An instruction about someone else's default is recorded as a
            proposal to that person. It is never applied by anyone but
-           the holder.</p>
+           that person.</p>
     </div>
 
     @if (Model.PendingAsks.Count > 0)
     {
-        <div class="say-box">
-            <p><strong>Questions waiting for you.</strong></p>
-            <p>The house is holding something at its narrowest audience
-               until you answer. Silence never widens it.</p>
+        <div class="panel">
+            <h3 class="panel-title">Questions waiting for you.</h3>
+            <p>One entry is being shown to as few people as possible
+               until you choose who can see it. If you do not answer, it
+               stays that way.</p>
             @foreach (var ask in Model.PendingAsks)
             {
                 <form method="post">
@@ -213,11 +201,13 @@
                     <label>
                         Audience for this entry
                         <select name="choice">
-                            <option value="Private">Keep it narrow</option>
-                            <option value="Household">The audience it would have had</option>
+                            <option value="Private">Keep it visible to as few people as possible</option>
+                            <option value="Household">Share it with the whole house</option>
                         </select>
                     </label>
-                    <button type="submit" formaction="?handler=AnswerAsk">Answer</button>
+                    <div class="form-actions">
+                        <button type="submit" formaction="?handler=AnswerAsk" class="primary">Answer</button>
+                    </div>
                 </form>
             }
         </div>
@@ -228,7 +218,7 @@
         <label>
             Reading as
             <select name="viewerId" onchange="this.form.submit()">
-                <option value="">Anyone standing here</option>
+                <option value="">No one (shared entries only)</option>
                 @foreach (var person in Model.People)
                 {
                     if (Model.ViewerId == person.Id)
@@ -251,12 +241,12 @@
     }
     else
     {
-        <ul>
+        <ul class="record-list">
             @foreach (var item in Model.RecentEvents)
             {
-                <li>
-                    <div>@item.Body</div>
-                    <div>
+                <li class="record-item">
+                    <div class="record-body">@item.Body</div>
+                    <div class="record-meta">
                         @if (item.AuthorPerson is not null)
                         {
                             <text>Added by @item.AuthorPerson.DisplayName</text>
@@ -268,7 +258,7 @@
                         &middot; <span class="state">@HomeNode.Data.ConfirmationWording.For(item.ConfirmationState)</span>
                         @if (item.RecordPending)
                         {
-                            <text> &middot; waiting for someone in the circle to close it</text>
+                            <text> &middot; waiting for someone in the house to confirm it</text>
                         }
                         @if (HomeNode.Services.ProvenanceRendering.Describe(item) is { } provenance)
                         {

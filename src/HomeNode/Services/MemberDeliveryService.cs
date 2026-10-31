@@ -89,7 +89,7 @@ public class MemberDeliveryService
             "Alert",
             d.BodyText,
             d.DeliveredAtUtc,
-            "A confirmed telling, delivered to you word for word.",
+            "A confirmed message, delivered to you word for word.",
             AlertDeliveryId: d.Id,
             ClosedAtUtc: d.AcknowledgedAtUtc,
             Provenance: d.Event is null ? null : ProvenanceRendering.Describe(d.Event))));
@@ -112,13 +112,13 @@ public class MemberDeliveryService
             var (source, note) = landing.Reason switch
             {
                 PlanDeliveryReason.PlanAcknowledged =>
-                    ("Plan", $"From the plan \"{planLabel}\", which you took on as runner."),
+                    ("Plan", $"From the plan \"{planLabel}\", which you took on as the runner, the person named to carry it out."),
                 PlanDeliveryReason.ElementSettled =>
-                    ("Settled", $"From the plan \"{planLabel}\": settled when everyone named had agreed."),
+                    ("Plan (settled)", $"From the plan \"{planLabel}\": settled after the people named on it agreed."),
                 PlanDeliveryReason.ElementRetimed =>
-                    ("Change", $"From the plan \"{planLabel}\": moved by {landing.ActorPerson?.DisplayName ?? "a person in the house"}, and routed to you because it affects you."),
+                    ("Plan (changed)", $"From the plan \"{planLabel}\": moved by {landing.ActorPerson?.DisplayName ?? "a person in the house"}, and routed to you because it affects you."),
                 PlanDeliveryReason.CounterCarried =>
-                    ("Counter", $"From the plan \"{planLabel}\": {landing.ActorPerson?.DisplayName ?? "a person in the house"} countered with these words, carried to you word for word as the new proposal."),
+                    ("Plan (counter proposal)", $"From the plan \"{planLabel}\": {landing.ActorPerson?.DisplayName ?? "a person in the house"} countered with these words, carried to you word for word as the new proposal."),
                 _ => ("Plan", $"From the plan \"{planLabel}\".")
             };
             string? provenance = null;

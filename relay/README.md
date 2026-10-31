@@ -49,6 +49,8 @@ Runtime output, both inspectable and both metadata only:
 | GET /relay/view | Queued packets as metadata only: envelope fields plus relay timing, no carried bytes, no signature. |
 | GET /health | Liveness plus the stated windows and limits from CONTRACT.md. |
 
+The view is the relay operator's surface, not one of the house's surfaces: it shows envelope metadata only, never content, and in the deployed demo the traffic it shows is the fictional household's.
+
 There is no other endpoint. In particular there is no join,
 confirm, answer, audience or door endpoint, and a knock packet
 queued here confirms nothing and changes no standing.

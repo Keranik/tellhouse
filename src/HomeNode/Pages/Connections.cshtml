@@ -6,11 +6,11 @@
 
 <h1>Connections</h1>
 <p>Who is connected to this house, through which assistant, at what level. An invite grants nothing by itself; the named inviter confirms every join.</p>
-<p>The door ceremony on this page is the house's own side of the door, the same acts the node's door adapter guards: it opens only to whoever presents the house secret, and a waiting request's check phrase is shown only to them.</p>
+<p>This page is the house side of the door. It opens only to whoever presents the house secret, and a waiting request's check phrase is shown only to them. The house side is the part of this page only the house can use.</p>
 
 @if (Model.Note is not null)
 {
-    <p><strong>@Model.Note</strong></p>
+    <p>@Model.Note</p>
 }
 @if (Model.HouseSideOpen && Model.NewInviteCode is not null)
 {
@@ -19,17 +19,20 @@
 
 @if (!Model.HouseSideOpen)
 {
+    <div class="panel">
     <h2>The house side is closed</h2>
-    <p>Present the house secret to run the door ceremony from this page. Without it, this page only shows who is connected; it confirms nothing, declines nothing, revokes nothing, and shows no check phrases.</p>
+    <p>Present the house secret to use the house side of this page. Without it, this page only shows who is connected; it confirms nothing, declines nothing, revokes nothing, and shows no check phrases.</p>
     <form method="get">
         <label>House secret
             <input type="password" name="houseSecret" />
         </label>
         <button type="submit">Open the house side</button>
     </form>
+    </div>
 }
 else
 {
+    <div class="panel">
     <h2>Invite someone</h2>
     <form method="post" asp-page-handler="Invite">
         <input type="hidden" name="houseSecret" value="@Model.PresentedHouseSecret" />
@@ -52,11 +55,12 @@ else
         <label>Level
             <select name="level">
                 <option value="Standard">Standard</option>
-                <option value="KnockOnly">KnockOnly</option>
+                <option value="KnockOnly">Knock only</option>
             </select>
         </label>
         <button type="submit">Create invite</button>
     </form>
+    </div>
 }
 
 <h2>Waiting at the door</h2>
@@ -67,9 +71,9 @@ else
 @foreach (var request in Model.PendingRequests)
 {
     var card = Model.Cards[request.Id];
-    <section>
+    <section class="panel">
         <h3>@card.ClaimedName, through @card.ProviderClaim (@card.ProviderClaimLabel)</h3>
-        <p>Level: @card.Level. @card.LevelConsequences</p>
+        <p>Level: @HomeNode.Data.StateWording.ForLevel(card.Level). @card.LevelConsequences</p>
         @if (Model.HouseSideOpen)
         {
             <p>Check phrase: <strong>@card.CheckPhrase</strong>. Ask the person, through a channel you already trust, what words they see. If the words do not match, this is not their request.</p>
@@ -78,11 +82,12 @@ else
         {
             <p>Check phrase: shown only to the house side. Present the house secret above to see it.</p>
         }
-        <p>Party id claimed: @card.ClaimedPartyId<br />
-        Key fingerprint (SHA-256 of the public point): <code>@card.Fingerprint</code></p>
+        <p>Their claimed id: @card.ClaimedPartyId<br />
+        Key fingerprint (a short code from their public key): <code>@card.Fingerprint</code></p>
         <p>Invited by @card.InviterName, request made @card.CreatedAtUtc.ToString("g") UTC.</p>
         @if (Model.HouseSideOpen)
         {
+            <p>Confirm only a join you invited yourself, in your own name.</p>
             <form method="post" asp-page-handler="Confirm">
                 <input type="hidden" name="houseSecret" value="@Model.PresentedHouseSecret" />
                 <input type="hidden" name="joinRequestId" value="@request.Id" />
@@ -129,13 +134,13 @@ else
 {
     <p>No connections yet.</p>
 }
-<ul>
+<ul class="record-list">
     @foreach (var connection in Model.Connections)
     {
-        <li>
-            <div>@connection.Person?.DisplayName, through @connection.ProviderClaim (self-asserted), level @connection.Level, standing @connection.Standing</div>
+        <li class="record-item">
+            <div>@connection.Person?.DisplayName, through @connection.ProviderClaim (their own claim, not checked), level @HomeNode.Data.StateWording.ForLevel(connection.Level), Status: @HomeNode.Data.StateWording.ForStanding(connection.Standing)</div>
             <div>Connection @connection.ConnectionId &middot; enrolled by @connection.EnrollingInviterPerson?.DisplayName</div>
-            <div>Party @connection.PartyId &middot; key fingerprint: <code>@connection.Fingerprint</code></div>
+            <div>Their claimed id: @connection.PartyId &middot; Key fingerprint (a short code from their public key): <code>@connection.Fingerprint</code></div>
             @if (Model.HouseSideOpen && connection.Standing == HomeNode.Data.ConnectionStanding.Active)
             {
                 <form method="post" asp-page-handler="Revoke">

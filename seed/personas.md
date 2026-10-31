@@ -16,11 +16,11 @@ Lisa works across town and cannot always be in the house, so she mostly meets th
 
 ## Timmy, Daniel and Lisa's son
 
-Timmy is the one with soccer at five thirty. His afternoons are the kind that live in one parent's head unless the house holds them: a pickup that has to happen on time, from a place, by whoever the plan names. He is a member of the record in his own right, a teller and a subject, not a line in somebody else's calendar.
+Timmy is the one with soccer at five thirty. His afternoons are the kind that live in one parent's head unless the house holds them: a pickup that has to happen on time, from a place, by whoever the plan names. He is a member of the record in his own right, a subject in his own name, not a line in somebody else's calendar; his parents do the telling for him, the way parents speak for a child everywhere else.
 
 ## Mia, Daniel and Lisa's daughter, Timmy's sister
 
-Mia has math homework tonight, and some nights she is stuck on it. When she is, that is a fact the house can hold the way it holds any other: spoken once, in her mother's or her own words, and there when the evening is planned. Like Timmy, she is in the record as herself, not as an errand in a parent's list.
+Mia has math homework tonight, and some nights she is stuck on it. When she is, that is a fact the house can hold the way it holds any other: spoken once, in her mother's words, told on her behalf, and there when the evening is planned. Like Timmy, she is in the record as herself, not as an errand in a parent's list.
 
 ## June, the Tuesday helper
 

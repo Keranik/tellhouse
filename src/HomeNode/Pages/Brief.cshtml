@@ -1,16 +1,17 @@
 @page "/Brief"
 @model HomeNode.Pages.BriefModel
 @{
-    ViewData["Title"] = "Your brief";
+    ViewData["Title"] = "Daily Summary";
 }
 
-<h1>Your brief</h1>
-<p>What the record holds for one person. Entries reach a brief only when
-   the audience written on them at the time includes that person.</p>
+<h1>Daily Summary</h1>
+<p>What the record holds for one person. Entries reach a summary only
+   when the audience written on them at the time (the people named to
+   read it) includes that person.</p>
 
 <form method="get">
     <label>
-        Whose brief?
+        Whose summary?
         <select name="PersonId" onchange="this.form.submit()">
             @if (Model.Viewer is null)
             {
@@ -34,13 +35,15 @@
         </select>
     </label>
 </form>
+<p>Pick a person to see the record as they see it.</p>
 
 @if (Model.Viewer is not null)
 {
-    <h2>@Model.Viewer.DisplayName.Split(' ')[0]'s brief</h2>
+    <div class="panel">
+    <h2>@Model.Viewer.DisplayName.Split(' ')[0]'s summary</h2>
     @if (Model.Lines.Count == 0)
     {
-        <p>Nothing in the record for you right now.</p>
+        <p>Nothing in the record for this person right now.</p>
     }
     else
     {
@@ -56,12 +59,12 @@
         }
     }
 
-    <h2>Ask the house</h2>
+    <h2>Look up a recorded place</h2>
     <form method="post" asp-page-handler="Lookup">
         @Html.AntiForgeryToken()
         <input type="hidden" name="askerPersonId" value="@Model.Viewer.Id" />
         <label>
-            Where is
+            Last recorded place of
             <select name="subjectPersonId">
                 @foreach (var person in Model.People)
                 {
@@ -73,11 +76,12 @@
     </form>
     @if (Model.LookupAnswer is not null)
     {
-        <p><strong>The house says:</strong> @Model.LookupAnswer</p>
+        <p><strong>From the record:</strong> @Model.LookupAnswer</p>
     }
+    </div>
 }
 else if (Model.People.Count > 0)
 {
-    <p>No reader named, so no brief is shown. A brief belongs to one
-       person; name whose brief to read above.</p>
+    <p>No reader named, so no summary is shown. A summary belongs to one
+       person; name whose summary to read above.</p>
 }

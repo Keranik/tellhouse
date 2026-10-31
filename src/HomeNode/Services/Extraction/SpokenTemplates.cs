@@ -30,7 +30,7 @@ public static class SpokenTemplates
     public static string SupplyForecast(string itemName, string directionWord, string dayName) =>
         $"Noted. {itemName} marked {directionWord}. At the usual rate, it runs out around {dayName}.";
 
-    public const string DoNotKnow = "I don't have that written down.";
+    public const string DoNotKnow = "That is not in the record.";
 
     public static string Clarify(string questionText) =>
         $"I want to get that right. {questionText}";
