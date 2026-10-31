@@ -361,8 +361,8 @@ reshelled. Every house surface now sits in one app
 shell, a fixed sidebar carrying the house's places, a
 top bar, and a roomy content canvas, in a single dark
 gray theme whose colors, type, and spacing were
-measured and set deliberately, with keyboard focus
-visible on every interactive element. Alongside the
+measured and set deliberately, with the focus state
+shown visibly on every interactive element. Alongside the
 shell, every public page's wording passed a full
 plain-words review: labels a first-time reader can
 understand cold (the deliveries page is now the
