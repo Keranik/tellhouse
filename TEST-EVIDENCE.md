@@ -541,3 +541,57 @@ the site icons are the brand's own favicon set (an
 SVG icon and an ICO icon) and its apple touch icon.
 The assets are the brand kit's files, used as
 delivered.
+
+## Ninth public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Ninth public commit: suites
+
+All passing at this commit's final verification
+(October 31, 2026; the home node demo suite grew by
+four checks and the home node suite by five, pinning
+the double-submit answers and the screen-wording rules
+this commit ships):
+
+- Home node demo suite: 211
+- Home node suite: 160
+- Single-process build demo suite: 138
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Ninth public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: plainer screens across the
+house. The daily page is the Briefing and the delivery
+page is the Inbox; a claim's status line carries the
+closing words as its proof, with the closer's name and
+the household time; every time on the screens is the
+household's local time in one format; a second click
+on a settled entry answers "Already confirmed."
+instead of erroring; an out-of-stock supply reads as
+out and orders now, with the run-out date fixed at its
+root; plan pages and error pages speak plainly and raw
+error text never reaches a visitor; and the
+Connections page unlocks with a posted passcode that
+sets a short-lived cookie, so the house secret never
+appears in an address, a redirect, or a hidden field.
