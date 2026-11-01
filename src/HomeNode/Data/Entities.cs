@@ -268,8 +268,15 @@ public class SupplyItem
     }
 
     // The day to order by: run out day minus the lead a person needs.
+    // An item with nothing on hand is ordered now, never on a date in
+    // the past: the plain subtraction used to land two days before
+    // today for an empty shelf, a date no one can act on.
     public DateOnly GetOrderByDate(DateOnly today)
     {
+        if (QuantityOnHand <= 0)
+        {
+            return today;
+        }
         var runOut = GetRunOutDate(today);
         return runOut == DateOnly.MaxValue ? runOut : runOut.AddDays(-ReorderLeadDays);
     }

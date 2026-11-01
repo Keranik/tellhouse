@@ -5,8 +5,7 @@
 }
 
 <h1>Connections</h1>
-<p>Who is connected to this house, through which assistant, at what level. An invite grants nothing by itself; the named inviter confirms every join.</p>
-<p>This page is the house side of the door. It opens only to whoever presents the house secret, and a waiting request's check phrase is shown only to them. The house side is the part of this page only the house can use.</p>
+<p>People's assistants connected to this household, and what each can do. No one joins until the person who invited them approves.</p>
 
 @if (Model.Note is not null)
 {
@@ -14,19 +13,19 @@
 }
 @if (Model.HouseSideOpen && Model.NewInviteCode is not null)
 {
-    <p>New invite code (shown once, share it with the person joining): <code>@Model.NewInviteCode</code></p>
+    <p>Invite code, shown once. Share it with @Model.NewInviteFor: <code>@Model.NewInviteCode</code></p>
 }
 
 @if (!Model.HouseSideOpen)
 {
     <div class="panel">
-    <h2>The house side is closed</h2>
-    <p>Present the house secret to use the house side of this page. Without it, this page only shows who is connected; it confirms nothing, declines nothing, revokes nothing, and shows no check phrases.</p>
-    <form method="get">
-        <label>House secret
+    <h2>Admin controls are locked</h2>
+    <p>The admin controls are locked. You can still see who's connected.</p>
+    <form method="post" asp-page-handler="Unlock">
+        <label>Admin passcode
             <input type="password" name="houseSecret" />
         </label>
-        <button type="submit">Open the house side</button>
+        <button type="submit">Unlock</button>
     </form>
     </div>
 }
@@ -35,95 +34,97 @@ else
     <div class="panel">
     <h2>Invite someone</h2>
     <form method="post" asp-page-handler="Invite">
-        <input type="hidden" name="houseSecret" value="@Model.PresentedHouseSecret" />
-        <label>Inviter
+        <label>Invited by
             <select name="inviterPersonId">
                 @foreach (var person in Model.People)
                 {
-                    <option value="@person.Id">@person.DisplayName</option>
+                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
             </select>
         </label>
-        <label>Intended person
+        <label>Who's joining
             <select name="intendedPersonId">
                 @foreach (var person in Model.People)
                 {
-                    <option value="@person.Id">@person.DisplayName</option>
+                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
             </select>
         </label>
-        <label>Level
+        <label>Access
             <select name="level">
-                <option value="Standard">Standard</option>
-                <option value="KnockOnly">Knock only</option>
+                <option value="Standard">Member</option>
+                <option value="KnockOnly">Request only</option>
             </select>
         </label>
-        <button type="submit">Create invite</button>
+        <button type="submit">Create invite code</button>
     </form>
     </div>
 }
 
-<h2>Waiting at the door</h2>
+<h2>Requests to join</h2>
 @if (Model.PendingRequests.Count == 0)
 {
-    <p>Nobody is waiting. Doing nothing means no.</p>
+    <p>No pending requests.</p>
 }
 @foreach (var request in Model.PendingRequests)
 {
     var card = Model.Cards[request.Id];
+    var claimedFirst = HomeNode.Data.NameWording.First(card.ClaimedName);
     <section class="panel">
-        <h3>@card.ClaimedName, through @card.ProviderClaim (@card.ProviderClaimLabel)</h3>
-        <p>Level: @HomeNode.Data.StateWording.ForLevel(card.Level). @card.LevelConsequences</p>
+        <h3>@claimedFirst — @claimedFirst's assistant (demo stand-in)</h3>
+        <p>Access: @HomeNode.Data.StateWording.ForLevel(card.Level). @card.LevelConsequences</p>
         @if (Model.HouseSideOpen)
         {
-            <p>Check phrase: <strong>@card.CheckPhrase</strong>. Ask the person, through a channel you already trust, what words they see. If the words do not match, this is not their request.</p>
+            <p>Verification phrase: <strong>@card.CheckPhrase</strong>. Call or text @claimedFirst and ask what phrase @claimedFirst's assistant shows. Approve only if it matches.</p>
         }
         else
         {
-            <p>Check phrase: shown only to the house side. Present the house secret above to see it.</p>
+            <p>Verification phrase: shown only when the admin controls are unlocked.</p>
         }
-        <p>Their claimed id: @card.ClaimedPartyId<br />
-        Key fingerprint (a short code from their public key): <code>@card.Fingerprint</code></p>
-        <p>Invited by @card.InviterName, request made @card.CreatedAtUtc.ToString("g") UTC.</p>
+        <p>Requested @HomeNode.Data.HouseholdTime.Stamp(card.CreatedAtUtc, Model.HouseholdZone)</p>
+        <details>
+            <summary>Technical details</summary>
+            <p>Claimed id: @card.ClaimedPartyId<br />
+            Key fingerprint: <code>@card.Fingerprint</code><br />
+            Provider: @card.ProviderClaim (@card.ProviderClaimLabel)<br />
+            Invited by @HomeNode.Data.NameWording.First(card.InviterName)</p>
+        </details>
         @if (Model.HouseSideOpen)
         {
-            <p>Confirm only a join you invited yourself, in your own name.</p>
             <form method="post" asp-page-handler="Confirm">
-                <input type="hidden" name="houseSecret" value="@Model.PresentedHouseSecret" />
                 <input type="hidden" name="joinRequestId" value="@request.Id" />
-                <label>Confirming inviter
+                <label>Approved by
                     <select name="inviterPersonId">
                         @foreach (var person in Model.People)
                         {
-                            <option value="@person.Id">@person.DisplayName</option>
+                            <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                         }
                     </select>
                 </label>
-                <label>This connection speaks for
+                <label>Connects as
                     <select name="personId">
                         @foreach (var person in Model.People)
                         {
-                            <option value="@person.Id">@person.DisplayName</option>
+                            <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                         }
                     </select>
                 </label>
-                <label>Check phrase you heard
+                <label>Phrase @claimedFirst read to you
                     <input type="text" name="checkPhrase" />
                 </label>
-                <button type="submit">Confirm this join</button>
+                <button type="submit">Approve</button>
             </form>
             <form method="post" asp-page-handler="Decline">
-                <input type="hidden" name="houseSecret" value="@Model.PresentedHouseSecret" />
                 <input type="hidden" name="joinRequestId" value="@request.Id" />
-                <label>Declining inviter
+                <label>Declined by
                     <select name="inviterPersonId">
                         @foreach (var person in Model.People)
                         {
-                            <option value="@person.Id">@person.DisplayName</option>
+                            <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                         }
                     </select>
                 </label>
-                <button type="submit">Decline this join</button>
+                <button type="submit">Decline</button>
             </form>
         }
     </section>
@@ -137,16 +138,23 @@ else
 <ul class="record-list">
     @foreach (var connection in Model.Connections)
     {
+        var personFirst = HomeNode.Data.NameWording.First(connection.Person?.DisplayName);
         <li class="record-item">
-            <div>@connection.Person?.DisplayName, through @connection.ProviderClaim (their own claim, not checked), level @HomeNode.Data.StateWording.ForLevel(connection.Level), Status: @HomeNode.Data.StateWording.ForStanding(connection.Standing)</div>
-            <div>Connection @connection.ConnectionId &middot; enrolled by @connection.EnrollingInviterPerson?.DisplayName</div>
-            <div>Their claimed id: @connection.PartyId &middot; Key fingerprint (a short code from their public key): <code>@connection.Fingerprint</code></div>
+            <div>@personFirst — @personFirst's assistant (demo stand-in) &middot; @HomeNode.Data.StateWording.ForLevel(connection.Level) &middot; @HomeNode.Data.StateWording.ForStanding(connection.Standing)</div>
+            <div>Approved by @HomeNode.Data.NameWording.First(connection.EnrollingInviterPerson?.DisplayName) &middot; Key @Model.ShortKey(connection.Fingerprint)</div>
+            <details>
+                <summary>Technical details</summary>
+                <p>Connection @connection.ConnectionId<br />
+                Claimed id: @connection.PartyId<br />
+                Key fingerprint: <code>@connection.Fingerprint</code><br />
+                Provider: @connection.ProviderClaim (their own claim, not checked)<br />
+                Enrolled by @(connection.EnrollingInviterPerson?.DisplayName ?? "")</p>
+            </details>
             @if (Model.HouseSideOpen && connection.Standing == HomeNode.Data.ConnectionStanding.Active)
             {
                 <form method="post" asp-page-handler="Revoke">
-                    <input type="hidden" name="houseSecret" value="@Model.PresentedHouseSecret" />
                     <input type="hidden" name="connectionId" value="@connection.ConnectionId" />
-                    <button type="submit">Revoke this connection</button>
+                    <button type="submit">Remove access</button>
                 </form>
             }
         </li>

@@ -825,9 +825,9 @@ if (AutoJoinEnabled())
 }
 
 app.MapGet("/", () => Results.Text(
-    "Daniel reference assistant. A stand-in program for Daniel, a fictional member of the demo household, " +
-    "speaking the Tellhouse packet protocol, contract version 1.0. It is not a real person's assistant. " +
-    "This surface shows status metadata only; it has no route that returns packet bodies."));
+    "Daniel's assistant (demo stand-in). A stand-in for the personal assistant of Daniel, " +
+    "a fictional member of the Ellis household. It talks to Tellhouse for Daniel and shows " +
+    "connection status only. It never shows message contents."));
 
 app.MapGet("/status", () =>
 {

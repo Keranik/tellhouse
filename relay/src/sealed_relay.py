@@ -473,6 +473,15 @@ def make_handler(service):
             # only log is RelayLog, with its allowlisted fields.
             pass
 
+        def _send_text(self, status, text):
+            self.close_connection = True
+            body = text.encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def _send(self, status, obj):
             self.close_connection = True
             body = json.dumps(obj, sort_keys=True).encode("utf-8")
@@ -514,6 +523,12 @@ def make_handler(service):
             self._send(202, result)
 
         def do_GET(self):
+            if self.path == "/":
+                self._send_text(200,
+                    "Tellhouse relay. Carries sealed messages between "
+                    "the house and members' assistants. It can't read "
+                    "them and keeps nothing.")
+                return
             if self.path == "/health":
                 self._send(200, {
                     "status": "ok",

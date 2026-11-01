@@ -50,13 +50,25 @@ public class ConnectionsModel : PageModel
     // handler re-checks it before acting.
     public bool HouseSideOpen { get; private set; }
 
-    // The secret the viewer presented, carried into the page's
-    // own forms so an authorized operator stays authorized across
-    // the page's posts and redirects. Set only when HouseSideOpen.
+    // Set only when HouseSideOpen. The secret itself is never
+    // carried in a URL, a redirect, or a hidden form field: the
+    // unlock post exchanges it for the short-lived cookie below,
+    // and every later request presents the cookie instead.
     public string? PresentedHouseSecret { get; private set; }
 
     public string? Note => TempData["Note"] as string;
     public string? NewInviteCode => TempData["NewInviteCode"] as string;
+    public string? NewInviteFor => TempData["NewInviteFor"] as string;
+
+    // The household zone request times are shown in.
+    public TimeZoneInfo HouseholdZone { get; private set; } =
+        TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+
+    // The cookie the unlock post sets: HttpOnly, same-site, and
+    // gone again in thirty minutes. It holds the presented secret
+    // so the page's own posts stay authorized without the secret
+    // ever riding in an address, a redirect, or a form field.
+    private const string HouseSideCookie = "tellhouse-house-side";
 
     private string? PresentedSecret()
     {
@@ -65,18 +77,29 @@ public class ConnectionsModel : PageModel
         {
             return fromHeader;
         }
+        if (Request.Cookies.TryGetValue(HouseSideCookie, out var fromCookie)
+            && !string.IsNullOrEmpty(fromCookie))
+        {
+            return fromCookie;
+        }
         if (Request.HasFormContentType
             && Request.Form.TryGetValue("houseSecret", out var fromForm)
             && !string.IsNullOrEmpty(fromForm.ToString()))
         {
             return fromForm.ToString();
         }
-        if (Request.Query.TryGetValue("houseSecret", out var fromQuery)
-            && !string.IsNullOrEmpty(fromQuery.ToString()))
-        {
-            return fromQuery.ToString();
-        }
         return null;
+    }
+
+    // A short display form of a key fingerprint: the first eight
+    // characters, split in two groups of four.
+    public string ShortKey(string fingerprint)
+    {
+        var chars = new string((fingerprint ?? "")
+            .Where(char.IsLetterOrDigit)
+            .Take(8)
+            .ToArray()).ToLowerInvariant();
+        return chars.Length > 4 ? $"{chars[..4]} {chars[4..]}" : chars;
     }
 
     private bool AuthorizeHouse()
@@ -104,6 +127,29 @@ public class ConnectionsModel : PageModel
         }
     }
 
+    // The unlock: a POST, never a GET. A correct passcode is
+    // exchanged for the short-lived cookie and the redirect that
+    // follows carries nothing; a wrong one changes nothing.
+    public IActionResult OnPostUnlock(string? houseSecret)
+    {
+        if (_house.Authorizes(houseSecret))
+        {
+            Response.Cookies.Append(HouseSideCookie, houseSecret!, new CookieOptions
+            {
+                HttpOnly = true,
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTimeOffset.UtcNow.AddMinutes(30),
+                Path = "/"
+            });
+            TempData["Note"] = "Admin controls are unlocked for the next thirty minutes.";
+        }
+        else
+        {
+            TempData["Note"] = "That passcode does not match.";
+        }
+        return RedirectToPage();
+    }
+
     public async Task<IActionResult> OnPostInviteAsync(int inviterPersonId, int? intendedPersonId, string level)
     {
         if (!AuthorizeHouse())
@@ -113,8 +159,12 @@ public class ConnectionsModel : PageModel
         var household = await _db.Households.FirstAsync();
         var code = await _door.CreateInviteAsync(household.Id, inviterPersonId, intendedPersonId, level);
         TempData["NewInviteCode"] = code;
-        TempData["Note"] = "Invite created. It grants nothing by itself; share the code with the person, and confirm their join here when their assistant knocks.";
-        return RedirectToPage(new { houseSecret = PresentedHouseSecret });
+        var intended = intendedPersonId is int intendedId
+            ? await _db.Persons.FirstOrDefaultAsync(p => p.Id == intendedId)
+            : null;
+        TempData["NewInviteFor"] = NameWording.First(intended?.DisplayName);
+        TempData["Note"] = "Invite created. It grants nothing by itself; share the code, and approve the join here when their assistant knocks.";
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostConfirmAsync(int joinRequestId, int inviterPersonId, int personId, string checkPhrase)
@@ -126,13 +176,14 @@ public class ConnectionsModel : PageModel
         try
         {
             var connection = await _door.ConfirmJoinAsync(joinRequestId, inviterPersonId, personId, checkPhrase);
-            TempData["Note"] = $"Join confirmed. Connection {connection.ConnectionId} is active; everything it sends is now checked against this connection.";
+            var person = await _db.Persons.FirstOrDefaultAsync(p => p.Id == connection.PersonId);
+            TempData["Note"] = $"Approved. {NameWording.First(person?.DisplayName)}'s assistant is connected.";
         }
         catch (InvalidOperationException ex)
         {
             TempData["Note"] = ex.Message;
         }
-        return RedirectToPage(new { houseSecret = PresentedHouseSecret });
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostDeclineAsync(int joinRequestId, int inviterPersonId)
@@ -144,13 +195,13 @@ public class ConnectionsModel : PageModel
         try
         {
             await _door.DeclineJoinAsync(joinRequestId, inviterPersonId);
-            TempData["Note"] = "Join declined and recorded. No connection was created, and the invite is spent.";
+            TempData["Note"] = "Declined. No connection was created.";
         }
         catch (InvalidOperationException ex)
         {
             TempData["Note"] = ex.Message;
         }
-        return RedirectToPage(new { houseSecret = PresentedHouseSecret });
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostRevokeAsync(string connectionId)
@@ -159,13 +210,21 @@ public class ConnectionsModel : PageModel
         {
             return StatusCode(403);
         }
+        var connection = await _db.HouseConnections
+            .Include(c => c.Person)
+            .FirstOrDefaultAsync(c => c.ConnectionId == connectionId);
         await _door.RevokeConnectionAsync(connectionId);
-        TempData["Note"] = $"Connection {connectionId} revoked. It can submit nothing from now on; words already in the record stay.";
-        return RedirectToPage(new { houseSecret = PresentedHouseSecret });
+        TempData["Note"] = $"{NameWording.First(connection?.Person?.DisplayName)}'s assistant can no longer send to this household. Past entries stay.";
+        return RedirectToPage();
     }
 
     private async Task LoadAsync()
     {
+        var household = await _db.Households.FirstOrDefaultAsync();
+        if (household is not null)
+        {
+            HouseholdZone = HouseholdTime.ZoneFor(household.TimeZoneId);
+        }
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
         Connections = await _db.HouseConnections
             .Include(c => c.Person)

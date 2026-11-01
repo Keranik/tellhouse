@@ -127,20 +127,36 @@ public class FrontDoorModel : PageModel
 
     public async Task<IActionResult> OnPostConfirmAsync(int eventId, int actorPersonId)
     {
-        await _confirmations.ConfirmAsync(eventId, actorPersonId, "tap");
+        try
+        {
+            await _confirmations.ConfirmAsync(eventId, actorPersonId, "tap");
+        }
+        catch (InvalidOperationException)
+        {
+            TempData["HouseReply"] = "Already confirmed.";
+            return RedirectToPage();
+        }
         var ev = await _db.Events.FirstAsync(e => e.Id == eventId);
         TempData["HouseReply"] = ev.ConfirmationState == ConfirmationState.Done
             ? SpokenTemplates.Done
             : "Confirmed.";
-        TempData["PipelineNote"] = "Confirmed by a person, in the open. The record shows who and when.";
+        TempData["PipelineNote"] = "Confirmed.";
         return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostDeclineAsync(int eventId, int actorPersonId)
     {
-        await _confirmations.DeclineAsync(eventId, actorPersonId, "tap");
+        try
+        {
+            await _confirmations.DeclineAsync(eventId, actorPersonId, "tap");
+        }
+        catch (InvalidOperationException)
+        {
+            TempData["HouseReply"] = "Already confirmed.";
+            return RedirectToPage();
+        }
         TempData["HouseReply"] = "Not sent.";
-        TempData["PipelineNote"] = "Declined by a person. It stays in the record as not confirmed, and nothing was sent.";
+        TempData["PipelineNote"] = "Not sent. It stays in the record, marked Not sent.";
         return RedirectToPage();
     }
 

@@ -94,7 +94,7 @@ The supply picture updates from her line: gauze on hand is now none. New line on
 
 June, who sits with Margaret on Tuesday afternoons, arrives. She taps "Getting dressed" and sees only the three household notes for that task (written in full in task-notes.json): the blue cardigan from the chair, because the green one has the broken button; shoes go on sitting on the bed, not standing; tea after, one sugar, though Margaret will say two.
 
-Timeline entry, 1:15 PM: June arrived. Getting dressed notes opened.
+Timeline entry, 1:15 PM: June arrived and opened the getting dressed notes.
 
 ## 2:10 PM, Lisa's second line, out with the groceries
 

@@ -1,10 +1,10 @@
 @page "/Timeline"
 @model HouseholdCoordinator.Pages.TimelineModel
 @{
-    ViewData["Title"] = "Family timeline";
+    ViewData["Title"] = "Timeline";
 }
 
-<h1>Family timeline</h1>
+<h1>Timeline</h1>
 <p>The shared record for the house, newest first, as the person you are
    acting as may read it. An entry written for named people appears only
    to them, here as on every surface.</p>
@@ -68,10 +68,6 @@ else
                     </td>
                     <td>
                         @HouseholdCoordinator.Data.ConfirmationWording.For(item.ConfirmationState)
-                        @if (item.RecordPending)
-                        {
-                            <text><br />Not yet closed by a person</text>
-                        }
                     </td>
                     <td>
                         @if (item.ConfirmationState == HouseholdCoordinator.Data.ConfirmationState.Proposed && !item.RecordPending)

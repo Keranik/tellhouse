@@ -121,15 +121,26 @@ public class FrontDoorModel : PageModel
     public int? ProposedEventId => TempData["ProposedEventId"] as int?;
     public int? ProposedAuthorId => TempData["ProposedAuthorId"] as int?;
 
+    // The words the person just said, echoed back in the reply area
+    // so they can see exactly what the house is asking about, and
+    // the action-named words on the reply's two buttons.
+    public string? ProposedWords => TempData["ProposedWords"] as string;
+    public string ConfirmLabel => TempData["ConfirmLabel"] as string ?? "Confirm";
+    public string DeclineLabel => TempData["DeclineLabel"] as string ?? "Don't tell";
+
+    // The household zone the recent list's times are shown in.
+    public TimeZoneInfo HouseholdZone { get; private set; } =
+        TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+
     public async Task OnGetAsync()
     {
         await LoadAsync();
     }
 
-    public async Task<IActionResult> OnPostTellAsync(int? speakerId, string? telling)
+    public async Task<IActionResult> OnPostTellAsync(int? speakerId, string? message)
     {
         var household = await _db.Households.FirstOrDefaultAsync();
-        if (household is null || string.IsNullOrWhiteSpace(telling))
+        if (household is null || string.IsNullOrWhiteSpace(message))
         {
             return RedirectToPage();
         }
@@ -142,7 +153,7 @@ public class FrontDoorModel : PageModel
         var input = new ExtractionInput
         {
             UtteranceId = $"u-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..26],
-            Transcript = telling.Trim(),
+            Transcript = message.Trim(),
             SourceType = "tap",
             OccurredAtLocal = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz),
             Speaker = speaker is null
@@ -163,26 +174,57 @@ public class FrontDoorModel : PageModel
             // The validator's own words are internal: they go to the
             // server log only, never to the page a visitor reads.
             _logger.LogWarning(
-                "The house refused a telling from speaker {SpeakerId}: {ValidationErrors}",
+                "The house refused a message from speaker {SpeakerId}: {ValidationErrors}",
                 speakerId, string.Join(" ", result.Validation.Errors));
             TempData["PipelineNote"] =
-                "The house could not write that down as stated, so nothing was recorded.";
+                "I couldn't make sense of that, so nothing was saved. Try one short sentence.";
         }
         else if (result.Output.ClarificationNeeded)
         {
-            TempData["PipelineNote"] = "Nothing was written down yet. Please answer the question above first.";
+            TempData["PipelineNote"] = "Nothing is saved yet. Reply in the box below.";
         }
         else if (result.ProposedEvent is not null)
         {
             TempData["ProposedEventId"] = result.ProposedEvent.Id;
             TempData["ProposedAuthorId"] = result.ProposedEvent.AuthorPersonId;
-            TempData["PipelineNote"] = "Written down as a proposal. Nothing is sent until a person confirms it.";
+            TempData["ProposedWords"] = result.ProposedEvent.Body;
+            TempData["PipelineNote"] = "It's in the record either way.";
+            // The confirm button names the action it takes: the
+            // pending action the dispatcher recorded for this entry
+            // decides whether it tells a person, puts media on, or
+            // sets a reminder.
+            var pendingAction = await _db.EventActions
+                .FirstOrDefaultAsync(a => a.EventId == result.ProposedEvent.Id);
+            switch (pendingAction?.ActionType)
+            {
+                case EventActionType.MediaPlay:
+                    TempData["ConfirmLabel"] = "Put it on";
+                    TempData["DeclineLabel"] = "No, don't";
+                    break;
+                case EventActionType.CreateReminder:
+                    TempData["ConfirmLabel"] = "Set reminder";
+                    TempData["DeclineLabel"] = "No, don't";
+                    break;
+                case EventActionType.NotifyPerson or EventActionType.RelayMessage:
+                    var target = pendingAction.TargetPersonId is int targetId
+                        ? await _db.Persons.FirstOrDefaultAsync(p => p.Id == targetId)
+                        : null;
+                    TempData["ConfirmLabel"] = target is null
+                        ? "Tell them"
+                        : $"Tell {NameWording.First(target.DisplayName)}";
+                    TempData["DeclineLabel"] = "Don't tell";
+                    break;
+                default:
+                    TempData["ConfirmLabel"] = "Confirm";
+                    TempData["DeclineLabel"] = "Don't tell";
+                    break;
+            }
         }
         else if (result.WrittenEvents.Count > 0)
         {
             TempData["PipelineNote"] = result.WrittenEvents.Count == 1
-                ? "Written into the shared record."
-                : $"Written into the shared record as {result.WrittenEvents.Count} entries.";
+                ? "Saved."
+                : $"Saved as {result.WrittenEvents.Count} entries.";
         }
         if (result.AsksCreated.Count > 0)
         {
@@ -190,7 +232,7 @@ public class FrontDoorModel : PageModel
             // only to the person entitled to answer it, when they
             // read as themselves below.
             TempData["PipelineNote"] = (TempData["PipelineNote"] as string ?? "")
-                + " One entry will stay visible to as few people as possible until the person who should decide answers.";
+                + " One entry stays private until the right person decides who sees it.";
         }
         return RedirectToPage();
     }
@@ -210,14 +252,18 @@ public class FrontDoorModel : PageModel
         // finding's rewrite verbatim; the other statuses get the same
         // form in plain words, because "done" for a send that did not
         // happen would be a false claim.
+        var personFirst = NameWording.First(
+            string.IsNullOrWhiteSpace(result.PersonName)
+                ? standInName.Replace("StandIn", "", StringComparison.OrdinalIgnoreCase)
+                : result.PersonName);
         TempData["TestSendNote"] = result.Status switch
         {
             "sent" =>
-                $"Test Send from Agent ({result.StandInName}): done. Any new entry appears in the record below.",
+                $"{personFirst}'s assistant sent a note. It's at the top of Recent.",
             "queued-unrecorded" or "unreachable" =>
-                $"Test Send from Agent ({result.StandInName}): the assistant cannot reach the house, so nothing appears here.",
+                $"{personFirst}'s assistant couldn't reach the house. Nothing was sent. Try again in a minute.",
             _ =>
-                $"Test Send from Agent ({result.StandInName}): that assistant is not connected to this house, so nothing was sent."
+                $"{personFirst}'s assistant isn't connected to this household."
         };
         return RedirectToPage();
     }
@@ -242,11 +288,13 @@ public class FrontDoorModel : PageModel
         {
             TempData["PendingDefaultRequestId"] = request.Id;
             TempData["PendingDefaultHolderId"] = holderPersonId;
-            TempData["DefaultNote"] = "Here is the change to check. Nothing is set until that person says yes.";
+            TempData["DefaultNote"] = "Check this change below. Nothing is set until you save it.";
         }
         else
         {
-            TempData["DefaultNote"] = "Saved as a suggestion for that person. Nothing changes; only they can set their own default.";
+            var holder = await _db.Persons.FirstOrDefaultAsync(p => p.Id == holderPersonId);
+            var holderFirst = NameWording.First(holder?.DisplayName);
+            TempData["DefaultNote"] = $"Only {holderFirst} can change {holderFirst}'s default. We'll pass your suggestion to {holderFirst}.";
         }
         return RedirectToPage();
     }
@@ -254,14 +302,14 @@ public class FrontDoorModel : PageModel
     public async Task<IActionResult> OnPostConfirmDefaultAsync(int requestId, int actorPersonId)
     {
         await _audience.ConfirmReadBackAsync(requestId, actorPersonId, DateTime.UtcNow);
-        TempData["DefaultNote"] = "Set. It applies to tellings from now on; nothing already written changes.";
+        TempData["DefaultNote"] = "Saved. This applies to new messages only.";
         return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostDeclineDefaultAsync(int requestId, int actorPersonId)
     {
         await _audience.DeclineReadBackAsync(requestId, actorPersonId, DateTime.UtcNow);
-        TempData["DefaultNote"] = "Not set. The default stays as it was.";
+        TempData["DefaultNote"] = "Not saved. The default stays as it was.";
         return RedirectToPage();
     }
 
@@ -274,28 +322,51 @@ public class FrontDoorModel : PageModel
         {
             await _audience.AnswerAskAsync(askId, actorPersonId, choice, null, DateTime.UtcNow);
             TempData["DefaultNote"] = choice == "Household"
-                ? "Answered. The entry is now shared with the whole house."
-                : "Answered. The entry stays visible to as few people as possible.";
+                ? "Saved. Everyone in the household can now see that entry."
+                : "Saved. Only the people it names can see that entry.";
         }
         return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostConfirmAsync(int eventId, int actorPersonId)
     {
-        await _confirmations.ConfirmAsync(eventId, actorPersonId, "tap");
+        try
+        {
+            await _confirmations.ConfirmAsync(eventId, actorPersonId, "tap");
+        }
+        catch (InvalidOperationException)
+        {
+            // A second click on an entry that has already moved on:
+            // the answer is a plain note, never the error page.
+            TempData["HouseReply"] = "Already confirmed.";
+            return RedirectToPage();
+        }
         var ev = await _db.Events.FirstAsync(e => e.Id == eventId);
         TempData["HouseReply"] = ev.ConfirmationState == ConfirmationState.Done
             ? SpokenTemplates.Done
             : "Confirmed.";
-        TempData["PipelineNote"] = "Confirmed by a person, in the open. The record shows who and when.";
+        var delivery = await _db.AlertDeliveries
+            .Include(d => d.ToPerson)
+            .FirstOrDefaultAsync(d => d.EventId == eventId);
+        TempData["PipelineNote"] = delivery?.ToPerson is not null
+            ? $"Sent to {NameWording.First(delivery.ToPerson.DisplayName)}."
+            : "Confirmed.";
         return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostDeclineAsync(int eventId, int actorPersonId)
     {
-        await _confirmations.DeclineAsync(eventId, actorPersonId, "tap");
+        try
+        {
+            await _confirmations.DeclineAsync(eventId, actorPersonId, "tap");
+        }
+        catch (InvalidOperationException)
+        {
+            TempData["HouseReply"] = "Already confirmed.";
+            return RedirectToPage();
+        }
         TempData["HouseReply"] = "Not sent.";
-        TempData["PipelineNote"] = "Declined by a person. It stays in the record as not confirmed, and nothing was sent.";
+        TempData["PipelineNote"] = "Not sent. It stays in the record, marked Not sent.";
         return RedirectToPage();
     }
 
@@ -306,6 +377,7 @@ public class FrontDoorModel : PageModel
         {
             return;
         }
+        HouseholdZone = HouseholdTime.ZoneFor(Household.TimeZoneId);
         People = await _db.Persons
             .Where(p => p.HouseholdId == Household.Id)
             .OrderBy(p => p.Id)
@@ -331,10 +403,12 @@ public class FrontDoorModel : PageModel
             {
                 Person = person,
                 Label = row is not null
-                    ? row.Value.ToString()
-                    : effective is not null
-                        ? $"{effective} (not yet set)"
-                        : "No default set"
+                    ? DefaultLabel(row.Value)
+                    : effective == AudienceDefaultValue.Ask
+                        ? "Ask each time (default for under-18s)"
+                        : effective is not null
+                            ? DefaultLabel(effective.Value)
+                            : "Not set yet"
             });
         }
         if (ViewerId is int reader)
@@ -342,4 +416,13 @@ public class FrontDoorModel : PageModel
             PendingAsks = await _audience.PendingAsksForAsync(reader, DateTime.UtcNow);
         }
     }
+
+    // The plain words a stored audience default is shown in.
+    private static string DefaultLabel(AudienceDefaultValue value) => value switch
+    {
+        AudienceDefaultValue.Private => "Just me and anyone I name",
+        AudienceDefaultValue.Household => "Everyone in the household",
+        AudienceDefaultValue.Ask => "Ask me each time",
+        _ => value.ToString()
+    };
 }

@@ -754,7 +754,7 @@ public static class NodeSuite
         var keystoreDanielBrief = await keystoreBriefs.BuildBriefAsync(2, keystoreToday);
         Check("Live authorship: the speaker can see her own telling, and no brief reads it as Daniel's claim",
             keystoreEvent is not null && BriefService.IsVisibleTo(keystoreEvent, 3)
-            && keystoreLisaBrief.Any(l => l.Text.Contains("Claimed by") && l.Text.Contains("get the milk"))
+            && keystoreLisaBrief.Any(l => l.Text.Contains("You claimed") && l.Text.Contains("get the milk"))
             && !keystoreDanielBrief.Any(l => l.Text.Contains("Claimed by Daniel") && l.Text.Contains("get the milk"))
             && !keystoreLisaBrief.Any(l => l.Text.Contains("Claimed by Daniel") && l.Text.Contains("get the milk")));
 
@@ -1686,6 +1686,101 @@ public static class NodeSuite
             requestAfterHouseDecline.Status == "Declined"
             && !await db.HouseConnections.AnyAsync(c => c.PersonId == 6));
 
+        // ---------- Surface wording: the banned words stay off the screens ----------
+        // "telling" as a screen noun and the phrase "by a person" are
+        // retired. The checks read what a visitor can meet: the page
+        // markup (comments stripped) and the string literals of the
+        // page models and the services whose words reach the screen.
+        var surfaceFiles = new[]
+        {
+            "Pages/FrontDoor.cshtml", "Pages/Timeline.cshtml", "Pages/Brief.cshtml",
+            "Pages/Member.cshtml", "Pages/Plans.cshtml", "Pages/Promises.cshtml",
+            "Pages/Connections.cshtml", "Pages/Error.cshtml", "Pages/NotFound.cshtml",
+            "Pages/Shared/_Layout.cshtml"
+        };
+        var markupClean = true;
+        foreach (var rel in surfaceFiles)
+        {
+            var path = FindSourceFile(rel);
+            if (path is null)
+            {
+                markupClean = false;
+                break;
+            }
+            var text = File.ReadAllText(path);
+            while (text.Contains("@*"))
+            {
+                var start = text.IndexOf("@*", StringComparison.Ordinal);
+                var end = text.IndexOf("*@", start, StringComparison.Ordinal);
+                if (end < 0) break;
+                text = text.Remove(start, end - start + 2);
+            }
+            if (text.Contains("telling", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("by a person", StringComparison.OrdinalIgnoreCase))
+            {
+                markupClean = false;
+            }
+        }
+        Check("Surface wording: no page markup carries the word telling or the phrase by a person",
+            markupClean);
+        var codeFiles = new[]
+        {
+            "Pages/FrontDoor.cshtml.cs", "Pages/Timeline.cshtml.cs", "Pages/Brief.cshtml.cs",
+            "Pages/Member.cshtml.cs", "Pages/Plans.cshtml.cs", "Pages/Promises.cshtml.cs",
+            "Pages/Connections.cshtml.cs", "Data/ConfirmationWording.cs",
+            "Services/BriefService.cs", "Services/MemberDeliveryService.cs",
+            "Services/DoorService.cs", "Services/LookupService.cs",
+            "Services/AudienceDecisionService.cs"
+        };
+        var literalsClean = true;
+        foreach (var rel in codeFiles)
+        {
+            var path = FindSourceFile(rel);
+            if (path is null)
+            {
+                literalsClean = false;
+                break;
+            }
+            foreach (var literal in StringLiteralsOf(path))
+            {
+                // A bare "telling" as a stored channel value (the
+                // same family as "tap" and "voice") is internal
+                // data, never screen wording; any longer literal
+                // carrying the word fails.
+                if ((literal.Contains("telling", StringComparison.OrdinalIgnoreCase)
+                        && literal.Trim() != "telling")
+                    || literal.Contains("by a person", StringComparison.OrdinalIgnoreCase))
+                {
+                    literalsClean = false;
+                }
+            }
+        }
+        Check("Surface wording: no user-facing string literal carries the word telling or the phrase by a person",
+            literalsClean);
+        Check("Surface wording: the one pending phrase is Needs confirmation",
+            HomeNode.Data.ConfirmationWording.For(HomeNode.Data.ConfirmationState.Proposed)
+                == "Needs confirmation");
+        var layoutPath = FindSourceFile("Pages/Shared/_Layout.cshtml");
+        var layoutText = layoutPath is null ? "" : File.ReadAllText(layoutPath);
+        // The rail only: the mobile bottom bar's labels are a later
+        // batch's work and are not judged by this check.
+        var railText = layoutText.Split("<nav class=\"app-bottombar\"")[0];
+        Check("Surface wording: the shell names the pages Briefing, Inbox, Timeline, and Home, and none of the retired names",
+            railText.Contains(">Briefing<") && railText.Contains(">Inbox<")
+            && railText.Contains(">Timeline<") && railText.Contains(">Home<")
+            && !railText.Contains("Daily Summary") && !railText.Contains("Private Inbox")
+            && !railText.Contains("Family timeline"));
+        var connectionsMarkupPath = FindSourceFile("Pages/Connections.cshtml");
+        var connectionsMarkup = connectionsMarkupPath is null ? "" : File.ReadAllText(connectionsMarkupPath);
+        var connectionsCodePath = FindSourceFile("Pages/Connections.cshtml.cs");
+        var connectionsCode = connectionsCodePath is null ? "" : File.ReadAllText(connectionsCodePath);
+        Check("Door page: the Connections unlock is a POST and the house secret rides in no hidden field, query, or redirect",
+            connectionsMarkup.Contains("asp-page-handler=\"Unlock\"")
+            && !connectionsMarkup.Contains("type=\"hidden\" name=\"houseSecret\"")
+            && !connectionsMarkup.Contains("method=\"get\"")
+            && !connectionsCode.Contains("houseSecret = PresentedHouseSecret")
+            && !connectionsCode.Contains("Request.Query"));
+
         // ---------- Door name matching is exact ----------
         var allPeople = await db.Persons.OrderBy(p => p.Id).ToListAsync();
         Check("Exact name matching: person lookup by name is exact: a full name or a first name matches; a prefix, a single letter, an empty string, and an unknown name match nobody",
@@ -2060,6 +2155,64 @@ public static class NodeSuite
             if (File.Exists(nested)) return nested;
         }
         return null;
+    }
+
+    // Any source file in the HomeNode tree, found the same way
+    // the Connections page is found below.
+    private static string? FindSourceFile(string relative)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var i = 0; i < 10 && dir is not null; i++, dir = dir.Parent)
+        {
+            var direct = Path.Combine(dir.FullName, relative);
+            if (File.Exists(direct)) return direct;
+            var nested = Path.Combine(dir.FullName, "src", "HomeNode", relative);
+            if (File.Exists(nested)) return nested;
+        }
+        return null;
+    }
+
+    // The user-facing string literals in a C# file: the text between
+    // quotes on lines that are not comments. Banned-word checks run
+    // over these, never over the file's comments, which may discuss
+    // the words without ever showing them to a visitor.
+    private static List<string> StringLiteralsOf(string path)
+    {
+        var literals = new List<string>();
+        foreach (var line in File.ReadAllLines(path))
+        {
+            var trimmed = line.TrimStart();
+            if (trimmed.StartsWith("//"))
+            {
+                continue;
+            }
+            var inString = false;
+            var current = new System.Text.StringBuilder();
+            for (var i = 0; i < line.Length; i++)
+            {
+                var c = line[i];
+                if (inString && c == '\\' && i + 1 < line.Length)
+                {
+                    current.Append(line[++i]);
+                    continue;
+                }
+                if (c == '"')
+                {
+                    if (inString)
+                    {
+                        literals.Add(current.ToString());
+                        current.Clear();
+                    }
+                    inString = !inString;
+                    continue;
+                }
+                if (inString)
+                {
+                    current.Append(c);
+                }
+            }
+        }
+        return literals;
     }
 
     // The Connections page markup, for the page invite form check: the

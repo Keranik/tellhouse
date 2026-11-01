@@ -32,10 +32,24 @@ public class MemberModel : PageModel
     public Person? Member { get; private set; }
     public List<MemberDeliveryItem> Received { get; private set; } = new();
 
+    // The household zone inbox times are shown in.
+    public TimeZoneInfo HouseholdZone { get; private set; } =
+        TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+
     public async Task OnGetAsync(int? personId)
     {
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
-        var id = personId ?? People.FirstOrDefault()?.Id;
+        var household = await _db.Households.FirstOrDefaultAsync();
+        if (household is not null)
+        {
+            HouseholdZone = HouseholdTime.ZoneFor(household.TimeZoneId);
+        }
+        // The inbox defaults to Daniel, who holds the seeded alert,
+        // so the page never opens on an empty inbox by accident.
+        var id = personId
+            ?? People.FirstOrDefault(
+                p => p.DisplayName.StartsWith("Daniel", StringComparison.Ordinal))?.Id
+            ?? People.FirstOrDefault()?.Id;
         Member = People.FirstOrDefault(p => p.Id == id);
         if (Member is not null)
         {

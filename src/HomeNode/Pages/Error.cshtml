@@ -1,17 +1,22 @@
 @page
 @model ErrorModel
 @{
-    ViewData["Title"] = "Error";
+    ViewData["Title"] = "Something went wrong";
 }
 
-<h1 class="text-danger">Error.</h1>
-<h2 class="text-danger">An error occurred while processing your request.</h2>
+<h1>Something went wrong</h1>
+<p>That didn't go through. Go back and try again.</p>
+
+<p>
+    <a href="javascript:history.back()">Go back</a>
+    <a asp-page="/FrontDoor">Home</a>
+</p>
 
 @if (Model.ShowRequestId)
 {
     <p>
-        Reference (quote this if you report the problem): <code>@Model.RequestId</code>
+        Reference: <code>@Model.RequestId</code>
     </p>
 }
 
-<p>Nothing was saved by the request that failed. Please try again, or go back and start over.</p>
+<p>Nothing was changed by the request that failed.</p>

@@ -82,7 +82,7 @@ public static class DbSeeder
                 HouseholdId = household.Id, HolderPersonId = lisa.Id, RequestedByPersonId = lisa.Id,
                 Value = AudienceDefaultValue.Private, State = AudienceDefaultRequestState.Applied,
                 TellingText = "Set the audience default to Private.",
-                ReadBackText = "You are setting your audience default to Private. Your unspecified tellings will resolve to just you, plus anyone the shape of the telling names. Say yes to set it, or no to leave it as it is.",
+                ReadBackText = "From now on, messages where you don't name anyone will be seen by just you and anyone you name.",
                 Channel = "tap", CreatedAtUtc = seedNow, DisposedByPersonId = lisa.Id, DisposedAtUtc = seedNow
             },
             new AudienceDefaultRequest
@@ -99,7 +99,7 @@ public static class DbSeeder
         // person's own words, the schedules a person set, and the
         // household glossary.
         db.AlertLevels.AddRange(
-            new AlertLevel { HouseholdId = household.Id, LevelKey = "now", Label = "Tell Daniel now", RouteToPersonId = daniel.Id, BackupPersonId = lisa.Id },
+            new AlertLevel { HouseholdId = household.Id, LevelKey = "now", Label = "Right away", RouteToPersonId = daniel.Id, BackupPersonId = lisa.Id },
             new AlertLevel { HouseholdId = household.Id, LevelKey = "brief", Label = "Put it in the brief" },
             new AlertLevel { HouseholdId = household.Id, LevelKey = "here", Label = "Just keep it here" }
         );
@@ -116,7 +116,7 @@ public static class DbSeeder
         var pads = new SupplyItem { HouseholdId = household.Id, Name = "pads", Unit = "pad", QuantityOnHand = 18m, SeededDailyUsageRate = 4m, ReorderLeadDays = 3, AssignedPersonId = lisa.Id, Aliases = """["pads","the big pads"]""" };
         var wipes = new SupplyItem { HouseholdId = household.Id, Name = "wipes", Unit = "wipe", QuantityOnHand = 12m, SeededDailyUsageRate = 5m, ReorderLeadDays = 2, AssignedPersonId = daniel.Id, Aliases = """["wipes","the wipes"]""" };
         var gauze = new SupplyItem { HouseholdId = household.Id, Name = "gauze", Unit = "dressing", QuantityOnHand = 1m, SeededDailyUsageRate = 1m, ReorderLeadDays = 2, AssignedPersonId = daniel.Id, Aliases = """["gauze"]""" };
-        var heartPills = new SupplyItem { HouseholdId = household.Id, Name = "heart pills (morning)", Unit = "pill", QuantityOnHand = 7m, SeededDailyUsageRate = 1m, ReorderLeadDays = 7, AssignedPersonId = lisa.Id, Aliases = """["heart pills","morning ones"]""" };
+        var heartPills = new SupplyItem { HouseholdId = household.Id, Name = "heart pills", Unit = "pill", QuantityOnHand = 7m, SeededDailyUsageRate = 1m, ReorderLeadDays = 7, AssignedPersonId = lisa.Id, Aliases = """["heart pills","morning ones"]""" };
         db.SupplyItems.AddRange(pads, wipes, gauze, heartPills);
         db.SaveChanges();
 
@@ -235,7 +235,7 @@ public static class DbSeeder
                 HouseholdId = household.Id, SubjectPersonId = margaret.Id, AuthorPersonId = june.Id,
                 Type = EventType.HouseholdNote, CreatedAtUtc = DemoDay(13, 15),
                 ConfirmationState = ConfirmationState.Confirmed,
-                Body = "June arrived. Getting dressed notes opened."
+                Body = "June arrived and opened the getting dressed notes."
             },
             // 2:55 PM. Daniel is home, five minutes ahead of the
             // morning's promise. A commitment on the timeline, kept on

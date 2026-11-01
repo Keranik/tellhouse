@@ -28,6 +28,45 @@ public class LookupService
         @"\b(take|skip|stop taking)\b[^.]*\b(pill|pills|ones|medicine|extra)\b",
         RegexOptions.IgnoreCase);
 
+    // The same lookup in parts, for a surface that renders the answer
+    // in its own layout (name, household time, the person's words).
+    // Null when the record holds no answer the asker may hear; a
+    // refusal and an absence return the same null, exactly as the
+    // spoken form returns the same sentence for both.
+    public async Task<(string FirstName, DateTime StatedLocal, string Body)?> AnswerWhereaboutsPartsAsync(
+        int askerPersonId, int subjectPersonId)
+    {
+        var subject = await _db.Persons.FirstOrDefaultAsync(p => p.Id == subjectPersonId);
+        if (subject is null)
+        {
+            return null;
+        }
+        var candidates = await _db.Events
+            .Where(e => e.HouseholdId == subject.HouseholdId
+                        && e.Type == EventType.Whereabouts
+                        && e.SubjectPersonId == subjectPersonId
+                        && (e.ConfirmationState == ConfirmationState.Confirmed
+                            || e.ConfirmationState == ConfirmationState.Done))
+            .OrderByDescending(e => e.CreatedAtUtc)
+            .ToListAsync();
+        foreach (var ev in candidates)
+        {
+            if (ev.Type == EventType.HealthMention || TakingInstruction.IsMatch(ev.Body))
+            {
+                continue;
+            }
+            if (!BriefService.IsVisibleTo(ev, askerPersonId))
+            {
+                continue;
+            }
+            var household = await _db.Households.FirstAsync(h => h.Id == subject.HouseholdId);
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(household.TimeZoneId ?? "America/Chicago");
+            var stated = TimeZoneInfo.ConvertTimeFromUtc(ev.CreatedAtUtc, tz);
+            return (subject.DisplayName.Split(' ')[0], stated, ev.Body);
+        }
+        return null;
+    }
+
     public async Task<string> AnswerWhereaboutsAsync(int askerPersonId, int subjectPersonId)
     {
         var subject = await _db.Persons.FirstOrDefaultAsync(p => p.Id == subjectPersonId);

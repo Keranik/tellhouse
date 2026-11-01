@@ -121,11 +121,11 @@ public class DoorService
     {
         if (invite.UsedAtUtc is not null)
         {
-            throw new InvalidOperationException("That invite has already been used; it is spent.");
+            throw new InvalidOperationException("That code has already been used.");
         }
         if (invite.ExpiresAtUtc <= DateTime.UtcNow)
         {
-            throw new InvalidOperationException("That invite has lapsed. A fresh invite is needed.");
+            throw new InvalidOperationException("That code has expired. Create a new one.");
         }
         invite.UsedAtUtc = DateTime.UtcNow;
         var request = new JoinRequest
@@ -171,7 +171,7 @@ public class DoorService
         var request = await _db.JoinRequests
             .Include(r => r.DoorInvite).ThenInclude(i => i!.InviterPerson)
             .FirstOrDefaultAsync(r => r.Id == joinRequestId)
-            ?? throw new InvalidOperationException($"Join request {joinRequestId} does not exist.");
+            ?? throw new InvalidOperationException("That request no longer exists. Refresh the page.");
         var level = request.DoorInvite!.Level;
         return new InviterCard(
             request.Id,
@@ -189,8 +189,8 @@ public class DoorService
 
     public static string LevelConsequencesFor(string level) => level switch
     {
-        "Standard" => "Can leave short notes and ask questions at this level, and receive what is addressed to them. Cannot see health related entries, invite others, or change anyone's access.",
-        "KnockOnly" => "Can send a join or re-confirmation request and nothing else. No notes, no questions, nothing delivered.",
+        "Standard" => "Can send notes and questions and receive messages addressed to them. Can't see health entries, invite people, or change access.",
+        "KnockOnly" => "Can send a join request and nothing else. No notes, no questions, nothing delivered.",
         _ => $"Level {level}, as the inviter named it. The house enforces this person's permissions on every request at this level."
     };
 
@@ -204,11 +204,13 @@ public class DoorService
         var request = await LoadPendingAsync(joinRequestId);
         if (request.DoorInvite!.InviterPersonId != inviterPersonId)
         {
-            throw new InvalidOperationException("Only the named inviter can confirm this join.");
+            throw new InvalidOperationException(
+                $"Only {NameWording.First(request.DoorInvite.InviterPerson?.DisplayName)}, who sent the invite, can approve this.");
         }
         if (!string.Equals(request.CheckPhrase, checkPhraseHeard.Trim(), StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("The check phrase does not match. This is not that person's request.");
+            throw new InvalidOperationException(
+                $"That phrase doesn't match. Don't approve; this request may not be from {NameWording.First(request.ClaimedName)}.");
         }
         // Re-enrollment replaces, never duplicates: a
         // member who joins again with a new key takes over the one
@@ -281,7 +283,8 @@ public class DoorService
         var request = await LoadPendingAsync(joinRequestId);
         if (request.DoorInvite!.InviterPersonId != inviterPersonId)
         {
-            throw new InvalidOperationException("Only the named inviter can decline this join.");
+            throw new InvalidOperationException(
+                $"Only {NameWording.First(request.DoorInvite?.InviterPerson?.DisplayName)}, who sent the invite, can decline this.");
         }
         request.Status = "Declined";
         request.DecidedByPersonId = inviterPersonId;
@@ -397,12 +400,12 @@ public class DoorService
     private async Task<JoinRequest> LoadPendingAsync(int joinRequestId)
     {
         var request = await _db.JoinRequests
-            .Include(r => r.DoorInvite)
+            .Include(r => r.DoorInvite).ThenInclude(i => i!.InviterPerson)
             .FirstOrDefaultAsync(r => r.Id == joinRequestId)
-            ?? throw new InvalidOperationException($"Join request {joinRequestId} does not exist.");
+            ?? throw new InvalidOperationException("That request no longer exists. Refresh the page.");
         if (request.Status != "Pending")
         {
-            throw new InvalidOperationException($"Join request {joinRequestId} is already {request.Status}.");
+            throw new InvalidOperationException("That request has already been answered. Refresh the page.");
         }
         return request;
     }

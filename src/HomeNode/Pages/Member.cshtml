@@ -1,35 +1,42 @@
 @page "/Member"
 @model HomeNode.Pages.MemberModel
 @{
-    ViewData["Title"] = "Private Inbox";
+    ViewData["Title"] = "Inbox";
+    var memberFirst = HomeNode.Data.NameWording.First(Model.Member?.DisplayName);
 }
 
-<h1>Private Inbox</h1>
-<p>Pick a person to see their private inbox: the alerts and plan
-   updates delivered to them, and nothing delivered to anyone else.
-   Open it when you want to check what arrived for someone, or to
-   acknowledge an alert.</p>
-<p class="note-panel"><strong>Demo note:</strong> on this one computer, this view stands in for
-   delivery. In the product design, a routed telling reaches a person
-   through their own assistant, in their own channel; that delivery
-   is not part of this demo.</p>
+@if (Model.Member is not null)
+{
+    <h1>@memberFirst's inbox</h1>
+    <p>Messages Tellhouse delivered to @memberFirst. Only @memberFirst sees these.</p>
+    <p class="note-panel">In the full product, these reach @memberFirst through @memberFirst's own assistant. In this demo, you see them here.</p>
+}
+else
+{
+    <h1>Inbox</h1>
+}
 
 <form method="get">
     <label>
-        Whose inbox?
-        <select name="personId">
+        Viewing as
+        <select name="personId" onchange="this.form.submit()">
             @foreach (var person in Model.People)
             {
-                <option value="@person.Id" selected="@(Model.Member?.Id == person.Id)">@person.DisplayName</option>
+                if (Model.Member?.Id == person.Id)
+                {
+                    <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                }
+                else
+                {
+                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                }
             }
         </select>
     </label>
-    <button type="submit">Show</button>
 </form>
 
 @if (Model.Member is not null)
 {
-    <h2>Private inbox for @Model.Member.DisplayName</h2>
     @if (Model.Received.Count == 0)
     {
         <p>Nothing has been delivered to this person's inbox yet.</p>
@@ -38,8 +45,19 @@
         @foreach (var item in Model.Received)
         {
             <li class="record-item">
-                <strong>@item.Source:</strong> @item.Text
-                <br />@item.Note
+                @if (item.Source == "Alert" && item.AuthorName is not null)
+                {
+                    <strong>From @HomeNode.Data.NameWording.First(item.AuthorName) · @HomeNode.Data.HouseholdTime.Time(item.AtUtc, Model.HouseholdZone)</strong>
+                    <text> — &ldquo;@item.Text&rdquo;</text>
+                }
+                else
+                {
+                    <strong>@item.Source:</strong> @item.Text
+                    @if (!string.IsNullOrEmpty(item.Note))
+                    {
+                        <br />@item.Note
+                    }
+                }
                 @if (item.Provenance is not null)
                 {
                     <br />@item.Provenance
@@ -48,14 +66,14 @@
                 {
                     if (item.ClosedAtUtc is DateTime closedAt)
                     {
-                        <br /><span>Acknowledged @closedAt.ToString("MMM d, h:mm tt").</span>
+                        <br /><span>Seen @HomeNode.Data.HouseholdTime.Time(closedAt, Model.HouseholdZone)</span>
                     }
                     else
                     {
                         <form method="post" asp-page-handler="Acknowledge">
                             <input type="hidden" name="deliveryId" value="@deliveryId" />
                             <input type="hidden" name="personId" value="@Model.Member.Id" />
-                            <button type="submit">Acknowledge</button>
+                            <button type="submit">Mark as seen</button>
                         </form>
                     }
                 }

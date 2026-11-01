@@ -1,17 +1,15 @@
 @page "/Timeline"
 @model HomeNode.Pages.TimelineModel
 @{
-    ViewData["Title"] = "Family timeline";
+    ViewData["Title"] = "Timeline";
 }
 
-<h1>Family timeline</h1>
-<p>The shared record for the house, newest first, in the view of the
-   reader named below. Picking a name in this demo shows that person's
-   view; entries for named people appear only there.</p>
+<h1>Timeline</h1>
+<p>Everything the household has told Tellhouse, newest first.</p>
 
 <form method="get">
     <label>
-        Acting as
+        Viewing as
         <select name="ActorId" onchange="this.form.submit()">
             @if (Model.ActorId is null)
             {
@@ -25,11 +23,11 @@
             {
                 if (Model.ActorId == person.Id)
                 {
-                    <option value="@person.Id" selected>@person.DisplayName</option>
+                    <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
                 else
                 {
-                    <option value="@person.Id">@person.DisplayName</option>
+                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
             }
         </select>
@@ -51,12 +49,12 @@ else
     <table class="table">
         <thead>
             <tr>
-                <th>When</th>
-                <th>Added by</th>
+                <th>Entry</th>
+                <th>From</th>
                 <th>About</th>
-                <th>Kind</th>
-                <th>Words</th>
-                <th>State</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>When</th>
                 <th></th>
             </tr>
         </thead>
@@ -64,10 +62,6 @@ else
             @foreach (var item in Model.Events)
             {
                 <tr>
-                    <td>@Model.ToHouseholdTime(item.CreatedAtUtc).ToString("MMM d, h:mm tt")</td>
-                    <td>@(item.AuthorPerson?.DisplayName ?? "Told to the house")</td>
-                    <td>@(item.SubjectPerson?.DisplayName ?? "")</td>
-                    <td>@HomeNode.Data.EventKindWording.For(item.Type)</td>
                     <td>
                         @item.Body
                         @if (HomeNode.Services.ProvenanceRendering.Describe(item) is { } provenance)
@@ -75,13 +69,20 @@ else
                             <br />@provenance
                         }
                     </td>
+                    <td>@HomeNode.Data.NameWording.First(item.AuthorPerson?.DisplayName ?? "The house")</td>
+                    <td>@HomeNode.Data.NameWording.First(item.SubjectPerson?.DisplayName)</td>
+                    <td>@HomeNode.Data.EventKindWording.For(item.Type)</td>
                     <td>
-                        @HomeNode.Data.ConfirmationWording.For(item.ConfirmationState)
-                        @if (item.RecordPending)
+                        @if (item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
                         {
-                            <text><br />Not yet closed by a person</text>
+                            <span class="state-action">@HomeNode.Data.ConfirmationWording.For(item.ConfirmationState)</span>
+                        }
+                        else
+                        {
+                            @Model.StateText(item)
                         }
                     </td>
+                    <td>@Model.ToHouseholdTime(item.CreatedAtUtc).ToString("MMM d, h:mm tt")</td>
                     <td>
                         @if (Model.ActorId is not null && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed && !item.RecordPending)
                         {
@@ -93,7 +94,7 @@ else
                             <form method="post" asp-page-handler="Decline">
                                 <input type="hidden" name="eventId" value="@item.Id" />
                                 <input type="hidden" name="actorId" value="@Model.ActorId" />
-                                <button type="submit">Decline</button>
+                                <button type="submit">Don't send</button>
                             </form>
                         }
                         else if (Model.ActorId is not null && item.RecordPending && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
@@ -101,7 +102,7 @@ else
                             <form method="post" asp-page-handler="Close">
                                 <input type="hidden" name="eventId" value="@item.Id" />
                                 <input type="hidden" name="actorId" value="@Model.ActorId" />
-                                <button type="submit">Close and confirm this entry</button>
+                                <button type="submit">Confirm</button>
                             </form>
                         }
                     </td>
@@ -115,16 +116,13 @@ else
 @if (Model.Deliveries.Count > 0)
 {
     <div class="panel panel-table">
-    <h2>Delivered to this reader</h2>
-    <p>Deliveries for the person named above, in the words that were
-       confirmed. Picking that person's name in this demo shows this
-       list.</p>
+    <h2>Delivered to @HomeNode.Data.NameWording.First(Model.People.FirstOrDefault(p => p.Id == Model.ActorId)?.DisplayName)</h2>
     <table class="table">
         <thead>
             <tr>
                 <th>When</th>
                 <th>To</th>
-                <th>Words carried, word for word</th>
+                <th>Message</th>
             </tr>
         </thead>
         <tbody>
@@ -132,7 +130,7 @@ else
             {
                 <tr>
                     <td>@Model.ToHouseholdTime(delivery.DeliveredAtUtc).ToString("MMM d, h:mm tt")</td>
-                    <td>@(delivery.ToPerson?.DisplayName ?? "")</td>
+                    <td>@HomeNode.Data.NameWording.First(delivery.ToPerson?.DisplayName)</td>
                     <td>
                         @delivery.BodyText
                         @if (delivery.Event is not null && HomeNode.Services.ProvenanceRendering.Describe(delivery.Event) is { } deliveryProvenance)
@@ -163,18 +161,18 @@ else
                 <th>On hand</th>
                 <th>Runs out</th>
                 <th>Order by</th>
-                <th>Orders it</th>
+                <th>Who orders</th>
             </tr>
         </thead>
         <tbody>
             @foreach (var item in Model.Supplies)
             {
                 <tr>
-                    <td>@item.Name</td>
-                    <td>@item.QuantityOnHand @item.Unit</td>
+                    <td>@Model.SupplyName(item)</td>
+                    <td>@Model.HandText(item)</td>
                     <td>@(item.GetRunOutDate(today) == DateOnly.MaxValue ? "" : item.GetRunOutDate(today).ToString("MMM d"))</td>
                     <td>@(item.GetOrderByDate(today) == DateOnly.MaxValue ? "" : item.GetOrderByDate(today).ToString("MMM d"))</td>
-                    <td>@(item.AssignedPerson?.DisplayName ?? "")</td>
+                    <td>@HomeNode.Data.NameWording.First(item.AssignedPerson?.DisplayName)</td>
                 </tr>
             }
         </tbody>

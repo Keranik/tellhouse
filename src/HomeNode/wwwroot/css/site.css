@@ -399,7 +399,7 @@ textarea:focus-visible, input:focus-visible,
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: none;
   text-align: left;
   padding: 0.6rem 0.7rem;
   border-bottom: 1px solid var(--border-panel);
@@ -509,6 +509,22 @@ textarea:focus-visible, input:focus-visible,
 
 .record-meta .state { color: var(--accent); font-weight: 600; }
 
+.record-meta .state { color: inherit; font-weight: inherit; }
+.record-meta .state-action, .state-action { color: var(--accent); font-weight: 600; }
+.chip-action {
+  display: inline-block;
+  color: var(--accent);
+  font-weight: 600;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+  font-size: 0.82rem;
+}
+
+.muted-note { color: var(--muted); font-size: 0.9rem; margin-top: 0.5rem; }
+.inline-form { display: inline-block; margin-left: 0.5rem; }
+.reply-echo { font-style: italic; }
+
 /* ---------- Reduced motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -531,10 +547,19 @@ textarea:focus-visible, input:focus-visible,
    Above the breakpoint none of this exists: the fixed
    rail is the only navigation. */
 
-/* Desktop: the mobile furniture is not rendered at all. */
+/* Desktop: the mobile furniture is not rendered at all. The
+   household name stays visible under the wordmark, and the
+   top bar does not repeat the page title. */
 .app-drawer-toggle { display: none; }
 .app-bottombar { display: none; }
-.app-brand-house { display: none; }
+.app-brand-house {
+  display: block;
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: 0.1rem;
+}
+.app-topbar-title { display: none; }
 .app-nav-divider { display: none; }
 .app-scrim { display: none; }
 
@@ -627,7 +652,7 @@ textarea:focus-visible, input:focus-visible,
     justify-content: flex-start;
     min-height: 56px;
   }
-  .app-topbar-title { margin-right: auto; }
+  .app-topbar-title { display: block; margin-right: auto; }
 
   .app-drawer-toggle {
     display: inline-flex;

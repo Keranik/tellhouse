@@ -1,5 +1,6 @@
 using HomeNode.Data;
 using HomeNode.Services;
+using HomeNode.Services.Extraction;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
@@ -35,14 +36,20 @@ public class BriefModel : PageModel
     public async Task<IActionResult> OnGetAsync()
     {
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
-        // A brief belongs to one named person. With no reader
-        // named there is no brief at all: the page shows the
-        // reader picker and a plain note, never the first person's
-        // brief. That default handed a bare visit the first
-        // person's full view, Restricted entries included.
+        // A briefing belongs to one named person. With no reader
+        // named, the page defaults to Daniel, the household's
+        // route person, so it never opens empty; naming anyone
+        // else in the picker shows that person's briefing instead.
         if (PersonId is not int viewerId)
         {
-            return Page();
+            var daniel = People.FirstOrDefault(
+                p => p.DisplayName.StartsWith("Daniel", StringComparison.Ordinal));
+            if (daniel is null)
+            {
+                return Page();
+            }
+            viewerId = daniel.Id;
+            PersonId = daniel.Id;
         }
         // An id that names nobody in the house is a 404, never a
         // 500: ordinary bad input gets an ordinary
@@ -73,7 +80,10 @@ public class BriefModel : PageModel
 
     public async Task<IActionResult> OnPostLookupAsync(int askerPersonId, int subjectPersonId)
     {
-        TempData["LookupAnswer"] = await _lookup.AnswerWhereaboutsAsync(askerPersonId, subjectPersonId);
+        var parts = await _lookup.AnswerWhereaboutsPartsAsync(askerPersonId, subjectPersonId);
+        TempData["LookupAnswer"] = parts is { } answer
+            ? $"{answer.FirstName} · {answer.StatedLocal:h:mm tt} · \"{answer.Body}\""
+            : SpokenTemplates.DoNotKnow;
         return RedirectToPage(new { PersonId = askerPersonId });
     }
 }

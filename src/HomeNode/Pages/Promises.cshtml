@@ -5,10 +5,7 @@
 }
 
 <h1>My Claims</h1>
-<p>Things a person has taken on themselves, in their own words, kept
-   as a record in its own right. Nobody is handed a claim: a person
-   takes it on themselves. A claim is settled only when a person
-   says so, in words that join the record.</p>
+<p>What people in the household have said they'll do, in their own words.</p>
 
 @if (Model.Note is not null)
 {
@@ -17,30 +14,26 @@
 
 <form method="get">
     <label>
-        Reading as
+        Viewing as
         <select name="ViewerId" onchange="this.form.submit()">
             <option value="">No reader named (house entries only)</option>
             @foreach (var person in Model.People)
             {
                 if (Model.ViewerId == person.Id)
                 {
-                    <option value="@person.Id" selected>@person.DisplayName</option>
+                    <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
                 else
                 {
-                    <option value="@person.Id">@person.DisplayName</option>
+                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
             }
         </select>
     </label>
 </form>
-<p>Claims are listed only for the reader named here, and only the
-   ones that reader is meant to see, as set when each claim was
-   recorded.</p>
-
 @if (Model.Promises.Count == 0)
 {
-    <p>No claims on the record yet.</p>
+    <p>No claims yet. When someone says &ldquo;I'll&hellip;&rdquo;, it shows up here.</p>
 }
 else
 {
@@ -48,51 +41,58 @@ else
     <table class="table">
         <thead>
             <tr>
-                <th>Claimed by</th>
                 <th>Claim</th>
-                <th>For whom</th>
+                <th>By</th>
+                <th>For</th>
                 <th>Due</th>
                 <th>Status</th>
-                <th>Settle</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
             @foreach (var promise in Model.Promises)
             {
                 <tr>
-                    <td>@(promise.PromisorPerson?.DisplayName ?? "")</td>
                     <td>@promise.CommitmentText</td>
-                    <td>@(promise.PromiseePerson?.DisplayName ?? "The house")</td>
-                    <td>@(promise.DueText ?? "")</td>
+                    <td>@HomeNode.Data.NameWording.First(promise.PromisorPerson?.DisplayName)</td>
+                    <td>@(promise.PromiseePerson is null ? "Household" : HomeNode.Data.NameWording.First(promise.PromiseePerson.DisplayName))</td>
+                    <td>@(promise.DueAtLocal is { } dueAt ? dueAt.ToString("MMM d, h:mm tt") : promise.DueText ?? "")</td>
                     <td>
                         @switch (promise.State)
                         {
                             case HomeNode.Data.PromiseState.Made:
-                                <text>Still open</text>
+                                <text>Open</text>
                                 break;
                             case HomeNode.Data.PromiseState.Kept:
-                                <text>Done, closed by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                <text>Done &middot; &ldquo;@(promise.ClosedByEvent?.Body ?? "")&rdquo; &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } keptAt ? HomeNode.Data.HouseholdTime.Time(keptAt, Model.HouseholdZone) : "")</text>
                                 break;
                             case HomeNode.Data.PromiseState.Broken:
-                                <text>Still unclaimed, closed by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                <text>Closed &middot; still unclaimed &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } brokenAt ? HomeNode.Data.HouseholdTime.Time(brokenAt, Model.HouseholdZone) : "")</text>
+                                if (promise.ClosedByEvent?.Body is { } brokenWords)
+                                {
+                                    <br /><text>In their words: &ldquo;@brokenWords&rdquo;</text>
+                                }
                                 break;
                             case HomeNode.Data.PromiseState.Released:
-                                <text>Released by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                <text>Released &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } releasedAt ? HomeNode.Data.HouseholdTime.Time(releasedAt, Model.HouseholdZone) : "")</text>
+                                if (promise.ClosedByEvent?.Body is { } releasedWords)
+                                {
+                                    <br /><text>In their words: &ldquo;@releasedWords&rdquo;</text>
+                                }
                                 break;
                         }
                     </td>
                     <td>
                         @if (promise.State == HomeNode.Data.PromiseState.Made)
                         {
-                            <p>Settle a claim only in your own name, with the words that were actually said.</p>
                             <form method="post" asp-page-handler="Close" data-promisor="@promise.PromisorPersonId" data-promisee="@(promise.PromiseePersonId?.ToString() ?? "")">
                                 <input type="hidden" name="promiseId" value="@promise.Id" />
                                 <label>
-                                    Settled by
+                                    Closed by
                                     <select name="closerPersonId">
                                         @foreach (var person in Model.People)
                                         {
-                                            <option value="@person.Id">@person.DisplayName</option>
+                                            <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                                         }
                                     </select>
                                 </label>
@@ -105,10 +105,10 @@ else
                                     </select>
                                 </label>
                                 <label>
-                                    The closing words
-                                    <input type="text" name="closingWords" placeholder="What the person said" />
+                                    In their words
+                                    <input type="text" name="closingWords" placeholder="e.g., &quot;Home, like I said this morning.&quot;" />
                                 </label>
-                                <button type="submit">Settle this claim</button>
+                                <button type="submit">Close claim</button>
                             </form>
                         }
                     </td>

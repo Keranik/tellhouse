@@ -644,9 +644,8 @@ public class AudienceDecisionService
         {
             request.State = AudienceDefaultRequestState.ProposalWaiting;
             request.ReadBackText =
-                $"Recorded as a proposal to {holderFirst}: the audience default {value}, " +
-                $"proposed by {requester.DisplayName.Split(' ')[0]}. It is not applied. " +
-                $"Only {holderFirst} can set it, by their own telling.";
+                $"Only {holderFirst} can change {holderFirst}'s default. " +
+                $"We'll pass your suggestion to {holderFirst}.";
         }
         else
         {
@@ -654,18 +653,14 @@ public class AudienceDecisionService
             request.ReadBackText = value switch
             {
                 AudienceDefaultValue.Private =>
-                    "You are setting your audience default to Private. Your unspecified tellings " +
-                    "will resolve to just you, plus anyone the shape of the telling names. " +
-                    "Say yes to set it, or no to leave it as it is.",
+                    "From now on, messages where you don't name anyone will be seen by " +
+                    "just you and anyone you name.",
                 AudienceDefaultValue.Household =>
-                    "You are setting your audience default to Household. Your unspecified tellings " +
-                    "will stay at the shape's own audience, up to the household, and no wider. " +
-                    "Say yes to set it, or no to leave it as it is.",
+                    "From now on, messages where you don't name anyone will be seen by " +
+                    "everyone in the household.",
                 AudienceDefaultValue.Ask =>
-                    "You are setting your audience default to Ask. Before the audience of one of " +
-                    "your unspecified tellings is set, the house will ask you, and will hold the " +
-                    "telling at its narrowest audience until you answer. " +
-                    "Say yes to set it, or no to leave it as it is.",
+                    "From now on, when one of your messages doesn't name anyone, " +
+                    "Tellhouse will ask you who should see it before anything is sent.",
                 _ => ""
             };
         }

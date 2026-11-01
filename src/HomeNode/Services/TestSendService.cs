@@ -27,6 +27,10 @@ public class StandInEndpoint
 public class TestSendResult
 {
     public required string StandInName { get; init; }
+    // The person this stand-in speaks for, as the household names
+    // them ("Lisa"). Result lines on the screen name the person,
+    // never the stand-in's configured setting name.
+    public string PersonName { get; init; } = "";
     // One of: sent, queued-unrecorded, unreachable, unconfigured.
     // "queued-unrecorded" is the relay stopped variant surfacing
     // honestly, in the stand-in's own terms: the stand-in accepted
@@ -108,6 +112,7 @@ public class TestSendService
             return new TestSendResult
             {
                 StandInName = standIn.Name,
+                PersonName = standIn.PersonName,
                 Status = "unconfigured",
                 Note = "That stand-in has no usable trigger configured on this home base. Nothing was sent."
             };
@@ -124,6 +129,7 @@ public class TestSendService
                 return new TestSendResult
                 {
                     StandInName = standIn.Name,
+                PersonName = standIn.PersonName,
                     Status = "unreachable",
                     Note = $"The stand-in answered with HTTP {(int)response.StatusCode} and sent nothing. Nothing landed in the record from this click."
                 };
@@ -212,6 +218,7 @@ public class TestSendService
             return new TestSendResult
             {
                 StandInName = standIn.Name,
+                PersonName = standIn.PersonName,
                 Status = status,
                 PacketId = packetId,
                 Note = note
@@ -222,6 +229,7 @@ public class TestSendService
             return new TestSendResult
             {
                 StandInName = standIn.Name,
+                PersonName = standIn.PersonName,
                 Status = "unreachable",
                 Note = "The stand-in did not answer. Nothing landed in the record from this click."
             };

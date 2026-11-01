@@ -42,22 +42,43 @@ public class TimelineModel : PageModel
 
     public async Task<IActionResult> OnPostConfirmAsync(int eventId, int actorId)
     {
-        await _confirmations.ConfirmAsync(eventId, actorId, "tap");
-        TempData["TimelineNote"] = "Confirmed. The record shows who confirmed it.";
+        try
+        {
+            await _confirmations.ConfirmAsync(eventId, actorId, "tap");
+            TempData["TimelineNote"] = "Confirmed.";
+        }
+        catch (InvalidOperationException)
+        {
+            TempData["TimelineNote"] = "Already confirmed.";
+        }
         return RedirectToPage(new { ActorId = actorId });
     }
 
     public async Task<IActionResult> OnPostDeclineAsync(int eventId, int actorId)
     {
-        await _confirmations.DeclineAsync(eventId, actorId, "tap");
-        TempData["TimelineNote"] = "Declined. Nothing was sent, and the record says so.";
+        try
+        {
+            await _confirmations.DeclineAsync(eventId, actorId, "tap");
+            TempData["TimelineNote"] = "Not sent.";
+        }
+        catch (InvalidOperationException)
+        {
+            TempData["TimelineNote"] = "Already confirmed.";
+        }
         return RedirectToPage(new { ActorId = actorId });
     }
 
     public async Task<IActionResult> OnPostCloseAsync(int eventId, int actorId)
     {
-        await _confirmations.CloseRecordPendingAsync(eventId, actorId, "tap");
-        TempData["TimelineNote"] = "Closed. The audit trail names the person who closed it.";
+        try
+        {
+            await _confirmations.CloseRecordPendingAsync(eventId, actorId, "tap");
+            TempData["TimelineNote"] = "Confirmed.";
+        }
+        catch (InvalidOperationException)
+        {
+            TempData["TimelineNote"] = "Already confirmed.";
+        }
         return RedirectToPage(new { ActorId = actorId });
     }
 

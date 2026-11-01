@@ -5,10 +5,7 @@
 }
 
 <h1>Plans</h1>
-<p>People decide. An item settles only when everyone it names has
-   agreed, in the same round (everyone answering the same wording), and
-   the runner (the person who will go and do it) saying they have the
-   plan is a separate act that never counts as agreement.</p>
+<p>Plan dinner and errands together. A plan is settled when everyone on it agrees.</p>
 
 @if (Model.Note is not null)
 {
@@ -17,39 +14,36 @@
 
 <form method="get">
     <label>
-        Reading as
+        Viewing as
         <select name="ViewerId" onchange="this.form.submit()">
             <option value="">No reader named (house entries only)</option>
             @foreach (var person in Model.People)
             {
                 if (Model.ViewerId == person.Id)
                 {
-                    <option value="@person.Id" selected>@person.DisplayName</option>
+                    <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
                 else
                 {
-                    <option value="@person.Id">@person.DisplayName</option>
+                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
             }
         </select>
     </label>
 </form>
-<p>Open decisions are listed only for the reader named here, and only
-   the ones that reader is meant to see. An entry built from a note
-   written for named people shows only to the readers that note names.</p>
 
 <div class="panel">
 <h2>Start a plan</h2>
 <form method="post" asp-page-handler="CreatePlan">
-    <label>Plan name <input type="text" name="label" placeholder="Tonight" /></label>
-    <label>Plan starts at <input type="time" name="anchorTime" /></label>
-    <button type="submit">Start the plan</button>
+    <label>Plan name <input type="text" name="label" placeholder="e.g., Tonight's dinner" /></label>
+    <label>Start time (optional) <input type="time" name="anchorTime" /></label>
+    <button type="submit">Create plan</button>
 </form>
 </div>
 
 @if (Model.OpenDecisions.Count > 0)
 {
-    <h2>Open decisions the record is holding</h2>
+    <h2>Open decisions</h2>
     <ul class="record-list">
         @foreach (var decision in Model.OpenDecisions)
         {
@@ -58,19 +52,24 @@
     </ul>
 }
 
+@if (Model.Plans.Count == 0)
+{
+    <p>No plans yet. Start one for tonight's dinner or this week's errands.</p>
+}
+
 @foreach (var plan in Model.Plans)
 {
     <div class="panel plan-panel">
     <h2>@plan.Label</h2>
     <p>
-        Status: @HomeNode.Data.StateWording.ForPlan(plan.State)
+        @HomeNode.Data.StateWording.ForPlan(plan.State)
         @if (plan.AnchorAtLocal is { } anchor)
         {
-            <text> &middot; starts at @anchor.ToString("h:mm tt")</text>
+            <text> &middot; Starts @anchor.ToString("h:mm tt")</text>
         }
         @if (plan.RunnerPerson is not null)
         {
-            <text> &middot; runner: @plan.RunnerPerson.DisplayName</text>
+            <text> &middot; @HomeNode.Data.NameWording.First(plan.RunnerPerson.DisplayName) is going</text>
         }
     </p>
 
@@ -81,18 +80,30 @@
             continue;
         }
         var required = HomeNode.Services.PlanAssemblyService.RequiredDisposers(element);
-        <h3>@element.Kind: @element.BodyText</h3>
-        <p>Status: @HomeNode.Data.StateWording.ForElement(element.State)</p>
+        var rounds = element.Agreements.Select(a => a.Round).Distinct().Count();
+        <h3>@HomeNode.Data.PlanKindWording.For(element.Kind): @element.BodyText</h3>
+        <p>@HomeNode.Data.StateWording.ForElement(element.State)</p>
         @if (required.Count > 0)
         {
             <ul>
                 @foreach (var agreement in element.Agreements.OrderBy(a => a.Round).ThenBy(a => a.AtUtc))
                 {
                     <li>
-                        Round @agreement.Round: @(agreement.Person?.DisplayName ?? "") answered @HomeNode.Data.StateWording.ForDisposal(agreement.Disposal)
-                        @if (agreement.CounterText is not null)
+                        @if (rounds > 1)
                         {
-                            <text> &middot; in their words: &ldquo;@agreement.CounterText&rdquo;</text>
+                            <text>Round @agreement.Round · </text>
+                        }
+                        @switch (agreement.Disposal)
+                        {
+                            case HomeNode.Data.PlanDisposal.Agreed:
+                                <text>@HomeNode.Data.NameWording.First(agreement.Person?.DisplayName) agreed</text>
+                                break;
+                            case HomeNode.Data.PlanDisposal.Declined:
+                                <text>@HomeNode.Data.NameWording.First(agreement.Person?.DisplayName) declined</text>
+                                break;
+                            case HomeNode.Data.PlanDisposal.Countered:
+                                <text>@HomeNode.Data.NameWording.First(agreement.Person?.DisplayName) suggested &ldquo;@agreement.CounterText&rdquo;</text>
+                                break;
                         }
                     </li>
                 }
@@ -100,34 +111,30 @@
             <form method="post" asp-page-handler="Dispose">
                 <input type="hidden" name="elementId" value="@element.Id" />
                 <label>
-                    Answering as
+                    Viewing as
                     <select name="personId">
                         @foreach (var personId in required)
                         {
                             var person = Model.People.FirstOrDefault(p => p.Id == personId);
-                            <option value="@personId">@(person?.DisplayName ?? "")</option>
+                            <option value="@personId">@HomeNode.Data.NameWording.First(person?.DisplayName)</option>
                         }
                     </select>
                 </label>
                 <label>
-                    Answer
-                    <select name="disposal">
-                        <option value="Agreed">Agreed</option>
-                        <option value="Declined">Declined</option>
-                        <option value="Countered">Propose a change</option>
-                    </select>
+                    Your suggestion
+                    <input type="text" name="counterText" placeholder="What you suggest instead, word for word" />
                 </label>
-                <label>
-                    A change, in your own words (only when proposing a change)
-                    <input type="text" name="counterText" placeholder="What you propose instead, word for word" />
-                </label>
-                <button type="submit">Record the answer</button>
+                <div class="form-actions">
+                    <button type="submit" name="disposal" value="Agreed" class="primary">Agree</button>
+                    <button type="submit" name="disposal" value="Declined">Decline</button>
+                    <button type="submit" name="disposal" value="Countered">Suggest a change</button>
+                </div>
             </form>
         }
         <form method="post" asp-page-handler="Retime">
             <input type="hidden" name="elementId" value="@element.Id" />
             <label>
-                Re-time this entry, in the new words
+                New wording
                 <input type="text" name="newText" value="@element.BodyText" />
             </label>
             <label>
@@ -135,11 +142,11 @@
                 <select name="actorPersonId">
                     @foreach (var person in Model.People)
                     {
-                        <option value="@person.Id">@person.DisplayName</option>
+                        <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                     }
                 </select>
             </label>
-            <button type="submit">Record the new time</button>
+            <button type="submit">Save</button>
         </form>
     }
 
@@ -150,9 +157,9 @@
         @if (Model.OpenDecisions.Count > 0)
         {
             <label>
-                From the open decision
+                Based on
                 <select name="sourceEventId">
-                    <option value="">None</option>
+                    <option value="">Nothing</option>
                     @foreach (var decision in Model.OpenDecisions)
                     {
                         <option value="@decision.Id">@decision.Body</option>
@@ -160,53 +167,54 @@
                 </select>
             </label>
         }
-        <label>Dinner proposed <input type="text" name="mealText" placeholder="What is proposed, in plain words" /></label>
+        <label>Suggest dinner <input type="text" name="mealText" placeholder="e.g., Tacos" /></label>
         <fieldset>
-            <legend>Who must agree</legend>
+            <legend>Who needs to agree</legend>
             @foreach (var person in Model.People)
             {
                 <label>
                     <input type="checkbox" name="disposerIds" value="@person.Id" />
-                    @person.DisplayName
+                    @HomeNode.Data.NameWording.First(person.DisplayName)
                 </label>
             }
         </fieldset>
-        <button type="submit">Propose dinner</button>
+        <button type="submit">Suggest dinner</button>
     </form>
     <form method="post" asp-page-handler="AddList">
         <input type="hidden" name="planId" value="@plan.Id" />
-        <label>The list <input type="text" name="listText" placeholder="What the runner picks up" /></label>
+        <label>Shopping list <input type="text" name="listText" placeholder="e.g., eggs, milk, gauze" /></label>
         <label>
-            Runner
+            Who's going
             <select name="runnerPersonId">
                 @foreach (var person in Model.People)
                 {
-                    <option value="@person.Id">@person.DisplayName</option>
+                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
             </select>
         </label>
-        <button type="submit">Add the list</button>
+        <button type="submit">Add list</button>
     </form>
     <form method="post" asp-page-handler="AddLeaveBy">
         <input type="hidden" name="planId" value="@plan.Id" />
         <label>
-            Stated durations, one per line as: name, minutes
-            <textarea name="durationsText" rows="3" placeholder="drive to the store, 25"></textarea>
+            Travel and prep times
+            <textarea name="durationsText" rows="3" placeholder="Drive to the store, 25"></textarea>
         </label>
-        <button type="submit">Work out the leave-by</button>
+        <p>One per line, e.g., Drive to the store, 25</p>
+        <button type="submit">Calculate leave time</button>
     </form>
     <form method="post" asp-page-handler="Acknowledge">
         <input type="hidden" name="planId" value="@plan.Id" />
         <label>
-            Runner acknowledging
+            Who's going
             <select name="runnerPersonId">
                 @foreach (var person in Model.People)
                 {
-                    <option value="@person.Id">@person.DisplayName</option>
+                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
                 }
             </select>
         </label>
-        <button type="submit">Acknowledge the plan</button>
+        <button type="submit">Confirm I'm going</button>
     </form>
     </div>
 }

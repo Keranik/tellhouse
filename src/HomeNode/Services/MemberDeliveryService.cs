@@ -11,7 +11,8 @@ namespace HomeNode.Services;
 // member's own channel carries that event's provenance sentence.
 public record MemberDeliveryItem(
     string Source, string Text, DateTime AtUtc, string Note,
-    int? AlertDeliveryId = null, DateTime? ClosedAtUtc = null, string? Provenance = null);
+    int? AlertDeliveryId = null, DateTime? ClosedAtUtc = null, string? Provenance = null,
+    string? AuthorName = null);
 
 // Reads what has landed with a person, for that person's member view
 // (the /Member page). DEMO DELIVERY PATH ONLY: this view is the
@@ -81,7 +82,7 @@ public class MemberDeliveryService
         var items = new List<MemberDeliveryItem>();
 
         var alerts = await _db.AlertDeliveries
-            .Include(d => d.Event)
+            .Include(d => d.Event).ThenInclude(e => e!.AuthorPerson)
             .Where(d => d.ToPersonId == personId)
             .OrderBy(d => d.DeliveredAtUtc)
             .ToListAsync();
@@ -89,10 +90,11 @@ public class MemberDeliveryService
             "Alert",
             d.BodyText,
             d.DeliveredAtUtc,
-            "A confirmed message, delivered to you word for word.",
+            "",
             AlertDeliveryId: d.Id,
             ClosedAtUtc: d.AcknowledgedAtUtc,
-            Provenance: d.Event is null ? null : ProvenanceRendering.Describe(d.Event))));
+            Provenance: d.Event is null ? null : ProvenanceRendering.Describe(d.Event),
+            AuthorName: d.Event?.AuthorPerson?.DisplayName)));
 
         // PlanElementId is a required foreign key, so PlanElement is
         // never null on a persisted landing; the null-forgiving
@@ -109,17 +111,18 @@ public class MemberDeliveryService
         foreach (var landing in planLandings)
         {
             var planLabel = landing.PlanElement?.Plan?.Label ?? "A plan";
+            var actorFirst = NameWording.First(landing.ActorPerson?.DisplayName);
             var (source, note) = landing.Reason switch
             {
                 PlanDeliveryReason.PlanAcknowledged =>
-                    ("Plan", $"From the plan \"{planLabel}\", which you took on as the runner, the person named to carry it out."),
+                    ("Plan update", $"You're going for \"{planLabel}.\""),
                 PlanDeliveryReason.ElementSettled =>
-                    ("Plan (settled)", $"From the plan \"{planLabel}\": settled after the people named on it agreed."),
+                    ("Plan update", $"\"{planLabel}\" is settled."),
                 PlanDeliveryReason.ElementRetimed =>
-                    ("Plan (changed)", $"From the plan \"{planLabel}\": moved by {landing.ActorPerson?.DisplayName ?? "a person in the house"}, and routed to you because it affects you."),
+                    ("Plan update", $"{actorFirst} changed the time on \"{planLabel}.\""),
                 PlanDeliveryReason.CounterCarried =>
-                    ("Plan (counter proposal)", $"From the plan \"{planLabel}\": {landing.ActorPerson?.DisplayName ?? "a person in the house"} countered with these words, carried to you word for word as the new proposal."),
-                _ => ("Plan", $"From the plan \"{planLabel}\".")
+                    ("Plan update", $"{actorFirst} suggested a change to \"{planLabel}.\""),
+                _ => ("Plan update", $"An update to \"{planLabel}.\"")
             };
             string? provenance = null;
             if (landing.PlanElement?.SourceEventIds is { } sourceJson)

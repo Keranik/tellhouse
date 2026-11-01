@@ -40,7 +40,7 @@ Binding rules:
   T-RELAY-CONFIRM: "Do you want me to tell {FirstName}: {MessageText}?"
   T-MEDIA-CONFIRM: "Shall I put {WhatText} on?"
   T-REMIND-CONFIRM: "Shall I remind you on {RemindOnText} to {TaskText}?"
-  T-SUPPLY: "Noted. {ItemName} marked {DirectionWord}. The morning brief will carry it."
+  T-SUPPLY: "Noted. {ItemName} marked {DirectionWord}. It'll be in the briefing."
   T-LOOKUP answers only from unfenced RecentEvents facts; HealthMention events and any event whose Body contains a medication-taking instruction are never sources. When the only source is fenced, or nothing is found, the answer is "I don't have that written down."
   T-CLARIFY: "I want to get that right. {QuestionText}" where QuestionText asks only about the target person and the topic.
   A question that references a body part or body state, a medication or its aliases, or a decision about taking is health content, including when framed as asking what someone said; it never reaches the lookup path.

@@ -7,10 +7,10 @@ public static class ConfirmationWording
 {
     public static string For(ConfirmationState state) => state switch
     {
-        ConfirmationState.Proposed => "Waiting for a person to confirm",
-        ConfirmationState.Confirmed => "Confirmed by a person",
+        ConfirmationState.Proposed => "Needs confirmation",
+        ConfirmationState.Confirmed => "Confirmed",
         ConfirmationState.Done => "Done",
-        ConfirmationState.NotConfirmed => "Not confirmed",
+        ConfirmationState.NotConfirmed => "Not sent",
         _ => state.ToString()
     };
 }

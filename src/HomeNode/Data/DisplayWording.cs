@@ -9,13 +9,13 @@ public static class EventKindWording
     public static string For(EventType type) => type switch
     {
         EventType.Request => "Request",
-        EventType.HouseholdNote => "Household note",
+        EventType.HouseholdNote => "Note",
         EventType.Supply => "Supply",
         EventType.Journal => "Journal",
-        EventType.FacilityNotice => "Facility notice",
-        EventType.Whereabouts => "Whereabouts",
-        EventType.HealthMention => "Health mention",
-        EventType.Commitment => "Commitment",
+        EventType.FacilityNotice => "Building notice",
+        EventType.Whereabouts => "Location",
+        EventType.HealthMention => "Health",
+        EventType.Commitment => "Claim",
         EventType.Task => "Task",
         _ => type.ToString()
     };
@@ -25,9 +25,9 @@ public static class StateWording
 {
     public static string ForPlan(PlanState state) => state switch
     {
-        PlanState.Assembling => "Still being put together",
+        PlanState.Assembling => "Draft",
         PlanState.Proposed => "Waiting on answers",
-        PlanState.Acknowledged => "The runner has the plan",
+        PlanState.Acknowledged => "Runner has the plan",
         PlanState.Completed => "Done",
         PlanState.Superseded => "Replaced by a newer plan",
         PlanState.Dropped => "Dropped",
@@ -59,11 +59,36 @@ public static class StateWording
     };
 
     // Connection levels are stored as the words the inviter picked
-    // ("Standard", "KnockOnly"); only the joined code word needs
-    // respacing for a reader.
+    // ("Standard", "KnockOnly"); the screen shows the plain display
+    // label for each. The stored level itself never changes.
     public static string ForLevel(string level) => level switch
     {
-        "KnockOnly" => "Knock only",
+        "Standard" => "Member",
+        "KnockOnly" => "Request only",
         _ => level
     };
+}
+
+// Display names for plan element kinds. The stored kind names stay
+// exactly as they are; only their rendering changes.
+public static class PlanKindWording
+{
+    public static string For(PlanElementKind kind) => kind switch
+    {
+        PlanElementKind.MealProposal => "Dinner",
+        PlanElementKind.ShoppingList => "Shopping list",
+        PlanElementKind.LeaveBy => "Leave by",
+        _ => kind.ToString()
+    };
+}
+
+// First names for the screen: a person's stored display name may carry
+// a family name, but the household's surfaces speak to first names.
+// Stored data never changes; only the rendering shortens.
+public static class NameWording
+{
+    public static string First(string? displayName) =>
+        string.IsNullOrWhiteSpace(displayName)
+            ? ""
+            : displayName.Split(' ')[0];
 }

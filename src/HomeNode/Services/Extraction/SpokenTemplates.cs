@@ -25,7 +25,7 @@ public static class SpokenTemplates
         $"Shall I remind you on {remindOnText} to {taskText}?";
 
     public static string Supply(string itemName, string directionWord) =>
-        $"Noted. {itemName} marked {directionWord}. The morning brief will carry it.";
+        $"Noted. {itemName} marked {directionWord}. It'll be in the briefing.";
 
     public static string SupplyForecast(string itemName, string directionWord, string dayName) =>
         $"Noted. {itemName} marked {directionWord}. At the usual rate, it runs out around {dayName}.";

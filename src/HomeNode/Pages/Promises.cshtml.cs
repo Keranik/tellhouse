@@ -28,6 +28,10 @@ public class PromisesModel : PageModel
     public List<Promise> Promises { get; private set; } = new();
     public List<Person> People { get; private set; } = new();
 
+    // The household zone claim times are shown in.
+    public TimeZoneInfo HouseholdZone { get; private set; } =
+        TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+
     [BindProperty(SupportsGet = true)]
     public int? ViewerId { get; set; }
     public string? Note => TempData["PromiseNote"] as string;
@@ -41,10 +45,16 @@ public class PromisesModel : PageModel
         // promises show. The closing forms below post back with no
         // reader named; closing itself is governed by the
         // confirmation service, not by this list.
+        var household = await _db.Households.FirstOrDefaultAsync();
+        if (household is not null)
+        {
+            HouseholdZone = HouseholdTime.ZoneFor(household.TimeZoneId);
+        }
         var all = await _db.Promises
             .Include(p => p.PromisorPerson)
             .Include(p => p.PromiseePerson)
             .Include(p => p.ClosedByPerson)
+            .Include(p => p.ClosedByEvent)
             .OrderByDescending(p => p.Id)
             .ToListAsync();
         var sources = await _db.Events
@@ -66,7 +76,7 @@ public class PromisesModel : PageModel
         // writes closing words of its own in a person's name.
         if (string.IsNullOrWhiteSpace(closingWords))
         {
-            TempData["PromiseNote"] = "A claim is settled in the closer's own words, so the words are needed.";
+            TempData["PromiseNote"] = "Add a few words about how it went.";
             return RedirectToPage();
         }
         var promise = await _db.Promises.FirstAsync(p => p.Id == promiseId);
@@ -79,7 +89,11 @@ public class PromisesModel : PageModel
             && closerPersonId != promise.PromiseePersonId
             && !(promise.PromiseePersonId is null && closerPersonId == promise.PromisorPersonId))
         {
-            TempData["PromiseNote"] = ConfirmationService.ReleasedOnlyByPromiseeMessage;
+            var promisee = await _db.Persons.FirstOrDefaultAsync(p => p.Id == promise.PromiseePersonId);
+            var promisor = await _db.Persons.FirstOrDefaultAsync(p => p.Id == promise.PromisorPersonId);
+            TempData["PromiseNote"] = promisee is not null
+                ? $"Only {NameWording.First(promisee.DisplayName)}, who it was for, can mark this as no longer needed."
+                : $"Only {NameWording.First(promisor?.DisplayName)}, who took it on, can mark this as no longer needed.";
             return RedirectToPage();
         }
         var closingEvent = new Event
@@ -97,11 +111,16 @@ public class PromisesModel : PageModel
         try
         {
             await _confirmations.ClosePromiseAsync(promiseId, closingEvent.Id, closerPersonId, outcome, "tap");
-            TempData["PromiseNote"] = "Settled by a person, in their words, and linked to the claim.";
+            TempData["PromiseNote"] = "Claim closed.";
         }
         catch (InvalidOperationException ex)
         {
-            TempData["PromiseNote"] = ex.Message;
+            // The service's own wording never reaches the page: a
+            // claim that has already closed gets the plain sentence,
+            // and every other refusal gets the generic one.
+            TempData["PromiseNote"] = ex.Message.Contains("no longer open")
+                ? "This claim is already closed."
+                : "That claim could not be closed.";
         }
         return RedirectToPage();
     }

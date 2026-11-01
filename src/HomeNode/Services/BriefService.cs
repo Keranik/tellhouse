@@ -64,14 +64,12 @@ public class BriefService
                 : ev.AuthorPerson is not null
                     ? $"{ev.AuthorPerson.DisplayName.Split(' ')[0]} said"
                     : "Told to the house";
-            var stateNote = ev.RecordPending
-                ? " (not yet closed by a person)"
-                : ev.ConfirmationState == ConfirmationState.Proposed
-                    ? " (waiting for a person to confirm)"
-                    : "";
+            var stateNote = ev.RecordPending || ev.ConfirmationState == ConfirmationState.Proposed
+                ? " (needs confirmation)"
+                : "";
             lines.Add(new BriefLine
             {
-                Section = "From the record",
+                Section = "Recent",
                 Text = $"{who}: {ev.Body}{stateNote}"
             });
         }
@@ -85,7 +83,7 @@ public class BriefService
         {
             lines.Add(new BriefLine
             {
-                Section = "Tasks to run",
+                Section = "Your tasks",
                 Text = task.Line
             });
         }
@@ -118,14 +116,16 @@ public class BriefService
         foreach (var promise in promises.Where(p => PromiseVisibleTo(
                      p, promiseSources.GetValueOrDefault(p.SourceEventId), personId)))
         {
-            var maker = promise.PromisorPersonId == personId ? "You" : promise.PromisorPerson?.DisplayName.Split(' ')[0];
+            var maker = promise.PromisorPerson?.DisplayName.Split(' ')[0];
             var due = promise.DueAtLocal is { } dueAt && dueAt < now
                 ? $" Still open; it was for {dueAt:dddd, MMM d, h:mm tt}."
                 : promise.DueText is not null ? $" For {promise.DueText}." : "";
             lines.Add(new BriefLine
             {
                 Section = "Claims still open",
-                Text = $"Claimed by {maker}: {promise.CommitmentText}.{due}"
+                Text = promise.PromisorPersonId == personId
+                    ? $"You claimed: {promise.CommitmentText}.{due}"
+                    : $"Claimed by {maker}: {promise.CommitmentText}.{due}"
             });
         }
 
@@ -134,24 +134,32 @@ public class BriefService
             .ToListAsync();
         foreach (var item in supplies)
         {
+            // An empty shelf is stated first, in its own words: the
+            // order-by arithmetic for a zero count used to be checked
+            // first, so the "is out" line could never appear and the
+            // brief named a date in the past instead.
+            if (item.QuantityOnHand <= 0)
+            {
+                var displayName = item.Name.Length == 0
+                    ? item.Name
+                    : char.ToUpperInvariant(item.Name[0]) + item.Name[1..];
+                lines.Add(new BriefLine
+                {
+                    Section = "To order",
+                    Text = $"{displayName} is out. Order now."
+                });
+                continue;
+            }
             var orderBy = item.GetOrderByDate(today);
             var runOut = item.GetRunOutDate(today);
             if (orderBy != DateOnly.MaxValue && orderBy <= today)
             {
                 lines.Add(new BriefLine
                 {
-                    Section = "Supplies",
+                    Section = "To order",
                     Text = runOut == DateOnly.MaxValue
                         ? $"Order {item.Name} by {orderBy:dddd, MMM d}."
                         : $"Order {item.Name} by {orderBy:dddd, MMM d} (runs out around {runOut:dddd, MMM d})."
-                });
-            }
-            else if (item.QuantityOnHand <= 0)
-            {
-                lines.Add(new BriefLine
-                {
-                    Section = "Supplies",
-                    Text = $"{item.Name} is out."
                 });
             }
         }

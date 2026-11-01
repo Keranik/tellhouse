@@ -112,7 +112,7 @@ public class PlansModel : PageModel
     // three create handlers below. The record holds only what a
     // person wrote; it never fills in words nobody entered.
     private const string BlankWordsNote =
-        "Words are needed: the record holds only what a person wrote.";
+        "Type something first. Tellhouse never fills in words for you.";
 
     public async Task<IActionResult> OnPostCreatePlanAsync(string label, string? anchorTime)
     {
@@ -128,7 +128,7 @@ public class PlansModel : PageModel
             anchor = DateTime.Today.Add(time.ToTimeSpan());
         }
         await _plans.CreatePlanAsync(household.Id, label.Trim(), anchor);
-        TempData["PlanNote"] = "Plan started. Add what it needs, piece by piece.";
+        TempData["PlanNote"] = "Plan created. Now add what it needs.";
         return RedirectToPage();
     }
 
@@ -162,7 +162,7 @@ public class PlansModel : PageModel
             mealText.Trim(),
             disposerIds,
             sourceEventIds: sourceEventId is int id ? new[] { id } : null);
-        TempData["PlanNote"] = "Dinner is proposed. It settles only when everyone named has agreed.";
+        TempData["PlanNote"] = "Dinner suggested. It's settled when everyone you named agrees.";
         return RedirectToPage(new { ViewerId = viewerId });
     }
 
@@ -178,7 +178,7 @@ public class PlansModel : PageModel
             listText.Trim(),
             Array.Empty<int>(),
             assigneePersonId: runnerPersonId);
-        TempData["PlanNote"] = "The list is on the plan for the runner.";
+        TempData["PlanNote"] = "Shopping list added.";
         return RedirectToPage();
     }
 
@@ -187,7 +187,7 @@ public class PlansModel : PageModel
         var plan = await _db.Plans.FirstAsync(p => p.Id == planId);
         if (plan.AnchorAtLocal is not { } anchor)
         {
-            TempData["PlanNote"] = "This plan has no start time, so no leave-by can be worked out.";
+            TempData["PlanNote"] = "Add a start time to calculate a leave time.";
             return RedirectToPage();
         }
         var durations = new List<(string, int)>();
@@ -201,15 +201,31 @@ public class PlansModel : PageModel
         }
         var element = await _plans.AddLeaveByAsync(planId, anchor, durations);
         TempData["PlanNote"] = element is null
-            ? "No leave-by was added: it is worked out only from durations a person stated."
-            : "Leave-by added, from the stated durations only.";
+            ? "Add at least one time, like \"Drive to the store, 25\"."
+            : "Leave time added.";
         return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostDisposeAsync(int elementId, int personId, string disposal, string? counterText)
     {
-        await _plans.RecordDisposalAsync(elementId, personId, Enum.Parse<PlanDisposal>(disposal), counterText);
-        TempData["PlanNote"] = "Answer recorded. An item settles only when everyone named has agreed in the same round.";
+        try
+        {
+            await _plans.RecordDisposalAsync(elementId, personId, Enum.Parse<PlanDisposal>(disposal), counterText);
+            TempData["PlanNote"] = "Answer saved.";
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already answered"))
+        {
+            // The already-answered path names the person who
+            // answered, in plain words; the service's own wording,
+            // which carries record ids and round numbers, never
+            // reaches the page.
+            var person = await _db.Persons.FirstOrDefaultAsync(p => p.Id == personId);
+            TempData["PlanNote"] = $"{NameWording.First(person?.DisplayName)} has already answered this.";
+        }
+        catch (InvalidOperationException)
+        {
+            TempData["PlanNote"] = "This plan can't take that change right now.";
+        }
         return RedirectToPage();
     }
 
@@ -223,7 +239,7 @@ public class PlansModel : PageModel
         if (!string.IsNullOrWhiteSpace(newText))
         {
             await _plans.RetimeElementAsync(elementId, newText.Trim(), actorPersonId);
-            TempData["PlanNote"] = "The entry was re-timed in the new words, and the new wording is on the record for the person it affects.";
+            TempData["PlanNote"] = "Updated. The person it affects has been told.";
         }
         return RedirectToPage();
     }
@@ -233,11 +249,21 @@ public class PlansModel : PageModel
         try
         {
             await _plans.AcknowledgeAsync(planId, runnerPersonId);
-            TempData["PlanNote"] = "The runner has the plan. Having the plan is not the same as it being done; the plan still shows what is owed.";
+            var runner = await _db.Persons.FirstOrDefaultAsync(p => p.Id == runnerPersonId);
+            TempData["PlanNote"] = $"{NameWording.First(runner?.DisplayName)} has the plan.";
         }
         catch (InvalidOperationException ex)
         {
-            TempData["PlanNote"] = ex.Message;
+            // Every refusal is restated in plain words; the service's
+            // own wording never reaches the page.
+            TempData["PlanNote"] = ex.Message switch
+            {
+                var m when m.Contains("cannot acknowledge yet") =>
+                    "Not everyone has answered yet.",
+                var m when m.Contains("no task") || m.Contains("no runner to bind") =>
+                    "Add a shopping list or errand with someone going first.",
+                _ => "This plan can't take that change right now."
+            };
         }
         return RedirectToPage();
     }

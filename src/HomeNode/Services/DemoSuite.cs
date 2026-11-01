@@ -244,7 +244,7 @@ public static class DemoSuite
         Check("Ex17 alias resolves to Evening pills, T-SUPPLY spoken (no forecast: no seeded rate)", ex17.WrittenEvents.Count == 1
             && ex17.WrittenEvents[0].RelatedSupplyItemId == 14
             && GetStr(ex17.WrittenEvents[0], "QuantityText") == "only a few left"
-            && ex17.HouseReply == "Noted. Evening pills (bottle) marked low. The morning brief will carry it.");
+            && ex17.HouseReply == "Noted. Evening pills (bottle) marked low. It'll be in the briefing.");
 
         var ex18 = await svc.ProcessAsync(Input("Tell her the thing about Thursday.", 1, "13:02"));
         Check("Ex18 unclear relay asks, writes nothing", ex18.Output.ClarificationNeeded
@@ -462,9 +462,9 @@ public static class DemoSuite
         Check("Brief: restricted mention does not reach backup or helper",
             !HasAnkle(lisaBrief) && !HasAnkle(juneBrief));
         Check("Brief: the supply forecast line reaches the person the item is assigned to",
-            danielBrief.Any(l => l.Section == "Supplies" && l.Text.Contains("Wipes")));
+            danielBrief.Any(l => l.Section == "To order" && l.Text.Contains("Wipes")));
         Check("Brief: a supply line does not reach a person it is not assigned to",
-            !margaretBrief.Any(l => l.Section == "Supplies" && l.Text.Contains("Wipes")));
+            !margaretBrief.Any(l => l.Section == "To order" && l.Text.Contains("Wipes")));
 
         // Fenced whereabouts lookup.
         var lookup = sp.GetRequiredService<LookupService>();
@@ -563,7 +563,7 @@ public static class DemoSuite
         var danielCounterView = await memberViews.ReceivedForAsync(2);
         var margaretCounterView = await memberViews.ReceivedForAsync(1);
         Check("Counter: the words land with the other disposer, as a counter carry",
-            lisaCounterView.Any(i => i.Source == "Plan (counter proposal)" && i.Text == counterWords));
+            lisaCounterView.Any(i => i.Source == "Plan update" && i.Text == counterWords));
         Check("Counter: the words do not land back with the counterer or anyone else",
             !danielCounterView.Any(i => i.Text == counterWords)
             && !margaretCounterView.Any(i => i.Text == counterWords));
@@ -582,6 +582,7 @@ public static class DemoSuite
         var wordlessPlan = await plans.CreatePlanAsync(householdId, "Wordless counter", null);
         var wordless = await plans.AddElementAsync(wordlessPlan.Id, PlanElementKind.MealProposal,
             "Pizza", new[] { 2, 3 });
+        var lisaBeforeWordless = await memberViews.ReceivedForAsync(3);
         await plans.RecordDisposalAsync(wordless.Id, 2, PlanDisposal.Countered);
         var wordlessRow = await db.PlanAgreements.FirstAsync(a => a.PlanElementId == wordless.Id);
         var wordlessElement = await db.PlanElements.FirstAsync(e => e.Id == wordless.Id);
@@ -589,7 +590,7 @@ public static class DemoSuite
         Check("Counter: a wordless counter stores no words and carries nothing",
             wordlessRow.CounterText is null
             && wordlessElement.BodyText == "Pizza"
-            && !lisaWordlessView.Any(i => i.Source == "Plan (counter proposal)" && i.Text == "Pizza"));
+            && lisaWordlessView.Count == lisaBeforeWordless.Count);
 
         // Delivery of a re-time: the re-timed dessert entry is routed
         // to the person it affects (Margaret, the element's assignee)
@@ -604,7 +605,7 @@ public static class DemoSuite
         await plans.RetimeElementAsync(dessert.Id, "The neighbors come for dessert at eight thirty", 3);
         var margaretAfterRetime = await memberViews.ReceivedForAsync(1);
         Check("Delivery: the re-timed entry lands in the affected person's view at the new time",
-            margaretAfterRetime.Any(i => i.Source == "Plan (changed)" && i.Text.Contains("eight thirty")));
+            margaretAfterRetime.Any(i => i.Source == "Plan update" && i.Text.Contains("eight thirty")));
         var danielAfterRetime = await memberViews.ReceivedForAsync(2);
         Check("Delivery: the re-timed entry lands with the affected person only",
             !danielAfterRetime.Any(i => i.Text.Contains("eight thirty")));
@@ -630,7 +631,7 @@ public static class DemoSuite
         Check("Page: the Plans retime handler re-times the entry in the new words",
             pageDessertAfter.BodyText == "June brings dessert over at eight thirty");
         Check("Page: the handler's re-time lands with the affected person only",
-            margaretPageView.Any(i => i.Source == "Plan (changed)" && i.Text.Contains("June brings dessert over at eight thirty"))
+            margaretPageView.Any(i => i.Source == "Plan update" && i.Text.Contains("June brings dessert over at eight thirty"))
             && !danielPageView.Any(i => i.Text.Contains("June brings dessert")));
         await plansPage.OnPostRetimeAsync(pageDessert.Id, "   ", 3);
         var pageDessertBlank = await db.PlanElements.FirstAsync(e => e.Id == pageDessert.Id);
@@ -644,13 +645,13 @@ public static class DemoSuite
         var plansBeforeBlank = await db.Plans.CountAsync();
         await plansPage.OnPostCreatePlanAsync("   ", null);
         Check("Blank plan fields: a blank plan name is refused and no plan is created",
-            plansPage.Note == "Words are needed: the record holds only what a person wrote."
+            plansPage.Note == "Type something first. Tellhouse never fills in words for you."
             && await db.Plans.CountAsync() == plansBeforeBlank);
         var elementsBeforeBlank = await db.PlanElements.CountAsync();
         await plansPage.OnPostAddDinnerAsync(pagePlan.Id, null, "  ", new[] { 2, 3 });
         await plansPage.OnPostAddListAsync(pagePlan.Id, "", 2);
         Check("Blank plan fields: a blank dinner or list is refused and no element is created",
-            plansPage.Note == "Words are needed: the record holds only what a person wrote."
+            plansPage.Note == "Type something first. Tellhouse never fills in words for you."
             && await db.PlanElements.CountAsync() == elementsBeforeBlank);
 
         // The disposal form's counter words travel the page handler
@@ -708,7 +709,7 @@ public static class DemoSuite
 
         var runnerDanielBrief = await briefs.BuildBriefAsync(2, today);
         Check("Runner rule: the runner's brief carries the pickup's basic details (what, when, where, subject, author)",
-            runnerDanielBrief.Any(l => l.Section == "Tasks to run"
+            runnerDanielBrief.Any(l => l.Section == "Your tasks"
                 && l.Text.Contains("Timmy") && l.Text.Contains("five thirty")
                 && l.Text.Contains("soccer") && l.Text.Contains("Lisa")));
         Check("Runner rule: the runner's brief never carries the telling itself",
@@ -719,7 +720,7 @@ public static class DemoSuite
             runnerPickup.AudienceRule == runnerPickupRule && runnerPickup.SensitivityClass == runnerPickupClass);
         var runnerLisaBrief = await briefs.BuildBriefAsync(3, today);
         Check("Runner rule: a person who is not the runner gets no runner projection",
-            !runnerLisaBrief.Any(l => l.Section == "Tasks to run"));
+            !runnerLisaBrief.Any(l => l.Section == "Your tasks"));
 
         // The fenced question path with the projection live: the
         // runner's own questions still meet the stored audience,
@@ -745,8 +746,8 @@ public static class DemoSuite
             await ThrowsQ38(() => runnerTasks.CompleteTaskAsync(runnerPickup.Id, 2)));
         var runnerDanielBriefAfter = await briefs.BuildBriefAsync(2, today);
         Check("Runner rule: a completed task drops out of the runner's brief; the open one stays",
-            !runnerDanielBriefAfter.Any(l => l.Section == "Tasks to run" && l.Text.Contains("Timmy"))
-            && runnerDanielBriefAfter.Any(l => l.Section == "Tasks to run" && l.Text.Contains("groceries")));
+            !runnerDanielBriefAfter.Any(l => l.Section == "Your tasks" && l.Text.Contains("Timmy"))
+            && runnerDanielBriefAfter.Any(l => l.Section == "Your tasks" && l.Text.Contains("groceries")));
 
         // Reassignment, by the author alone: the view and the
         // completion move to the new runner, and the audit records
@@ -755,8 +756,8 @@ public static class DemoSuite
         var runnerDanielBriefMoved = await briefs.BuildBriefAsync(2, today);
         var runnerJuneBrief = await briefs.BuildBriefAsync(6, today);
         Check("Runner rule: reassignment moves the view (the former runner loses it, the new runner gains it)",
-            !runnerDanielBriefMoved.Any(l => l.Section == "Tasks to run")
-            && runnerJuneBrief.Any(l => l.Section == "Tasks to run"
+            !runnerDanielBriefMoved.Any(l => l.Section == "Your tasks")
+            && runnerJuneBrief.Any(l => l.Section == "Your tasks"
                 && l.Text.Contains("groceries") && l.Text.Contains("on the way back")
                 && l.Text.Contains("Lisa")));
         Check("Runner rule: the audit records the new runner's delivery on reassignment",
@@ -792,7 +793,7 @@ public static class DemoSuite
         await plans.AcknowledgeAsync(runnerPrivatePlan.Id, 2);
         var runnerDanielBriefPrivate = await briefs.BuildBriefAsync(2, today);
         Check("Runner rule: a Restricted task projects its basic details to its runner",
-            runnerDanielBriefPrivate.Any(l => l.Section == "Tasks to run"
+            runnerDanielBriefPrivate.Any(l => l.Section == "Your tasks"
                 && l.Text.Contains("bring the blue folder") && l.Text.Contains("tonight")
                 && l.Text.Contains("Margaret")));
         Check("Runner rule: the Restricted telling itself stays fenced from its runner, body and audience alike",
@@ -1086,8 +1087,8 @@ public static class DemoSuite
             timelineNoReader.Deliveries.Count == 0);
         var briefNoReader = new HomeNode.Pages.BriefModel(db, briefs, lookup) { PersonId = null };
         await briefNoReader.OnGetAsync();
-        Check("Audience: the brief with no reader named belongs to nobody and holds no lines",
-            briefNoReader.Viewer is null && briefNoReader.Lines.Count == 0);
+        Check("Audience: the brief with no reader named defaults to Daniel and holds his lines",
+            briefNoReader.Viewer?.Id == 2 && briefNoReader.Lines.Count > 0);
         var briefLisaPage = new HomeNode.Pages.BriefModel(db, briefs, lookup) { PersonId = 3 };
         await briefLisaPage.OnGetAsync();
         Check("Audience: the brief page named for Lisa still builds her brief",
@@ -1099,7 +1100,7 @@ public static class DemoSuite
         // included.
         var timmyBrief = await briefs.BuildBriefAsync(4, today);
         var miaBrief = await briefs.BuildBriefAsync(5, today);
-        bool HasMedLine(List<BriefLine> lines) => lines.Any(l => l.Section == "Supplies" && l.Text.Contains("Heart pills"));
+        bool HasMedLine(List<BriefLine> lines) => lines.Any(l => l.Section == "To order" && l.Text.Contains("Heart pills"));
         Check("Brief: the medication order line reaches the person it is assigned to",
             HasMedLine(lisaBrief));
         Check("Brief: the medication order line reaches nobody else, children included",
@@ -1207,7 +1208,7 @@ public static class DemoSuite
         var pendingDaniel = await db.AudienceDefaultRequests.OrderBy(r => r.Id).LastAsync(r => r.HolderPersonId == 2);
         Check("Audience defaults: a default set by telling waits on its read-back, unapplied",
             pendingDaniel.State == AudienceDefaultRequestState.PendingReadBack
-            && pendingDaniel.ReadBackText != null && pendingDaniel.ReadBackText.Contains("Ask")
+            && pendingDaniel.ReadBackText != null && pendingDaniel.ReadBackText.Contains("will ask you")
             && await audience.GetDefaultRowAsync(householdId, 2) is null);
         await doorPage.OnPostConfirmDefaultAsync(pendingDaniel.Id, 2);
         var appliedDaniel = await db.AudienceDefaultRequests.FirstAsync(r => r.Id == pendingDaniel.Id);
@@ -1217,7 +1218,7 @@ public static class DemoSuite
             && await audience.GetEffectiveDefaultAsync(householdId, 2) == AudienceDefaultValue.Ask);
         await doorPage.OnGetAsync();
         Check("Audience defaults: the front door shows the holder's default after the read-back",
-            doorPage.Defaults.Any(d => d.Person.Id == 2 && d.Label == "Ask"));
+            doorPage.Defaults.Any(d => d.Person.Id == 2 && d.Label == "Ask me each time"));
 
         // Clause 7, the Ask: Daniel's own telling is held at
         // its narrowest audience (Daniel alone) until he answers.
@@ -1521,7 +1522,7 @@ public static class DemoSuite
             && pagePromiseAfterEmpty.State == PromiseState.Made
             && pagePromiseAfterEmpty.ClosedByEventId is null);
         Check("Claims page: a close with no closing words says the words are needed",
-            promisesPage.Note == "A claim is settled in the closer's own words, so the words are needed.");
+            promisesPage.Note == "Add a few words about how it went.");
         await promisesPage.OnPostCloseAsync(pagePromise.Id, 2, "Kept", "The plants are watered, like I said.");
         var pagePromiseAfterWords = await db.Promises.FirstAsync(p => p.Id == pagePromise.Id);
         var pageClosingEvent = await db.Events.FirstAsync(e => e.Id == pagePromiseAfterWords.ClosedByEventId);
@@ -1537,7 +1538,7 @@ public static class DemoSuite
         Check("Claims page: a release by anyone but the person the claim was made to is refused with a plain note, no event written, claim still open",
             await db.Events.CountAsync() == eventsBeforeRefused
             && pageReleaseAfter.State == PromiseState.Made
-            && promisesPage.Note == ConfirmationService.ReleasedOnlyByPromiseeMessage);
+            && promisesPage.Note == "Only Lisa, who it was for, can mark this as no longer needed.");
 
         var namedPromise = await MakePromise(2, 3, "Daniel will fix the gate on Sunday.");
         var strangerClosing = await ClosingWords(1, 2, "Margaret says let the gate go.");
@@ -1774,9 +1775,61 @@ public static class DemoSuite
         await refusingPage.OnPostTellAsync(1, "A telling the house will refuse.");
         var refusalNote = refusingPage.PipelineNote;
         Check("Dispatch: a refused telling shows plain words only, writes nothing, and its raw errors go to the server log",
-            refusalNote == "The house could not write that down as stated, so nothing was recorded."
+            refusalNote == "I couldn't make sense of that, so nothing was saved. Try one short sentence."
             && await db.Events.CountAsync() == eventsBeforeRefusal
             && refusalLogger.Messages.Any(m => m.Contains("speaker 1") && m.Contains("NotARealType")));
+
+        // Double submit: a second click on an entry that
+        // has already been confirmed used to throw out of the page
+        // handlers and land the visitor on the error page. Both the
+        // timeline's and the front door's confirm and decline now
+        // answer "Already confirmed." and change nothing further.
+        var t5Event = await confirmations.ProposeAsync(new Event
+        {
+            HouseholdId = householdId,
+            Type = EventType.HouseholdNote,
+            Body = "Double-submit check entry: a note for Daniel.",
+            SubjectPersonId = 2,
+            AuthorPersonId = 1,
+            CreatedAtUtc = DateTime.UtcNow,
+            SensitivityClass = SensitivityClass.Household,
+            AudienceRule = "{\"Class\":\"Household\"}"
+        }, new EventAction { ActionType = EventActionType.RelayMessage, TargetPersonId = 2 }, "tap");
+        var t5Timeline = new HomeNode.Pages.TimelineModel(db, confirmations) { ActorId = 2 };
+        t5Timeline.TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+            new Microsoft.AspNetCore.Http.DefaultHttpContext(), new PassthroughTempDataProvider());
+        await t5Timeline.OnPostConfirmAsync(t5Event.Id, 2);
+        var t5AfterFirst = await db.Events.FirstAsync(e => e.Id == t5Event.Id);
+        await t5Timeline.OnPostConfirmAsync(t5Event.Id, 2);
+        Check("Double submit: a second confirm on the timeline answers Already confirmed and the entry stays confirmed",
+            t5AfterFirst.ConfirmationState is ConfirmationState.Confirmed or ConfirmationState.Done
+            && t5Timeline.Note == "Already confirmed.");
+        await t5Timeline.OnPostDeclineAsync(t5Event.Id, 2);
+        Check("Double submit: a decline after the confirm on the timeline answers Already confirmed",
+            t5Timeline.Note == "Already confirmed.");
+        var t5Event2 = await confirmations.ProposeAsync(new Event
+        {
+            HouseholdId = householdId,
+            Type = EventType.HouseholdNote,
+            Body = "Double-submit check entry: a second note for Daniel.",
+            SubjectPersonId = 2,
+            AuthorPersonId = 1,
+            CreatedAtUtc = DateTime.UtcNow,
+            SensitivityClass = SensitivityClass.Household,
+            AudienceRule = "{\"Class\":\"Household\"}"
+        }, new EventAction { ActionType = EventActionType.RelayMessage, TargetPersonId = 2 }, "tap");
+        var t5Door = new HomeNode.Pages.FrontDoorModel(db, builder, svc, confirmations, audience)
+        {
+            TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+                new Microsoft.AspNetCore.Http.DefaultHttpContext(), new PassthroughTempDataProvider())
+        };
+        await t5Door.OnPostConfirmAsync(t5Event2.Id, 2);
+        await t5Door.OnPostConfirmAsync(t5Event2.Id, 2);
+        Check("Double submit: a second confirm on the front door answers Already confirmed",
+            t5Door.HouseReply == "Already confirmed.");
+        await t5Door.OnPostDeclineAsync(t5Event2.Id, 2);
+        Check("Double submit: a decline after the confirm on the front door answers Already confirmed",
+            t5Door.HouseReply == "Already confirmed.");
 
         // Health mention routing: the route person
         // reports his own health mention. Daniel (2) is the default
