@@ -595,3 +595,63 @@ error text never reaches a visitor; and the
 Connections page unlocks with a posted passcode that
 sets a short-lived cookie, so the house secret never
 appears in an address, a redirect, or a hidden field.
+
+## Tenth public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Tenth public commit: suites
+
+All passing at this commit's final verification
+(November 1, 2026; the home node suite grew by one
+check pinning the party-id refusal, and the
+single-process build's demo suite grew by one check
+pinning the brief's source-audience rule):
+
+- Home node demo suite: 211
+- Home node suite: 161
+- Single-process build demo suite: 139
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Tenth public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: the finished whole of the
+enterprise audit program and the two fixes the
+November 1 checklist scan named. The home page reads
+in its final order, the Timeline and the Claims page
+render as cards on a phone, the mobile bottom bar
+names its four destinations, and the shell's accent
+is the brand mark's own coral. The README is the
+finalized front door, with a real screenshot of this
+build and a three-step path for a judge, and DEPLOY.md
+no longer describes the deployment as one computer.
+At the door, a join confirmation can no longer enroll
+a party id that already belongs to a different person:
+it refuses and names the person enrolled. In the
+single-process build, kept in the tree as the first
+iteration, the brief now reads a claim's stored
+audience from its source telling exactly as the home
+node does, and that build is frozen again at this
+fixed state. The README's provenance sentence, at the
+author's direction, credits a real household rather
+than naming one.
