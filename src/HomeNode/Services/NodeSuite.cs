@@ -1974,6 +1974,27 @@ public static class NodeSuite
             && await deliveries.QueueDeliveryAsync(householdId, 3, "Re-enrollment delivery after revoke.", "Delivery") is null
             && await db.HouseConnections.CountAsync(c => c.ConnectionId == lisa.ConnectionId && c.Standing == ConnectionStanding.Revoked) == 1);
 
+        // ---------- Nov 1 scan S5: a party id enrolled for one person
+        // is refused for another ----------
+        // The scanner's fix spec named a refusal that was never
+        // implemented: confirming a knock that claims an already
+        // enrolled party id for a different person silently
+        // reassigned the enrolled connection row to that person.
+        // Lisa re-enrolls first (her C4 row stands revoked), then an
+        // invite for Daniel whose knock claims Lisa's party id is
+        // confirmed for Daniel: it must refuse, and Lisa's row must
+        // not move. Same-person re-enrollment (C4) stays allowed.
+        using var lisaKeys3 = IdentityKeypair.Generate();
+        var lisa3 = await JoinAsync(3, "Lisa Ellis", "member-lisa", lisaKeys3);
+        using var s5Keys = IdentityKeypair.Generate();
+        var s5Invite = await door.CreateInviteAsync(householdId, 1, 2, "Standard");
+        var s5Request = await door.KnockAsync(s5Invite, "Daniel Ellis", "member-lisa", "Stand-in Assistant", s5Keys.PublicKeyBase64Url);
+        Check("S5: confirming a knock that claims a party id already enrolled for another person is refused, and the enrolled row does not move",
+            await ThrowsAsync(() => door.ConfirmJoinAsync(s5Request.Id, 1, 2, s5Request.CheckPhrase))
+            && await db.HouseConnections.CountAsync(c => c.ConnectionId == lisa3.ConnectionId
+                && c.PersonId == 3 && c.PublicKeyBase64Url == lisaKeys3.PublicKeyBase64Url
+                && c.Standing == ConnectionStanding.Active) == 1);
+
         Console.WriteLine();
         Console.WriteLine($"Node suite: {_passed} passed, {_failed} failed.");
         foreach (var failure in _failures)

@@ -222,6 +222,34 @@ public class DoorService
         var connectionId = request.ConnectionId ?? ConnectionIdForParty(request.ClaimedPartyId);
         var connection = await _db.HouseConnections
             .FirstOrDefaultAsync(c => c.ConnectionId == connectionId);
+        // A party id already enrolled for another person is
+        // refused, never reassigned (Nov 1 scan S5): the scanner's
+        // fix spec named this refusal and it was never implemented,
+        // so confirmation silently moved the enrolled row to the
+        // new person. The same person re-enrolling takes their own
+        // row over (C4); a different person is refused, whether the
+        // clash shows on the row this connection id names or on any
+        // live row already carrying this party id. A revoked row is
+        // not an enrollment: its id was revoked wholesale, so it
+        // may be confirmed fresh.
+        HouseConnection? conflict = null;
+        if (connection is not null && connection.PersonId != personId
+            && connection.Standing != ConnectionStanding.Revoked)
+        {
+            conflict = connection;
+        }
+        conflict ??= await _db.HouseConnections.FirstOrDefaultAsync(c =>
+            c.PartyId == request.ClaimedPartyId && c.PersonId != personId
+            && c.Standing != ConnectionStanding.Revoked);
+        if (conflict is not null)
+        {
+            var enrolledPerson = await _db.Persons
+                .FirstOrDefaultAsync(p => p.Id == conflict.PersonId);
+            var enrolledName = NameWording.First(enrolledPerson?.DisplayName);
+            var who = enrolledName.Length > 0 ? enrolledName : "someone else";
+            throw new InvalidOperationException(
+                $"That party id is already enrolled for {who}, so it cannot be confirmed for a different person.");
+        }
         if (connection is null)
         {
             connection = new HouseConnection { ConnectionId = connectionId };
