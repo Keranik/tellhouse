@@ -45,8 +45,8 @@
 }
 else
 {
-    <div class="panel panel-table">
-    <table class="table">
+    <div class="panel panel-table timeline-entries-panel">
+    <table class="table timeline-entries">
         <thead>
             <tr>
                 <th>Entry</th>
@@ -69,7 +69,7 @@ else
                             <br />@provenance
                         }
                     </td>
-                    <td>@HomeNode.Data.NameWording.First(item.AuthorPerson?.DisplayName ?? "The house")</td>
+                    <td>@(item.AuthorPerson is not null ? HomeNode.Data.NameWording.First(item.AuthorPerson.DisplayName) : "The house")</td>
                     <td>@HomeNode.Data.NameWording.First(item.SubjectPerson?.DisplayName)</td>
                     <td>@HomeNode.Data.EventKindWording.For(item.Type)</td>
                     <td>

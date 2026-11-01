@@ -27,7 +27,7 @@ public static class StateWording
     {
         PlanState.Assembling => "Draft",
         PlanState.Proposed => "Waiting on answers",
-        PlanState.Acknowledged => "Runner has the plan",
+        PlanState.Acknowledged => "Has the plan",
         PlanState.Completed => "Done",
         PlanState.Superseded => "Replaced by a newer plan",
         PlanState.Dropped => "Dropped",
@@ -53,7 +53,7 @@ public static class StateWording
     public static string ForStanding(ConnectionStanding standing) => standing switch
     {
         ConnectionStanding.Active => "Active",
-        ConnectionStanding.KnockOnly => "Knock only",
+        ConnectionStanding.KnockOnly => "Request only",
         ConnectionStanding.Revoked => "Revoked",
         _ => standing.ToString()
     };

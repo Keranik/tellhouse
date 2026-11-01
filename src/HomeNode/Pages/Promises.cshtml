@@ -37,8 +37,8 @@
 }
 else
 {
-    <div class="panel panel-table">
-    <table class="table">
+    <div class="panel panel-table claims-panel">
+    <table class="table claims-table">
         <thead>
             <tr>
                 <th>Claim</th>
@@ -85,7 +85,7 @@ else
                     <td>
                         @if (promise.State == HomeNode.Data.PromiseState.Made)
                         {
-                            <form method="post" asp-page-handler="Close" data-promisor="@promise.PromisorPersonId" data-promisee="@(promise.PromiseePersonId?.ToString() ?? "")">
+                            <form method="post" asp-page-handler="Close" class="claim-close-form" data-promisor="@promise.PromisorPersonId" data-promisee="@(promise.PromiseePersonId?.ToString() ?? "")">
                                 <input type="hidden" name="promiseId" value="@promise.Id" />
                                 <label>
                                     Closed by

@@ -5,7 +5,7 @@
    is the center of gravity and the shared record sits below
    it. The dress is the gray-dark register measured off the
    reference apps (canvas #191919, rail one step lighter,
-   composer #303030, one clay accent). One theme only, no
+   composer #303030, one coral accent derived from the mark). One theme only, no
    toggle. Every color hangs off the tokens in :root.
    Fonts are open: Inter for text, Source Serif 4 for the
    front-door headline, both SIL OFL 1.1, bundled under
@@ -42,11 +42,11 @@
   --ink-soft: #d4d4d4;
   --muted: #9e9e9e;
   --placeholder: #9e9e9e;
-  --accent: #d97757;
-  --accent-strong: #e89a7d;
-  --accent-fill: #a75c43;
-  --accent-fill-hover: #9c563f;
-  --accent-ink: #fff7f0;
+  --accent: #f2846f;
+  --accent-strong: #f59b87;
+  --accent-fill: #c8432f;
+  --accent-fill-hover: #b53a29;
+  --accent-ink: #ffffff;
   --focus-border: #8a8a8a;
   --focus-ring: rgba(239, 239, 239, 0.08);
   --reply-bg: #243527;
@@ -525,6 +525,90 @@ textarea:focus-visible, input:focus-visible,
 .inline-form { display: inline-block; margin-left: 0.5rem; }
 .reply-echo { font-style: italic; }
 
+/* ---------- Mobile record cards ---------- */
+
+@media (max-width: 768px) {
+  .timeline-entries-panel,
+  .claims-panel {
+    background: transparent;
+    border: none;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .timeline-entries,
+  .claims-table {
+    display: block;
+    margin: 0;
+  }
+
+  .timeline-entries thead,
+  .claims-table thead {
+    display: none;
+  }
+
+  .timeline-entries tbody,
+  .claims-table tbody {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .timeline-entries tr,
+  .claims-table tr {
+    display: block;
+    background: var(--card);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+  }
+
+  .timeline-entries td,
+  .claims-table td {
+    display: block;
+    border-bottom: none;
+    padding: 0.18rem 0;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .timeline-entries td:first-child,
+  .claims-table td:first-child {
+    color: var(--ink);
+    font-size: 0.97rem;
+  }
+
+  .timeline-entries td:not(:first-child),
+  .claims-table td:not(:first-child) {
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
+  .timeline-entries td form {
+    display: inline-block;
+    margin-right: 0.35rem;
+  }
+
+  .claim-close-form {
+    display: grid;
+    gap: 0.15rem;
+    margin-top: 0.6rem;
+  }
+
+  .claim-close-form label {
+    margin: 0.45rem 0 0.25rem;
+  }
+
+  .claim-close-form select,
+  .claim-close-form input[type="text"] {
+    width: 100%;
+  }
+
+  .claim-close-form button {
+    width: 100%;
+    margin: 0.6rem 0 0;
+  }
+}
+
 /* ---------- Reduced motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -684,16 +768,14 @@ textarea:focus-visible, input:focus-visible,
      safe area, so nothing is ever hidden behind it. */
   .app-canvas {
     padding: 1.25rem 1rem
-      calc(3rem + 64px + env(safe-area-inset-bottom, 0px));
+      calc(3rem + 80px + env(safe-area-inset-bottom, 0px));
   }
   .hero h1 { font-size: 1.625rem; }
 
   /* Bottom navigation bar: four pinned places, equal
-     segments, icons at the spec size, targets far past
-     the 48px floor. Labels are present in the markup and
-     announced to screen readers; the visible bar follows
-     Bryan's X reference (icons only). See the spec file's
-     conflict section. */
+     segments, icons at the spec size, visible labels,
+     targets far past the 48px floor. The labelled bar
+     uses the mobile spec's 80px height and active pill. */
   .app-bottombar {
     display: flex;
     position: fixed;
@@ -709,24 +791,42 @@ textarea:focus-visible, input:focus-visible,
   .app-bottombar-link {
     flex: 1 1 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 64px;
+    gap: 0.12rem;
+    height: 80px;
     min-width: 48px;
     color: var(--muted);
+    position: relative;
     transition: color 150ms var(--ease);
+  }
+  .app-bottombar-link svg {
+    flex: none;
+    position: relative;
+    z-index: 1;
   }
   .app-bottombar-link:hover { color: var(--ink); text-decoration: none; }
   .app-bottombar-link.active { color: var(--accent); }
   .app-bottombar-link.active svg { stroke-width: 2.3; }
+  .app-bottombar-link.active::before {
+    content: "";
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    width: 64px;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--rail-active);
+    transform: translateX(-50%);
+  }
 
   .app-bottombar-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1;
+    position: relative;
     white-space: nowrap;
+    z-index: 1;
   }
 }

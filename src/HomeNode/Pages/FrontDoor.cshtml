@@ -16,6 +16,32 @@
         <p class="lead">Tell it once. Tellhouse writes it down, and asks before it tells anyone.</p>
     </div>
 
+    <div class="hero-input">
+        <form method="post" asp-page-handler="Tell">
+            <div class="speaker-row">
+                <label>
+                    Viewing as
+                    <select name="speakerId">
+                        @foreach (var person in Model.People)
+                        {
+                            <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                        }
+                        <option value="">No name given</option>
+                    </select>
+                </label>
+            </div>
+            <label>
+                <span class="visually-hidden">Message to the house</span>
+                <textarea name="telling" rows="3" placeholder="Try &quot;We're out of milk&quot;, &quot;I'll get Mia at 3&quot;, or &quot;Where's Daniel?&quot;"></textarea>
+            </label>
+            <div class="form-actions">
+                <button type="submit" class="primary">Send</button>
+            </div>
+            <p class="muted-note">Nothing goes to anyone until you confirm.</p>
+        </form>
+    </div>
+
+
     @if (Model.HouseReply is not null)
     {
         <div class="panel panel-reply">
@@ -58,30 +84,97 @@
         </div>
     }
 
-    <div class="hero-input">
-        <form method="post" asp-page-handler="Tell">
-            <div class="speaker-row">
-                <label>
-                    Viewing as
-                    <select name="speakerId">
-                        @foreach (var person in Model.People)
+
+    @if (Model.PendingAsks.Count > 0)
+    {
+        <div class="panel">
+            <h3 class="panel-title">Needs your answer</h3>
+            <p>Who should see this entry?</p>
+            <p>Until you choose, only the people it names can see it.</p>
+            @foreach (var ask in Model.PendingAsks)
+            {
+                <form method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="askId" value="@ask.Id" />
+                    <input type="hidden" name="actorPersonId" value="@Model.ViewerId" />
+                    <label>
+                        Who should see this entry
+                        <select name="choice">
+                            <option value="Private">Only the people it names</option>
+                            <option value="Household">Everyone in the household</option>
+                        </select>
+                    </label>
+                    <div class="form-actions">
+                        <button type="submit" formaction="?handler=AnswerAsk" class="primary">Save choice</button>
+                    </div>
+                </form>
+            }
+        </div>
+    }
+
+
+    <h2>Recent</h2>
+    <form method="get">
+        <label>
+            Viewing as
+            <select name="viewerId" onchange="this.form.submit()">
+                <option value="">No one (shared entries only)</option>
+                @foreach (var person in Model.People)
+                {
+                    if (Model.ViewerId == person.Id)
+                    {
+                        <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                    }
+                    else
+                    {
+                        <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                    }
+                }
+            </select>
+        </label>
+    </form>
+    @if (Model.RecentEvents.Count == 0)
+    {
+        <p>Nothing here yet. Messages you send show up here.</p>
+    }
+    else
+    {
+        <ul class="record-list">
+            @foreach (var item in Model.RecentEvents)
+            {
+                <li class="record-item">
+                    <div class="record-body">@item.Body</div>
+                    <div class="record-meta">
+                        @if (item.AuthorPerson is not null)
                         {
-                            <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                            <text>@HomeNode.Data.NameWording.First(item.AuthorPerson.DisplayName)</text>
                         }
-                        <option value="">No name given</option>
-                    </select>
-                </label>
-            </div>
-            <label>
-                <span class="visually-hidden">Message to the house</span>
-                <textarea name="telling" rows="3" placeholder="Try &quot;We're out of milk&quot;, &quot;I'll get Mia at 3&quot;, or &quot;Where's Daniel?&quot;"></textarea>
-            </label>
-            <div class="form-actions">
-                <button type="submit" class="primary">Send</button>
-            </div>
-            <p class="muted-note">Nothing goes to anyone until you confirm.</p>
-        </form>
-    </div>
+                        else
+                        {
+                            <text>The house</text>
+                        }
+                        &middot; @HomeNode.Data.HouseholdTime.Time(item.CreatedAtUtc, Model.HouseholdZone)
+                        @if (item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
+                        {
+                            <text> &middot; </text><span class="chip-action">Needs confirmation</span>
+                            @if (Model.ViewerId is int recentViewer)
+                            {
+                                <form method="post" asp-page-handler="Confirm" class="inline-form">
+                                    <input type="hidden" name="eventId" value="@item.Id" />
+                                    <input type="hidden" name="actorPersonId" value="@recentViewer" />
+                                    <button type="submit">Confirm</button>
+                                </form>
+                            }
+                        }
+                        @if (HomeNode.Services.ProvenanceRendering.Describe(item) is { } provenance)
+                        {
+                            <div>@provenance</div>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    }
 
     @if (Model.StandIns.Count > 0)
     {
@@ -104,6 +197,7 @@
             </form>
         </div>
     }
+
 
     <div class="panel">
         <h3 class="panel-title">Who sees your messages by default</h3>
@@ -174,93 +268,4 @@
            person can set their own default.</p>
     </div>
 
-    @if (Model.PendingAsks.Count > 0)
-    {
-        <div class="panel">
-            <h3 class="panel-title">Needs your answer</h3>
-            <p>Who should see this entry?</p>
-            <p>Until you choose, only the people it names can see it.</p>
-            @foreach (var ask in Model.PendingAsks)
-            {
-                <form method="post">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="askId" value="@ask.Id" />
-                    <input type="hidden" name="actorPersonId" value="@Model.ViewerId" />
-                    <label>
-                        Who should see this entry
-                        <select name="choice">
-                            <option value="Private">Only the people it names</option>
-                            <option value="Household">Everyone in the household</option>
-                        </select>
-                    </label>
-                    <div class="form-actions">
-                        <button type="submit" formaction="?handler=AnswerAsk" class="primary">Save choice</button>
-                    </div>
-                </form>
-            }
-        </div>
-    }
-
-    <h2>Recent</h2>
-    <form method="get">
-        <label>
-            Viewing as
-            <select name="viewerId" onchange="this.form.submit()">
-                <option value="">No one (shared entries only)</option>
-                @foreach (var person in Model.People)
-                {
-                    if (Model.ViewerId == person.Id)
-                    {
-                        <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                    }
-                    else
-                    {
-                        <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                    }
-                }
-            </select>
-        </label>
-    </form>
-    @if (Model.RecentEvents.Count == 0)
-    {
-        <p>Nothing here yet. Messages you send show up here.</p>
-    }
-    else
-    {
-        <ul class="record-list">
-            @foreach (var item in Model.RecentEvents)
-            {
-                <li class="record-item">
-                    <div class="record-body">@item.Body</div>
-                    <div class="record-meta">
-                        @if (item.AuthorPerson is not null)
-                        {
-                            <text>@HomeNode.Data.NameWording.First(item.AuthorPerson.DisplayName)</text>
-                        }
-                        else
-                        {
-                            <text>The house</text>
-                        }
-                        &middot; @HomeNode.Data.HouseholdTime.Time(item.CreatedAtUtc, Model.HouseholdZone)
-                        @if (item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
-                        {
-                            <text> &middot; </text><span class="chip-action">Needs confirmation</span>
-                            @if (Model.ViewerId is int recentViewer)
-                            {
-                                <form method="post" asp-page-handler="Confirm" class="inline-form">
-                                    <input type="hidden" name="eventId" value="@item.Id" />
-                                    <input type="hidden" name="actorPersonId" value="@recentViewer" />
-                                    <button type="submit">Confirm</button>
-                                </form>
-                            }
-                        }
-                        @if (HomeNode.Services.ProvenanceRendering.Describe(item) is { } provenance)
-                        {
-                            <div>@provenance</div>
-                        }
-                    </div>
-                </li>
-            }
-        </ul>
-    }
-</div>
+    </div>
