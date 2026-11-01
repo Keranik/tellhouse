@@ -60,9 +60,7 @@ Run the home node:
 
 Then open Home in a browser. On first start, the demo seeds a fictional household and one ordinary day. Extraction defaults to a deterministic local stand-in, so the demo runs with no API key and no spend.
 
-To run the same extraction path with Meta's model, supply a Meta Model API key through the environment. The repository's `.env.example` shows the variable name with a redacted value:
-
-    MODEL_API_KEY=<redacted>
+To run the same extraction path with Meta's model, supply a Meta Model API key through the environment. The repository's `.env.example` shows the variable name, `MODEL_API_KEY`, with a redacted value.
 
 Set the real `MODEL_API_KEY` in the host's secret store or environment, never in the repository. Set the extraction mode to Live and the model to `muse-spark-1.3` (Muse Spark) in the host configuration. DEPLOY.md documents the live configuration used for the judged demo environment, including the deployed environment-variable form.
 
@@ -92,4 +90,4 @@ Our pledge for that direction: we will not keep your data, we do not want it, an
 
 ## Provenance
 
-The idea grew out of how one household already keeps each other informed day to day, as a practice. No working version of Tellhouse existed before this event: the concept was created after the hackathon was announced, transformed entirely once the event started, and evolved organically between Bryan Hamilton, Harald, Princess, and Poe out of a household need. The code, the data model, the screens, and the demo were designed and built entirely during the event; no pre-existing code, screens, or footage are used.
+The idea grew out of how one household already keeps each other informed day to day, as a practice. No working version of Tellhouse existed before this event: the concept was created after the hackathon was announced, transformed entirely once the event started, and evolved organically in Bryan Hamilton's household out of a household need. The code, the data model, the screens, and the demo were designed and built entirely during the event; no pre-existing code, screens, or footage are used.
