@@ -174,7 +174,7 @@ public class FrontDoorModel : PageModel
             // The validator's own words are internal: they go to the
             // server log only, never to the page a visitor reads.
             _logger.LogWarning(
-                "The house refused a telling from speaker {SpeakerId}: {ValidationErrors}",
+                "The house refused a message from speaker {SpeakerId}: {ValidationErrors}",
                 speakerId, string.Join(" ", result.Validation.Errors));
             TempData["PipelineNote"] =
                 "I couldn't make sense of that, so nothing was saved. Try one short sentence.";
