@@ -137,10 +137,10 @@ public class FrontDoorModel : PageModel
         await LoadAsync();
     }
 
-    public async Task<IActionResult> OnPostTellAsync(int? speakerId, string? message)
+    public async Task<IActionResult> OnPostTellAsync(int? speakerId, string? telling)
     {
         var household = await _db.Households.FirstOrDefaultAsync();
-        if (household is null || string.IsNullOrWhiteSpace(message))
+        if (household is null || string.IsNullOrWhiteSpace(telling))
         {
             return RedirectToPage();
         }
@@ -153,7 +153,7 @@ public class FrontDoorModel : PageModel
         var input = new ExtractionInput
         {
             UtteranceId = $"u-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..26],
-            Transcript = message.Trim(),
+            Transcript = telling.Trim(),
             SourceType = "tap",
             OccurredAtLocal = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz),
             Speaker = speaker is null
@@ -174,7 +174,7 @@ public class FrontDoorModel : PageModel
             // The validator's own words are internal: they go to the
             // server log only, never to the page a visitor reads.
             _logger.LogWarning(
-                "The house refused a message from speaker {SpeakerId}: {ValidationErrors}",
+                "The house refused a telling from speaker {SpeakerId}: {ValidationErrors}",
                 speakerId, string.Join(" ", result.Validation.Errors));
             TempData["PipelineNote"] =
                 "I couldn't make sense of that, so nothing was saved. Try one short sentence.";

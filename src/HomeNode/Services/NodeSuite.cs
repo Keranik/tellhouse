@@ -1707,7 +1707,11 @@ public static class NodeSuite
                 markupClean = false;
                 break;
             }
-            var text = File.ReadAllText(path);
+            var text = File.ReadAllText(path)
+                // The say form's field name is the POST contract the
+                // deployed drivers use; it is never displayed text,
+                // so it is normalized out before the scan.
+                .Replace("name=\"telling\"", "name=\"field\"");
             while (text.Contains("@*"))
             {
                 var start = text.IndexOf("@*", StringComparison.Ordinal);

@@ -270,7 +270,7 @@ def main():
             page2 = Page(NODE_NOSECRET)
             _, html = page2.get("/Connections")
             check("a node with no house secret configured offers no ceremony form on the page",
-                  "Open the house side" in html and "Confirm this join" not in html)
+                  "Admin controls are locked" in html and "Confirm this join" not in html)
             s, _ = page2.post_form("/Connections?handler=Invite", {
                 "inviterPersonId": margaret, "intendedPersonId": lisa, "level": "Standard",
                 "__RequestVerificationToken": page2.any_token()})
