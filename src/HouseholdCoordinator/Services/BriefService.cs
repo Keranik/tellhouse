@@ -71,7 +71,12 @@ public class BriefService
             .Include(p => p.PromiseePerson)
             .Where(p => p.HouseholdId == person.HouseholdId && p.State == PromiseState.Made)
             .ToListAsync();
-        foreach (var promise in promises.Where(p => PromiseVisibleTo(p, personId)))
+        var promiseSourceIds = promises.Select(p => p.SourceEventId).ToList();
+        var promiseSources = await _db.Events
+            .Where(e => promiseSourceIds.Contains(e.Id))
+            .ToDictionaryAsync(e => e.Id);
+        foreach (var promise in promises.Where(p => PromiseVisibleTo(
+            p, promiseSources.GetValueOrDefault(p.SourceEventId), personId)))
         {
             var maker = promise.PromisorPersonId == personId ? "You" : promise.PromisorPerson?.DisplayName.Split(' ')[0];
             var due = promise.DueAtLocal is { } dueAt && dueAt < now
@@ -158,13 +163,24 @@ public class BriefService
         }
     }
 
-    private static bool PromiseVisibleTo(Promise promise, int personId)
+    // A promise's visibility is the stored audience of the telling
+    // that borned it, read exactly as every other event is read
+    // (the node's rule, ported under the Nov 1 scan S2 fix and the
+    // re-freeze it was ruled with). A commitment is stored Named
+    // to its maker and its promisee, so a promise with no promisee
+    // is visible to its maker alone under that rule, never to
+    // everyone by virtue of having no promisee. A promise whose
+    // source telling was stored Household is visible to the house,
+    // because the stored rule says so. A promise whose source
+    // event cannot be found fails closed to its maker and its
+    // promisee, the narrowest reading its own fields support.
+    private static bool PromiseVisibleTo(Promise promise, Event? sourceEvent, int personId)
     {
-        // A promise made to the house (no named promisee) is part of the
-        // shared record; a named promise belongs to its maker and its
-        // promisee.
-        return promise.PromiseePersonId is null
-            || promise.PromisorPersonId == personId
+        if (sourceEvent is not null)
+        {
+            return IsVisibleTo(sourceEvent, personId);
+        }
+        return promise.PromisorPersonId == personId
             || promise.PromiseePersonId == personId;
     }
 }

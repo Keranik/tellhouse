@@ -1206,6 +1206,17 @@ public static class DemoSuite
             !PromiseShown(promisesOther, "a commitment for its maker only")
             && !PromiseShown(promisesNone, "a commitment for its maker only"));
 
+        // Nov 1 scan S2 (monolith half): the brief must read the
+        // same fence. The commitment above is stored Named to its
+        // maker alone with no promisee; the brief's claim line may
+        // reach its maker only, under the source telling's stored
+        // audience, exactly as the node's brief reads it.
+        var fenceBriefMaker = await briefs.BuildBriefAsync(2, today);
+        var fenceBriefOther = await briefs.BuildBriefAsync(3, today);
+        Check("Monolith fence S2: the brief shows a maker-only no-promisee claim to its maker only, under the source telling's stored audience",
+            fenceBriefMaker.Any(l => l.Text.Contains("a commitment for its maker only"))
+            && !fenceBriefOther.Any(l => l.Text.Contains("a commitment for its maker only")));
+
         var fenceNote = new Event
         {
             HouseholdId = householdId,
