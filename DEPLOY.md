@@ -24,8 +24,8 @@ pre-seeded with the fictional Ellis household, visitors look
 around and try tellings. Every page of the node carries a
 plain standing label with the words "DEMO ENVIRONMENT" and
 the demo-scope line: "Demo: the people in this house are
-invented, it runs on one computer, and no real family's data
-is in it." Both live in the shared layout
+invented, and no real family's data is in it." Both live in
+the shared layout
 (src/HomeNode/Pages/Shared/_Layout.cshtml), so they render
 on the front door and on every other house surface that uses
 that layout, and they travel with the environment wherever
