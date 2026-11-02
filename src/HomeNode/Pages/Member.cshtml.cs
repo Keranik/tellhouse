@@ -42,6 +42,8 @@ public class MemberModel : PageModel
     public NeedsYou? Needs { get; private set; }
     public Dictionary<int, int> WaitingByPerson { get; private set; } = new();
     public Dictionary<int, ActivityItem> Traces { get; private set; } = new();
+    // Picture cards Muse Image drew for deliveries, by delivery.
+    public Dictionary<int, int> Pictures { get; private set; } = new();
     public TimeZoneInfo HouseholdZone { get; private set; } =
         TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
 
@@ -76,6 +78,12 @@ public class MemberModel : PageModel
         var eventByDelivery = await _db.AlertDeliveries
             .Where(d => deliveryIds.Contains(d.Id))
             .ToDictionaryAsync(d => d.Id, d => d.EventId);
+        Pictures = (await _db.ModelCalls
+                .Where(c => c.Purpose == ModelCallPurpose.Draw && c.Outcome == ModelCallOutcome.Done
+                    && c.DeliveryId != null && deliveryIds.Contains(c.DeliveryId.Value))
+                .Select(c => new { c.Id, Delivery = c.DeliveryId!.Value })
+                .ToListAsync())
+            .GroupBy(c => c.Delivery).ToDictionary(g => g.Key, g => g.First().Id);
         var feed = await new ActivityService(_db).BuildAsync(Member.Id, take: 300);
         var traceByEvent = new Dictionary<int, ActivityItem>();
         foreach (var item in feed.Items)

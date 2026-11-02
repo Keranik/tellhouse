@@ -51,6 +51,13 @@ public class BriefModel : PageModel
     public Dictionary<int, string> SupplyNames { get; private set; } = new();
     public List<Plan> OpenPlans { get; private set; } = new();
 
+    // The shelf check: SAM 3.1 counts the tracked supplies in a photo.
+    public bool ShelfAvailable { get; private set; }
+    public ModelCall? ShelfCall { get; private set; }
+    public HomeNode.Services.Models.ShelfResult? Shelf { get; private set; }
+    public List<(string Name, string Prompt)> ShelfAsks { get; private set; } = new();
+    public List<string> ShelfNeverAsked { get; private set; } = new();
+
     public async Task<IActionResult> OnGetAsync()
     {
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
@@ -126,7 +133,49 @@ public class BriefModel : PageModel
             WonderCall = await reviews.LatestWonderAsync(viewerId);
             Wonder = WonderCall is null ? null : HomeNode.Services.Models.ReviewService.Read(WonderCall);
         }
+        if (HttpContext?.RequestServices.GetService(typeof(HomeNode.Services.Models.ShelfCheckService))
+            is HomeNode.Services.Models.ShelfCheckService shelf
+            && HttpContext.RequestServices.GetService(typeof(HomeNode.Services.Models.MetaApi)) is HomeNode.Services.Models.MetaApi shelfApi)
+        {
+            ShelfAvailable = shelf.Available;
+            var (asked, notAsked) = HomeNode.Services.Models.ShelfCheckService.PromptsFor(
+                await _db.SupplyItems.Where(x => x.HouseholdId == Viewer.HouseholdId).ToListAsync(), shelfApi.Models);
+            ShelfAsks = asked.Select(a => (a.Supply.Name, a.Prompt)).ToList();
+            ShelfNeverAsked = notAsked;
+            ShelfCall = await shelf.LatestAsync(Viewer.HouseholdId);
+            Shelf = ShelfCall is null ? null : HomeNode.Services.Models.ShelfCheckService.Read(ShelfCall);
+        }
         return Page();
+    }
+
+    // Check the shelf: the photo (already shrunk by the browser) goes to
+    // SAM 3.1 once per tracked supply. Nothing is written to the record.
+    public async Task<IActionResult> OnPostShelfAsync(IFormFile? photo, int personId, int width, int height)
+    {
+        var services = HttpContext?.RequestServices;
+        if (services?.GetService(typeof(HomeNode.Services.Models.ShelfCheckService)) is not HomeNode.Services.Models.ShelfCheckService shelf
+            || !shelf.Available || photo is null || photo.Length == 0
+            || photo.Length > HomeNode.Services.Models.ShelfCheckService.MaxBytes)
+        {
+            return RedirectToPage(new { PersonId = personId });
+        }
+        var person = await _db.Persons.FirstOrDefaultAsync(p => p.Id == personId);
+        if (person is null)
+        {
+            return RedirectToPage();
+        }
+        byte[] bytes;
+        using (var buffer = new MemoryStream())
+        {
+            await photo.CopyToAsync(buffer);
+            bytes = buffer.ToArray();
+        }
+        if (HomeNode.Services.Models.ShelfCheckService.MediaType(bytes) is not string media)
+        {
+            return RedirectToPage(new { PersonId = personId });
+        }
+        await shelf.CheckAsync(person.HouseholdId, personId, bytes, media, width, height, HttpContext!.RequestAborted);
+        return Redirect($"/Brief?PersonId={personId}#shelf");
     }
 
     // Ask Muse Wonder to look over the shared record as this person.

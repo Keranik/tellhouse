@@ -161,6 +161,78 @@
         </div>
     </section>
 }
+
+@if (Model.Viewer is not null)
+{
+    string[] palette = { "#94b8ff", "#f4c771", "#92d99a", "#f59b87", "#c9a7ff", "#7fd4c1" };
+    <section class="shelf" aria-labelledby="shelf" id="shelf">
+        <div class="section-head">
+            <h2 id="shelf">What&rsquo;s on the shelf</h2>
+            <p>Snap the supply shelf and SAM 3.1 looks for each thing the house tracks, by name, and outlines what it finds. Nothing is written to the record: where it sees none, you can say so in one tap.</p>
+        </div>
+        <div class="shelf-grid">
+            <div class="shelf-photo">
+                @if (Model.ShelfCall is { } shelfCall && Model.Shelf is { } shelfResult && shelfCall.Image is not null)
+                {
+                    <figure class="shelf-figure">
+                        <div class="shelf-frame">
+                        <img src="/models/shelf/@shelfCall.Id" alt="The supply shelf photo, with what SAM 3.1 found outlined" width="@shelfResult.Width" height="@shelfResult.Height" />
+                        <svg class="shelf-boxes" viewBox="0 0 @shelfResult.Width @shelfResult.Height" preserveAspectRatio="none" aria-hidden="true">
+                            @for (var i = 0; i < shelfResult.Counts.Count; i++)
+                            {
+                                foreach (var box in shelfResult.Counts[i].Boxes)
+                                {
+                                    <rect x="@box.Left" y="@box.Top" width="@Math.Max(1, box.Right - box.Left)" height="@Math.Max(1, box.Bottom - box.Top)" fill="none" stroke="@palette[i % palette.Length]" stroke-width="@Math.Max(2, shelfResult.Width / 300)" rx="6" />
+                                }
+                            }
+                        </svg>
+                        </div>
+                        <figcaption>@Icons.Get("eye", 13) SAM 3.1 &middot; @shelfCall.Model &middot; @((shelfCall.ElapsedMs / 1000.0).ToString("0.0")) s for @shelfResult.Counts.Count look@(shelfResult.Counts.Count == 1 ? "" : "s") side by side &middot; @HouseholdTime.TimeOrDate(shelfCall.AtUtc, Model.HouseholdZone)</figcaption>
+                    </figure>
+                }
+                else
+                {
+                    <div class="shelf-empty">@Icons.Get("camera", 28)<p>@(Model.ShelfAvailable ? "No shelf check yet. Snap the shelf to start." : "On a Live instance, SAM 3.1 (through the Meta Model API) counts the tracked supplies in a photo of the shelf here. This instance has no model key.")</p></div>
+                }
+            </div>
+            <div class="shelf-side">
+                @if (Model.Shelf is { } counted)
+                {
+                    <ul class="shelf-counts">
+                        @for (var i = 0; i < counted.Counts.Count; i++)
+                        {
+                            var c = counted.Counts[i];
+                            <li>
+                                <span class="shelf-dot" style="background:@palette[i % palette.Length]" aria-hidden="true"></span>
+                                <span class="shelf-name">@c.Name</span>
+                                <span class="shelf-count">@(c.Problem is not null ? "no answer" : c.Count == 0 ? "none seen" : $"{c.Count} seen")</span>
+                                <span class="shelf-prompt">asked for &ldquo;@c.Prompt&rdquo;</span>
+                                @if (c.Problem is null && c.Count == 0)
+                                {
+                                    <a class="finding-use" href="/?say=@Uri.EscapeDataString($"We're out of {c.Name}.")">Say it: &ldquo;We&rsquo;re out of @c.Name.&rdquo; &rarr;</a>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+                @if (Model.ShelfAvailable)
+                {
+                    <form method="post" enctype="multipart/form-data" asp-page-handler="Shelf" data-busy data-busy-label="SAM 3.1 is looking…" data-shelf-form>
+                        <input type="hidden" name="personId" value="@Model.Viewer.Id" />
+                        <input type="hidden" name="width" value="0" data-shelf-width />
+                        <input type="hidden" name="height" value="0" data-shelf-height />
+                        <label class="shelf-pick">
+                            @Icons.Get("camera", 16) <span>Snap the shelf</span>
+                            <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" capture="environment" data-shelf-input required />
+                        </label>
+                        <button type="submit" class="primary">Check it with SAM 3.1</button>
+                    </form>
+                }
+                <p class="muted small">SAM looks for: @(Model.ShelfAsks.Count == 0 ? "nothing yet" : string.Join(", ", Model.ShelfAsks.Select(a => a.Name))). It is never asked to look for a medicine@(Model.ShelfNeverAsked.Count > 0 ? $" ({string.Join(", ", Model.ShelfNeverAsked)} stay with the house's own rules)" : "").</p>
+            </div>
+        </div>
+    </section>
+}
 @if (Model.Viewer is not null)
 {
     <div class="brief-grid">

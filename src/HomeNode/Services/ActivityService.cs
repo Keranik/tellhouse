@@ -248,9 +248,15 @@ public class ActivityService
             .Where(c => c.Purpose == ModelCallPurpose.Review && c.OutputJson != null && c.OutputJson.Contains("\"SentReadingId\":"))
             .OrderByDescending(c => c.Id).Take(200)
             .ToListAsync();
+        var deliveryIds = deliveries.Select(d => d.Id).ToList();
+        var pictures = await _db.ModelCalls
+            .Where(c => c.Purpose == ModelCallPurpose.Draw && c.Outcome == ModelCallOutcome.Done
+                && c.DeliveryId != null && deliveryIds.Contains(c.DeliveryId.Value))
+            .Select(c => new ModelCall { Id = c.Id, DeliveryId = c.DeliveryId, Model = c.Model, ElapsedMs = c.ElapsedMs, AtUtc = c.AtUtc })
+            .ToListAsync();
 
         return new TraceContext(people, zone, readings, events, actions, audits, deliveries,
-            outbox, promises, adjustments, heard, reviews);
+            outbox, promises, adjustments, heard, reviews, pictures);
     }
 
     internal static List<int> ParseIds(string? json)
@@ -291,6 +297,7 @@ public class ActivityService
         private readonly List<Promise> _promises;
         private readonly ILookup<int, SupplyAdjustment> _adjustments;
         private readonly Dictionary<int, ModelCall> _heardByReading;
+        private readonly Dictionary<int, ModelCall> _pictures;
         private readonly Dictionary<int, (int CallId, Services.Models.ReviewFinding Finding)> _draftByReading = new();
 
         public TimeZoneInfo Zone { get; }
@@ -298,8 +305,10 @@ public class ActivityService
         public TraceContext(List<Person> people, TimeZoneInfo zone, List<ModelReading> readings,
             List<Event> events, List<EventAction> actions, List<EventAudit> audits,
             List<AlertDelivery> deliveries, List<OutboxRow> outbox, List<Promise> promises,
-            List<SupplyAdjustment> adjustments, List<ModelCall> heard, List<ModelCall> reviews)
+            List<SupplyAdjustment> adjustments, List<ModelCall> heard, List<ModelCall> reviews,
+            List<ModelCall> pictures)
         {
+            _pictures = pictures.GroupBy(c => c.DeliveryId!.Value).ToDictionary(g => g.Key, g => g.First());
             _heardByReading = heard.GroupBy(c => c.ReadingId!.Value).ToDictionary(g => g.Key, g => g.First());
             foreach (var call in reviews)
             {
@@ -864,6 +873,13 @@ public class ActivityService
                 steps.Add(new TraceStep("delivery", "Delivered",
                     $"to {to}'s inbox{(delivery.IsBackupHop ? ", as the backup person" : "")}",
                     null, delivery.DeliveredAtUtc));
+                if (_pictures.TryGetValue(delivery.Id, out var picture))
+                {
+                    steps.Add(new TraceStep("model", "Muse Image",
+                        $"drew a picture card for {to}, so it can be taken in without reading",
+                        $"{picture.Model} · Meta Model API · {(picture.ElapsedMs >= 1000 ? $"{picture.ElapsedMs / 1000.0:0.0} s" : $"{picture.ElapsedMs} ms")}",
+                        picture.AtUtc));
+                }
                 if (delivery.AcknowledgedAtUtc is DateTime seen)
                 {
                     steps.Add(new TraceStep("person", to, "saw it", null, seen));

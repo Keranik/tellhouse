@@ -27,10 +27,11 @@ public class ModelOptions
 
     // What SAM is asked to look for, per tracked supply, when the
     // supply's name is not something a camera can see by that name.
+    // Medicines are never on this list: a supply whose name is
+    // health-shaped is never sent to SAM at all (ShelfCheckService).
     public Dictionary<string, string> ShelfPrompts { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["heart pills"] = "pill bottle",
-        ["pads"] = "package of incontinence pads",
+        ["pads"] = "package of pads",
         ["wipes"] = "package of wet wipes",
         ["gauze"] = "box of gauze pads"
     };

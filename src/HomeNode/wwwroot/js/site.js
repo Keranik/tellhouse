@@ -358,3 +358,48 @@
         else if (state === "recording") stop();
     });
 })();
+
+// The shelf check: the photo is made smaller in the browser before it
+// leaves the device (at most 1600 pixels on its long side, JPEG), and
+// its size travels with it so SAM's outlines can be drawn over it.
+(function () {
+    var form = document.querySelector("form[data-shelf-form]");
+    var input = form && form.querySelector("[data-shelf-input]");
+    if (!input) return;
+    var widthField = form.querySelector("[data-shelf-width]");
+    var heightField = form.querySelector("[data-shelf-height]");
+    var label = form.querySelector(".shelf-pick span");
+    var shrinking = false;
+    input.addEventListener("change", function () {
+        var file = input.files && input.files[0];
+        if (!file || shrinking) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+            var img = new Image();
+            img.onload = function () {
+                var scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+                var w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+                widthField.value = w;
+                heightField.value = h;
+                if (label) label.textContent = "Photo ready";
+                if (scale >= 1 && file.size < 1500000) return;
+                var canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+                if (!canvas.toBlob || typeof DataTransfer === "undefined") return;
+                shrinking = true;
+                canvas.toBlob(function (blob) {
+                    try {
+                        var dt = new DataTransfer();
+                        dt.items.add(new File([blob], "shelf.jpg", { type: "image/jpeg" }));
+                        input.files = dt.files;
+                    } catch (e) { }
+                    shrinking = false;
+                }, "image/jpeg", 0.85);
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+})();

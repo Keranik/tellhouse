@@ -53,6 +53,12 @@ builder.Services.Configure<HomeNode.Services.Models.ModelOptions>(builder.Config
 builder.Services.AddSingleton<HomeNode.Services.Models.MetaApi>();
 builder.Services.AddScoped<HomeNode.Services.Models.IVoiceClient, HomeNode.Services.Models.MetaVoiceClient>();
 builder.Services.AddScoped<HomeNode.Services.Models.ReviewService>();
+builder.Services.AddScoped<HomeNode.Services.Models.ISeeClient, HomeNode.Services.Models.MetaSeeClient>();
+builder.Services.AddScoped<HomeNode.Services.Models.ShelfCheckService>();
+builder.Services.AddScoped<HomeNode.Services.Models.IDrawClient, HomeNode.Services.Models.MetaDrawClient>();
+// Picture cards for deliveries to children: drawn in the background
+// after the delivery is written, and only on a Live instance.
+builder.Services.AddHostedService<HomeNode.Services.Models.PictureCardService>();
 builder.Services.AddScoped<NeedsYouService>();
 builder.Services.AddScoped<PlanAssemblyService>();
 builder.Services.AddScoped<RunnerTaskService>();
@@ -279,6 +285,30 @@ app.MapGet("/as/{personId:int?}", async (int? personId, string? @return, HttpCon
     var valid = personId is int id && await db.Persons.AnyAsync(p => p.Id == id);
     CurrentPerson.Set(http, valid ? personId : null);
     return Results.LocalRedirect(CurrentPerson.SafeReturn(@return));
+});
+
+// The images the models' work is shown with. A shelf photo is the
+// household's own (anyone in the house may see the shelf check); a
+// picture card is shown only to someone who may see the entry it was
+// drawn from, the child it was drawn for included.
+app.MapGet("/models/shelf/{id:int}", async (int id, AppDbContext db) =>
+{
+    var call = await db.ModelCalls.FirstOrDefaultAsync(c => c.Id == id && c.Purpose == ModelCallPurpose.See);
+    return call?.Image is null ? Results.NotFound() : Results.File(call.Image, call.ImageType ?? "image/jpeg");
+});
+app.MapGet("/models/picture/{id:int}", async (int id, HttpContext http, AppDbContext db) =>
+{
+    var call = await db.ModelCalls.FirstOrDefaultAsync(c => c.Id == id && c.Purpose == ModelCallPurpose.Draw);
+    if (call?.Image is null || call.EventId is not int eventId)
+    {
+        return Results.NotFound();
+    }
+    var source = await db.Events.FirstOrDefaultAsync(e => e.Id == eventId);
+    var viewer = CurrentPerson.FromCookie(http);
+    var allowed = source is not null && (viewer is int v
+        ? v == call.PersonId || BriefService.IsVisibleTo(source, v)
+        : BriefService.IsVisibleWithNoReader(source));
+    return allowed ? Results.File(call.Image, call.ImageType ?? "image/png") : Results.NotFound();
 });
 
 // The HTTP door adapter the stand-ins speak (the stand-ins'

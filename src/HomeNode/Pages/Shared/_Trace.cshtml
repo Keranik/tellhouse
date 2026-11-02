@@ -430,6 +430,7 @@
                     "waiting" => "clock",
                     _ => step.Actor switch
                     {
+                        "model" => "image",
                         "person" => "person",
                         "assistant" => "lock",
                         "delivery" => step.Who == "Sealed relay" || step.Text.StartsWith("sealed") ? "lock" : "send",

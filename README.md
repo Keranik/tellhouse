@@ -49,7 +49,7 @@ The pages follow one loop, seen through one person's eyes at a time (the person 
 
 - **Home:** say it. Type or speak a message to the house, mark it Private if it should go to no model, and watch what happens to it, step by step.
 - **Inbox:** needs you. What is waiting on this person: a yes the house is asking for, a question about who should see something, plan items, and what the house has passed on.
-- **Briefing:** the house now. What needs attention (the house's own rules, and Muse Wonder's review), who has taken what on, what is running low, and what is planned. Plans and Claims open from here.
+- **Briefing:** the house now. What needs attention (the house's own rules, and Muse Wonder's review), what is on the shelf (SAM 3.1), who has taken what on, what is running low, and what is planned. Plans and Claims open from here.
 - **Timeline:** the record. Every message, newest first, from the words that came in to where they went.
 - **The models:** each Meta model's job in the house, what it never sees, the exact instructions and output schema, and live counts.
 - **Assistants:** who is connected to the house through their own assistant, and how one joins.
@@ -61,8 +61,10 @@ Each model has one job at one step of the loop, all through the Meta Model API w
 - **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) hears a spoken message on Home, with the household's names and supplies as keywords; the words come back to be checked before sending, and the audio is not kept.
 - **Muse Spark** (`muse-spark-1.3`) reads every message into typed record entries and at most one proposed action, under a strict JSON schema.
 - **Muse Wonder** (`muse-wonder-1.0`) reviews the shared record a person may see, when they ask on Briefing, and reports conflicts, slipping claims and supplies that will run out, citing the entries it relied on; the house drops any finding that cites something it was not shown.
+- **SAM 3.1** (`sam-3.1`) looks at a photo of the supply shelf on Briefing: the house's own supply list becomes its prompts, one noun phrase per request, and it outlines and counts what it finds. Where it sees none, the page offers "We're out of …" for the message box; a photo writes nothing to the record.
+- **Muse Image** (`muse-image-1.0`) draws a picture card when the house passes a message on to a child ("come down for dinner at 6:30" becomes a plate and a big clock), so it can be taken in without reading. The brief it gets carries no one's name.
 
-Private things are kept away from every model: a message about health or medicine, or one marked Private, is written down by the house's own deterministic rules on the server, and if those rules cannot write it down nothing is sent anywhere. Muse Wonder is never shown a private entry, a health entry, or a medicine. `tools/model-smoke.py` calls each model once with your key and reports whether it answered in the expected shape.
+Private things are kept away from every model: a message about health or medicine, or one marked Private, is written down by the house's own deterministic rules on the server, and if those rules cannot write it down nothing is sent anywhere. Muse Wonder is never shown a private entry, a health entry, or a medicine; SAM 3.1 is never asked to look for a medicine; Muse Image draws only from what the whole household may see, and never anything health-shaped. `tools/model-smoke.py` calls each model once with your key and reports whether it answered in the expected shape.
 
 ## Run it locally
 

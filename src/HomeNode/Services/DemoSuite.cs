@@ -2212,6 +2212,58 @@ public static class DemoSuite
             && CurrentPerson.SafeReturn("/Member?personId=3") == "/Member"
             && CurrentPerson.Resolve(null, null, await db.Persons.ToListAsync()) is null);
 
+        // ---------- Seeing: SAM 3.1's answer, read by the house ----------
+        var samLine = "<0f> 1 <|box;x1=10;y1=20;x2=110;y2=220;w=100;h=200;c=0.91|><|mask;x=10;y=20;data=AAAA|> "
+            + "2 <|box;x1=200;y1=30;w=60;h=100;c=0.77|><|mask;x=200;y=30;data=BBBB|>";
+        var samBoxes = HomeNode.Services.Models.SamGrammar.Boxes(samLine);
+        var streamedSam = "event: response.output_text.delta\n"
+            + "data: {\"type\":\"response.output_text.delta\",\"delta\":\"<0f> 7 <|box;x1=1;y1=2;\"}\n\n"
+            + "data: {\"type\":\"response.output_text.delta\",\"delta\":\"x2=3;y2=4|>\"}\n\n"
+            + "data: [DONE]\n";
+        Check("Seeing: the house reads SAM 3.1's boxes from its token grammar, streamed or whole, and an empty answer as none seen",
+            samBoxes.Count == 2
+            && samBoxes[0] == new HomeNode.Services.Models.SeenBox(10, 20, 110, 220, 0.91)
+            && samBoxes[1].Right == 260 && samBoxes[1].Bottom == 130 && samBoxes[1].Confidence == 0.77
+            && HomeNode.Services.Models.SamGrammar.Boxes(HomeNode.Services.Models.SamGrammar.OutputText(streamedSam)).Count == 1
+            && HomeNode.Services.Models.SamGrammar.Boxes("").Count == 0
+            && HomeNode.Services.Models.SamGrammar.Boxes("<0f>").Count == 0);
+        var (shelfAsked, shelfNotAsked) = HomeNode.Services.Models.ShelfCheckService.PromptsFor(
+            await db.SupplyItems.ToListAsync(), new HomeNode.Services.Models.ModelOptions());
+        Check("Seeing: SAM is asked about the tracked supplies by name, one phrase each, and never about a medicine",
+            shelfAsked.Count == 3
+            && shelfAsked.Any(a => a.Prompt == "package of wet wipes")
+            && !shelfAsked.Any(a => PrivacyRule.WordsArePrivate(a.Prompt) || PrivacyRule.WordsArePrivate(a.Supply.Name))
+            && shelfNotAsked.Count == 2);
+        Check("Seeing: only a JPEG, PNG or WebP photo, known by its own first bytes, is sent",
+            HomeNode.Services.Models.ShelfCheckService.MediaType(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0, 0 }) == "image/jpeg"
+            && HomeNode.Services.Models.ShelfCheckService.MediaType(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0 }) == "image/png"
+            && HomeNode.Services.Models.ShelfCheckService.MediaType(System.Text.Encoding.ASCII.GetBytes("RIFF0000WEBPVP8 ")) == "image/webp"
+            && HomeNode.Services.Models.ShelfCheckService.MediaType(System.Text.Encoding.ASCII.GetBytes("GIF89a......")) is null);
+
+        // ---------- Drawing: picture cards, only where they belong ----------
+        var timmyPerson = await db.Persons.FirstAsync(p => p.Id == 4);
+        var margaretPerson = await db.Persons.FirstAsync(p => p.Id == 1);
+        var sharedEntry = new Event { Type = EventType.Request, Body = "Ask Timmy to come down for dinner at 6:30", SensitivityClass = SensitivityClass.Household };
+        var healthEntry = new Event { Type = EventType.HealthMention, Body = "Timmy has a fever", SensitivityClass = SensitivityClass.Restricted };
+        var namedEntry = new Event { Type = EventType.Request, Body = "Ask Timmy to keep the gift a surprise", SensitivityClass = SensitivityClass.Named };
+        Check("Drawing: a picture card is drawn only for a child, only from what the whole household may see, and never for anything health-shaped",
+            HomeNode.Services.Models.PictureCardService.Eligible(timmyPerson, sharedEntry, sharedEntry.Body)
+            && !HomeNode.Services.Models.PictureCardService.Eligible(margaretPerson, sharedEntry, sharedEntry.Body)
+            && !HomeNode.Services.Models.PictureCardService.Eligible(timmyPerson, healthEntry, healthEntry.Body)
+            && !HomeNode.Services.Models.PictureCardService.Eligible(timmyPerson, namedEntry, namedEntry.Body)
+            && !HomeNode.Services.Models.PictureCardService.Eligible(timmyPerson, sharedEntry, "Ask Timmy to take his medicine at 6:30"));
+        var pictureBrief = HomeNode.Services.Models.PictureCardService.PromptFor(sharedEntry.Body, new[] { "Timmy", "Margaret", "Ellis" });
+        Check("Drawing: the picture brief carries no one's name, asks for no faces and no writing, and puts a named time on a clock",
+            !pictureBrief.Contains("Timmy") && pictureBrief.Contains("come down for dinner")
+            && pictureBrief.Contains("hands at 6:30") && pictureBrief.Contains("Do not draw any faces")
+            && pictureBrief.Contains("Do not write any words"));
+        var drawnResponse = "{\"id\":\"resp_1\",\"status\":\"completed\",\"output\":[{\"type\":\"image_generation_call\",\"result\":\""
+            + Convert.ToBase64String(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3 }) + "\"}]}";
+        var drawn = HomeNode.Services.Models.MetaDrawClient.ImageFrom(drawnResponse);
+        Check("Drawing: the picture is read from the image_generation_call result of Muse Image's response",
+            drawn is { Length: 11 } && HomeNode.Services.Models.ShelfCheckService.MediaType(drawn) == "image/png"
+            && HomeNode.Services.Models.MetaDrawClient.ImageFrom("{\"output\":[]}") is null);
+
         Console.WriteLine();
         Console.WriteLine($"Demo suite: {_passed} passed, {_failed} failed.");
         foreach (var failure in _failures)

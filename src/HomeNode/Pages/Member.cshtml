@@ -9,6 +9,7 @@
     var memberFirst = NameWording.First(Model.Member?.DisplayName);
     var needs = Model.Needs;
     var timelineHref = "/Timeline";
+    int? Picture(int? deliveryId) => deliveryId is int d && Model.Pictures.TryGetValue(d, out var callId) ? callId : null;
     TraceView Card(ActivityItem item) => new(item, new TraceOptions
     {
         PagePath = "/Member",
@@ -117,7 +118,7 @@
 
     @foreach (var item in needs.NewDeliveries.OrderByDescending(r => r.AtUtc))
     {
-        <partial name="_Delivery" model="new DeliveryView(item, Model.Traces.GetValueOrDefault(item.AlertDeliveryId ?? 0), Model.Member, Model.People, Model.HouseholdZone, timelineHref)" />
+        <partial name="_Delivery" model="new DeliveryView(item, Model.Traces.GetValueOrDefault(item.AlertDeliveryId ?? 0), Model.Member, Model.People, Model.HouseholdZone, timelineHref, Picture(item.AlertDeliveryId))" />
     }
 </section>
 
@@ -157,7 +158,7 @@
         <summary><h2>Seen and earlier</h2> <span class="muted small">@needs.SeenDeliveries.Count</span></summary>
         @foreach (var item in needs.SeenDeliveries.OrderByDescending(r => r.AtUtc))
         {
-            <partial name="_Delivery" model="new DeliveryView(item, Model.Traces.GetValueOrDefault(item.AlertDeliveryId ?? 0), Model.Member, Model.People, Model.HouseholdZone, timelineHref)" />
+            <partial name="_Delivery" model="new DeliveryView(item, Model.Traces.GetValueOrDefault(item.AlertDeliveryId ?? 0), Model.Member, Model.People, Model.HouseholdZone, timelineHref, Picture(item.AlertDeliveryId))" />
         }
     </details>
 }
