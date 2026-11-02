@@ -775,3 +775,56 @@ screenshot shows this build, and its steps start with
 a message that produces a confirmation. No licence
 file is included with the code.
 
+## Thirteenth public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Thirteenth public commit: suites
+
+All passing at this commit's final verification
+(November 2, 2026; no count moved from the twelfth
+public commit, and no check was changed or removed):
+
+- Home node demo suite: 219
+- Home node suite: 161
+- Single-process build demo suite: 139
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Thirteenth public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: the page redesign. Every
+message is now shown as a trace of the steps it took:
+the words and where they came from, what read them (the
+served model on a live instance, the local stand-in on
+this one, a stated-turn rule, or the demo seed for the
+starting record), the typed entries it became with their
+fields and any proposed action, what the house rules
+checked and who can see it, what a person decided, and
+where it went. A new Model page shows how the house
+uses its model: this instance's engine and settings,
+the path a message takes, counts from the readings on
+file, and the model's instructions and output shape.
+The reading record keeps a message's words and output
+only when the message produced record entries; a
+question or a refused reading keeps counted numbers
+only. No licence file is included with the code.
