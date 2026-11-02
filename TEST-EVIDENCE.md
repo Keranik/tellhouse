@@ -1,12 +1,9 @@
 # Test evidence summary
 
 What was run against the code in this repository, and what
-it showed. Three public commits are covered, each verified on
-its own exact tree: the first public commit (75b6ed3,
-October 29, 2026), the deployment wiring follow-up
-commit built on top of it (October 29, 2026), and the
-third public commit built on top of that (October 29,
-2026), covered in the final sections below.
+it showed. Every public commit is covered in its own
+sections below, each verified on its own exact tree, in
+the order the commits landed.
 
 ## Build
 
@@ -710,3 +707,71 @@ itself. The audience defaults list names only the
 people who have chosen a default, and says once, about
 the settings, when some have not chosen yet. The rail
 prints the household name once, under the wordmark.
+
+## Twelfth public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Twelfth public commit: suites
+
+All passing at this commit's final verification
+(November 2, 2026; the home node demo suite grew by the
+eight standing checks this commit adds, for the claims
+wording, the household claim audience, and the relayed
+message landing; no other count moved):
+
+- Home node demo suite: 219
+- Home node suite: 161
+- Single-process build demo suite: 139
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Twelfth public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: the second enterprise audit's
+fixes. The claims wording now reads the way people speak:
+a claim closed undone is "Not done", a claim let go is
+"No longer needed", and the page is called Claims (its
+address does not change). A claim addressed to the
+household is stored with the household as its audience,
+so the whole household sees it, as its label always said;
+a claim naming a person still reaches that person and its
+maker only. A confirmed message for one person now lands
+in that person's Inbox on the house, and nobody else's,
+and the answer after confirming says what happened
+("Sent to Daniel.", "Reminder set for Friday."). The
+Timeline table fits its panel at desktop widths, so the
+Confirm and Don't send buttons are on screen. The
+pickers name their roles (Sending as, Confirming as,
+Acting as, Answering as), the message box keeps the
+speaker a person chose, entries carry their date when
+they are not from today, and the Briefing lists open
+claims and things to order before recent entries, newest
+first. On a phone, the record cards name their parts, the
+supplies table no longer clips, and the menu button
+shows a menu marker. The pages for the two member
+assistants and the relay now describe what they actually
+do, in words that match the code. The README's
+screenshot shows this build, and its steps start with
+a message that produces a confirmation. No licence
+file is included with the code.
+
