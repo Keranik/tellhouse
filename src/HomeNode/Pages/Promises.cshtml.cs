@@ -36,6 +36,12 @@ public class PromisesModel : PageModel
     public int? ViewerId { get; set; }
     public string? Note => TempData["PromiseNote"] as string;
 
+    // Where each listed claim came from: its source entry (the message
+    // it was read out of), and that message's trace when one is on
+    // file, so the card can say what read the words and link to it.
+    public Dictionary<int, Event> Sources { get; private set; } = new();
+    public Dictionary<int, ActivityItem> SourceTraces { get; private set; } = new();
+
     public async Task OnGetAsync()
     {
         // The list follows the stored audience of each promise's
@@ -66,6 +72,19 @@ public class PromisesModel : PageModel
                 : BriefService.PromiseVisibleWithNoReader(p, sources.GetValueOrDefault(p.SourceEventId)))
             .ToList();
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
+        Sources = sources;
+        // The traces behind the listed claims, under the same reader:
+        // a claim the reader may see has a source the reader may see,
+        // and a source whose message the reader may not see in full
+        // simply has no trace link.
+        var feed = await new ActivityService(_db).BuildAsync(ViewerId, take: 300);
+        foreach (var item in feed.Items)
+        {
+            foreach (var entry in item.Entries)
+            {
+                SourceTraces[entry.Event.Id] = item;
+            }
+        }
     }
 
     public async Task<IActionResult> OnPostCloseAsync(int promiseId, int? closerPersonId, string outcome, string? closingWords)

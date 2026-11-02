@@ -37,6 +37,12 @@ public class PlansModel : PageModel
     public List<Event> OpenDecisions { get; private set; } = new();
     public string? Note => TempData["PlanNote"] as string;
 
+    // The trace behind each open decision, when the reader may see
+    // its message: the decision was flagged by the reading of a
+    // message, and the page says which engine flagged it.
+    public Dictionary<int, ActivityItem> DecisionTraces { get; private set; } = new();
+    public TimeZoneInfo HouseholdZone { get; private set; } = HouseholdTime.ZoneFor(null);
+
     public async Task OnGetAsync()
     {
         Plans = await _db.Plans
@@ -76,6 +82,20 @@ public class PlansModel : PageModel
                 ? BriefService.IsVisibleTo(e, viewer)
                 : BriefService.IsVisibleWithNoReader(e))
             .ToList();
+        var household = await _db.Households.FirstOrDefaultAsync();
+        HouseholdZone = HouseholdTime.ZoneFor(household?.TimeZoneId);
+        if (OpenDecisions.Count > 0)
+        {
+            var decisionIds = OpenDecisions.Select(e => e.Id).ToHashSet();
+            var feed = await new ActivityService(_db).BuildAsync(ViewerId, take: 300);
+            foreach (var item in feed.Items)
+            {
+                foreach (var entry in item.Entries.Where(e => decisionIds.Contains(e.Event.Id)))
+                {
+                    DecisionTraces[entry.Event.Id] = item;
+                }
+            }
+        }
     }
 
     // Whether this page's reader may see one plan element's text.

@@ -32,6 +32,14 @@ public class MemberModel : PageModel
     public Person? Member { get; private set; }
     public List<MemberDeliveryItem> Received { get; private set; } = new();
 
+    // How a delivered message got here, by delivery id: the trace of
+    // the message behind it, when the member may see that message's
+    // entries under their stored audience. A delivery carries its own
+    // words to the person it names; it never widens what that person
+    // may read in the record, so a source the member may not see has
+    // no trace here.
+    public Dictionary<int, ActivityItem> Traces { get; private set; } = new();
+
     // The household zone inbox times are shown in.
     public TimeZoneInfo HouseholdZone { get; private set; } =
         TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
@@ -54,6 +62,27 @@ public class MemberModel : PageModel
         if (Member is not null)
         {
             Received = await _deliveries.ReceivedForAsync(Member.Id);
+            var deliveryIds = Received.Where(r => r.AlertDeliveryId is not null)
+                .Select(r => r.AlertDeliveryId!.Value).ToList();
+            var eventByDelivery = await _db.AlertDeliveries
+                .Where(d => deliveryIds.Contains(d.Id))
+                .ToDictionaryAsync(d => d.Id, d => d.EventId);
+            var feed = await new ActivityService(_db).BuildAsync(Member.Id, take: 300);
+            var traceByEvent = new Dictionary<int, ActivityItem>();
+            foreach (var item in feed.Items)
+            {
+                foreach (var entry in item.Entries)
+                {
+                    traceByEvent[entry.Event.Id] = item;
+                }
+            }
+            foreach (var (deliveryId, eventId) in eventByDelivery)
+            {
+                if (traceByEvent.TryGetValue(eventId, out var trace))
+                {
+                    Traces[deliveryId] = trace;
+                }
+            }
         }
     }
 

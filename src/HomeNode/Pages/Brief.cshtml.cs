@@ -33,6 +33,13 @@ public class BriefModel : PageModel
 
     public string? LookupAnswer => TempData["LookupAnswer"] as string;
 
+    // The same reader's view of the house's activity (ActivityService):
+    // the newest entries this person may see, traced, and the ones
+    // still waiting on a person's answer.
+    public List<ActivityItem> Recent { get; private set; } = new();
+    public List<ActivityItem> Waiting { get; private set; } = new();
+    public TimeZoneInfo HouseholdZone { get; private set; } = HouseholdTime.ZoneFor(null);
+
     public async Task<IActionResult> OnGetAsync()
     {
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
@@ -75,6 +82,10 @@ public class BriefModel : PageModel
         }
         Lines = await _briefs.BuildBriefAsync(viewerId,
             DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, householdZone)));
+        HouseholdZone = householdZone;
+        var feed = await new ActivityService(_db).BuildAsync(viewerId, take: 60);
+        Waiting = feed.Items.Where(i => i.NeedsDecision).Take(5).ToList();
+        Recent = feed.Items.Take(8).ToList();
         return Page();
     }
 

@@ -4,19 +4,24 @@
     ViewData["Title"] = "Something went wrong";
 }
 
-<h1>Something went wrong</h1>
-<p>That didn't go through. Go back and try again.</p>
+<div class="page-head">
+    <h1>Something went wrong</h1>
+    <p class="lede">That didn't go through. Go back and try again.</p>
+</div>
 
 <p>
     <a href="javascript:history.back()">Go back</a>
+    &middot;
     <a asp-page="/FrontDoor">Home</a>
+    &middot;
+    <a asp-page="/Timeline">Timeline</a>
 </p>
 
 @if (Model.ShowRequestId)
 {
-    <p>
+    <p class="muted small">
         Reference: <code>@Model.RequestId</code>
     </p>
 }
 
-<p>Check Recent or Timeline to see whether it landed before you send it again.</p>
+<p class="note">Check the Timeline to see whether it landed before you send it again.</p>

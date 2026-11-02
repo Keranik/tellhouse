@@ -46,6 +46,18 @@ public class TimelineModel : PageModel
 
     public string? Note => TempData["TimelineNote"] as string;
 
+    // The record as activity: each message the reader may see, traced
+    // step by step from the words that came in to where they went
+    // (ActivityService). Show filters the list: all, waiting (a
+    // person still has to answer), or sent (it reached someone).
+    [BindProperty(SupportsGet = true)]
+    public string? Show { get; set; }
+    public List<ActivityItem> Activity { get; private set; } = new();
+    public int CountAll { get; private set; }
+    public int CountRead { get; private set; }
+    public int CountWaiting { get; private set; }
+    public int CountSent { get; private set; }
+
     public async Task OnGetAsync()
     {
         await LoadAsync();
@@ -193,5 +205,17 @@ public class TimelineModel : PageModel
                 .Take(20)
                 .ToListAsync()
             : new List<AlertDelivery>();
+
+        var feed = await new ActivityService(_db).BuildAsync(ActorId, take: 200);
+        CountAll = feed.Items.Count;
+        CountRead = feed.Items.Count(i => i.Engine.HasReading);
+        CountWaiting = feed.Items.Count(i => i.NeedsDecision);
+        CountSent = feed.Items.Count(i => i.WasSent);
+        Activity = Show switch
+        {
+            "waiting" => feed.Items.Where(i => i.NeedsDecision).ToList(),
+            "sent" => feed.Items.Where(i => i.WasSent).ToList(),
+            _ => feed.Items
+        };
     }
 }

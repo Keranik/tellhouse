@@ -1,240 +1,438 @@
 @page "/"
 @model HomeNode.Pages.FrontDoorModel
+@using HomeNode.Data
+@using HomeNode.Services
+@inject Microsoft.Extensions.Options.IOptions<HomeNode.Services.Extraction.ExtractionOptions> ExtractionSettings
 @{
     ViewData["Title"] = "Home";
+    var live = ExtractionSettings.Value.Mode.Equals("Live", StringComparison.OrdinalIgnoreCase);
+    var modelId = ExtractionSettings.Value.Model;
+    var engineName = live ? "Muse Spark" : "the local stand-in";
+    var defaultSpeaker = Model.LastSpeakerId ?? Model.ViewerId;
+    // Every one-view note is read here, once, so none of them
+    // outlives this view whichever branch below shows it.
+    var houseReply = Model.HouseReply;
+    var pipelineNote = Model.PipelineNote;
+    var proposedWords = Model.ProposedWords;
+    var proposedEventId = Model.ProposedEventId;
+    var proposedAuthorId = Model.ProposedAuthorId;
+    var confirmLabel = Model.ConfirmLabel;
+    var declineLabel = Model.DeclineLabel;
+    var answerNote = Model.AnswerNote;
+    var testSendNote = Model.TestSendNote;
+    var defaultNote = Model.DefaultNote;
+    var readBackText = Model.ReadBackText;
+    var pendingDefaultRequestId = Model.PendingDefaultRequestId;
+    var pendingDefaultHolderId = Model.PendingDefaultHolderId;
+    var viewer = Model.People.FirstOrDefault(p => p.Id == Model.ViewerId);
+    var viewerFirst = NameWording.First(viewer?.DisplayName);
+    string[] examples =
+    {
+        "Ask Daniel to pick up milk on his way home",
+        "I'll get Mia at 3",
+        "We're out of wipes",
+        "Remind me on Friday to call the pharmacy"
+    };
+    var lensView = new LensView("/", "viewerId", Model.ViewerId, Model.People, true);
+    var justNowView = Model.JustNow is null ? null : new TraceView(Model.JustNow, new TraceOptions
+    {
+        PagePath = "/",
+        ActorField = "actorPersonId",
+        ActorId = Model.ViewerId,
+        LensField = "viewerId",
+        People = Model.People,
+        DefaultActorId = proposedAuthorId ?? Model.JustNow.SpeakerId,
+        Zone = Model.HouseholdZone
+    });
+    var featuredView = Model.Featured is null ? null : new TraceView(Model.Featured, new TraceOptions
+    {
+        PagePath = "/",
+        ActorField = "actorPersonId",
+        ActorId = Model.ViewerId,
+        LensField = "viewerId",
+        People = Model.People,
+        DefaultActorId = Model.Featured.SpeakerId,
+        Zone = Model.HouseholdZone
+    });
+    var timelineHref = Model.ViewerId is int timelineViewer ? $"/Timeline?ActorId={timelineViewer}" : "/Timeline";
+    var waitingHref = Model.ViewerId is int waitingViewer ? $"/Timeline?show=waiting&ActorId={waitingViewer}" : "/Timeline?show=waiting";
+    var lens = new TraceOptions
+    {
+        PagePath = "/",
+        ActorField = "actorPersonId",
+        ActorId = Model.ViewerId,
+        LensField = "viewerId",
+        Zone = Model.HouseholdZone,
+        Compact = true
+    };
 }
 
-<div class="front-door">
-    <div class="hero">
-        <h1>Tell the house</h1>
-
-        @if (Model.Household is not null)
-        {
-            <p class="house-name">Ellis household · @Model.People.Count people</p>
-        }
-
-        <p class="lead">Tell it once. Tellhouse writes it down, and asks before it tells anyone.</p>
-    </div>
-
-    <div class="hero-input">
-        <form method="post" asp-page-handler="Tell">
-            <div class="speaker-row">
-                <label>
-                    Sending as
-                    <select name="speakerId">
-                        @foreach (var person in Model.People)
-                        {
-                            if (Model.LastSpeakerId == person.Id)
-                            {
-                                <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                            }
-                            else
-                            {
-                                <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                            }
-                        }
-                        <option value="">No name given</option>
-                    </select>
-                </label>
-            </div>
-            <label>
-                <span class="visually-hidden">Message to the house</span>
-                <textarea name="telling" rows="3" placeholder="Try &quot;Ask Daniel to pick up milk&quot;, &quot;I'll get Mia at 3&quot;, or &quot;We're out of milk&quot;"></textarea>
-            </label>
-            <div class="form-actions">
-                <button type="submit" class="primary">Send</button>
-            </div>
-            <p class="muted-note">Nothing goes to anyone until you confirm.</p>
-        </form>
-    </div>
-
-
-    @if (Model.HouseReply is not null)
+<section class="home-hero">
+    @if (live)
     {
+        <a class="engine-badge" asp-page="/Model"><span class="dot" aria-hidden="true"></span>Read by Muse Spark &middot; @modelId</a>
+    }
+    else
+    {
+        <a class="engine-badge engine-badge--mock" asp-page="/Model"><span class="dot" aria-hidden="true"></span>Read by the local stand-in &middot; no model calls</a>
+    }
+    <h1>Tell the house</h1>
+    <p class="lede">Say what is happening, in plain words. @(live ? "Meta's Muse Spark" : "The model") turns it into a structured record: who it is about, what needs doing, when, and who should hear about it. The house's own rules decide who can see it, and nothing is sent until a person says yes.</p>
+</section>
+
+<div class="composer">
+    <form method="post" asp-page-handler="Tell" data-busy data-busy-label="@(live ? "Muse Spark is reading…" : "Reading…")">
+        <div class="composer-top">
+            <label>
+                Sending as
+                <select name="speakerId">
+                    @foreach (var person in Model.People)
+                    {
+                        if (defaultSpeaker == person.Id)
+                        {
+                            <option value="@person.Id" selected>@NameWording.First(person.DisplayName)</option>
+                        }
+                        else
+                        {
+                            <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
+                        }
+                    }
+                    <option value="">No name given</option>
+                </select>
+            </label>
+            @if (Model.Household is not null)
+            {
+                <span class="muted small">Ellis household &middot; @Model.People.Count people</span>
+            }
+        </div>
+        <label>
+            <span class="visually-hidden">Message to the house</span>
+            <textarea name="telling" rows="2" data-composer placeholder="Try &ldquo;Ask Daniel to pick up milk on his way home&rdquo;"></textarea>
+        </label>
+        <div class="composer-foot">
+            <div class="examples" aria-label="Examples to try">
+                <span class="examples-label">Try</span>
+                @foreach (var example in examples)
+                {
+                    <button type="button" class="example" data-example="@example">@example</button>
+                }
+            </div>
+            <button type="submit" class="primary">Send to the house</button>
+        </div>
+    </form>
+</div>
+<p class="composer-note">@(live ? "Muse Spark" : "The model") proposes. The house's rules decide who can see it. A person confirms before anything is sent.</p>
+
+@if (Model.JustNow is not null)
+{
+    <section class="just-now" aria-label="What happened to your message">
+        <div class="just-now-label">@Icons.Get("spark", 14) What the house did with your message</div>
+        @if (answerNote is not null)
+        {
+            <p class="note note--ok">@answerNote</p>
+        }
+        <partial name="_Trace" model="justNowView" />
+        @if (pipelineNote is string asksNote && asksNote.Contains("stays private"))
+        {
+            <p class="muted small">One entry stays private until the right person decides who sees it.</p>
+        }
+    </section>
+}
+else if (Model.JustRead is { } read)
+{
+    var readEngine = read.Engine switch
+    {
+        "live" => "Muse Spark",
+        "mock" => "The local stand-in",
+        "rule" => "The turn rule",
+        _ => read.Engine
+    };
+    var readMeta = new List<string>();
+    if (read.Engine == "live" && read.Model is not null) { readMeta.Add(read.Model); }
+    if (read.Engine == "mock") { readMeta.Add("No model call"); }
+    if (read.ElapsedMs is int readMs) { readMeta.Add(readMs >= 1000 ? $"{readMs / 1000.0:0.0} s" : $"{readMs} ms"); }
+    if (read.PromptTokens is int readIn) { readMeta.Add($"{readIn:N0} tokens in, {read.CompletionTokens ?? 0:N0} out"); }
+    var speakerName = read.SpeakerId is int sid ? NameWording.First(Model.People.FirstOrDefault(p => p.Id == sid)?.DisplayName) : "No name given";
+    var (readStatus, readStatusKey, readText) = read.Outcome switch
+    {
+        "Answered" => ("Answered from the record", "recorded", "answered from the record. Nothing new was written."),
+        "Clarify" => ("Needs a clearer message", "waiting", "asked a question back instead of guessing. Nothing was written."),
+        "Refused" => ("Nothing saved", "stopped", "returned something the house's checks would not accept. Nothing was saved."),
+        "Failed" => ("Nothing saved", "owed", "did not answer."),
+        _ => ("Nothing to record", "stopped", "found nothing to record.")
+    };
+    <section class="just-now" aria-label="What happened to your message">
+        <div class="just-now-label">@Icons.Get("spark", 14) What the house did with your message</div>
+        <article class="trace trace--@readStatusKey">
+            <header class="trace-head">
+                <span class="avatar avatar--@PersonStyle.Slot(read.SpeakerId)" aria-hidden="true">@PersonStyle.Initial(speakerName)</span>
+                <div class="trace-head-text">
+                    <span class="trace-who">@speakerName</span>
+                    <span class="trace-sub">Home &middot; just now</span>
+                </div>
+                <span class="status status--@readStatusKey">@readStatus</span>
+            </header>
+            <p class="trace-words">&ldquo;@read.Words&rdquo;</p>
+            <ol class="steps">
+                <li class="step step--@(read.Outcome == "Failed" ? "failed" : "model")">
+                    <span class="step-icon">@Icons.Get(read.Outcome == "Failed" ? "alert" : "spark")</span>
+                    <div class="step-body">
+                        <p class="step-title"><span class="step-who">@readEngine</span> @readText</p>
+                        @if (readMeta.Count > 0)
+                        {
+                            <p class="step-meta">@string.Join(" · ", readMeta)</p>
+                        }
+                    </div>
+                </li>
+                @if (read.Reply is not null)
+                {
+                    <li class="step step--house">
+                        <span class="step-icon">@Icons.Get("chat")</span>
+                        <div class="step-body">
+                            <p class="step-title"><span class="step-who">The house</span> replied</p>
+                            <p class="step-reply"><span>&ldquo;@read.Reply&rdquo;</span></p>
+                        </div>
+                    </li>
+                }
+            </ol>
+            @if (read.OutputJson is not null)
+            {
+                <details class="trace-raw">
+                    <summary>@Icons.Get("code", 14) What @(read.Engine == "live" ? "Muse Spark" : "the stand-in") returned</summary>
+                    <pre><code>@ActivityService.PrettyJson(read.OutputJson)</code></pre>
+                </details>
+            }
+        </article>
+        @if (pipelineNote is { } refusedNote && read.Outcome == "Refused")
+        {
+            <p class="muted small">@refusedNote</p>
+        }
+    </section>
+}
+else if (houseReply is not null)
+{
+    @* A reply with no trace to show (an answer about an entry the
+       reader may not see, or a message from before readings were
+       kept): the house's words and, for a proposal, its buttons. *@
+    <section class="just-now">
         <div class="panel panel-reply">
-            <p>@Model.HouseReply</p>
-            @if (Model.ProposedWords is not null)
+            <p>@houseReply</p>
+            @if (proposedWords is not null)
             {
-                <p class="reply-echo">&ldquo;@Model.ProposedWords&rdquo;</p>
+                <p class="reply-echo">&ldquo;@proposedWords&rdquo;</p>
             }
-            @if (Model.PipelineNote is not null)
+            @if (pipelineNote is not null)
             {
-                <p>@Model.PipelineNote</p>
+                <p>@pipelineNote</p>
             }
-            @if (Model.ProposedEventId is int proposedId)
+            @if (proposedEventId is int proposedId)
             {
-                <form method="post">
-                    @Html.AntiForgeryToken()
+                <form method="post" class="decide">
                     <input type="hidden" name="eventId" value="@proposedId" />
-                    <label>
+                    <label class="decide-as">
                         Confirming as
                         <select name="actorPersonId">
                             @foreach (var person in Model.People)
                             {
-                                if (Model.ProposedAuthorId == person.Id)
+                                if (proposedAuthorId == person.Id)
                                 {
-                                    <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                                    <option value="@person.Id" selected>@NameWording.First(person.DisplayName)</option>
                                 }
                                 else
                                 {
-                                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                                    <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
                                 }
                             }
                         </select>
                     </label>
-                    <div class="form-actions">
-                        <button type="submit" formaction="?handler=Confirm" class="primary">@Model.ConfirmLabel</button>
-                        <button type="submit" formaction="?handler=Decline">@Model.DeclineLabel</button>
-                    </div>
+                    <button type="submit" formaction="?handler=Confirm" class="primary">@confirmLabel</button>
+                    <button type="submit" formaction="?handler=Decline">@declineLabel</button>
                 </form>
             }
         </div>
-    }
+    </section>
+}
 
-
-    @if (Model.PendingAsks.Count > 0)
+@if (Model.JustNow is null && Model.JustRead is null && houseReply is null)
+{
+    if (featuredView is not null)
     {
-        <div class="panel">
-            <h3 class="panel-title">Needs your answer</h3>
-            <p>Who should see this entry?</p>
-            <p>Until you choose, only the people it names can see it.</p>
-            @foreach (var ask in Model.PendingAsks)
-            {
+        <section class="just-now" aria-label="The most recent message the model read">
+            <div class="just-now-label">@Icons.Get("spark", 14) The most recent message @engineName read@(Model.ViewerId is null ? " (household view)" : $", as {viewerFirst} may see it")</div>
+            <partial name="_Trace" model="featuredView" />
+        </section>
+    }
+    else
+    {
+        <section class="just-now">
+            <div class="empty">
+                <p>@(Model.AnyReadings ? "Nothing in this view was read by a model yet." : $"No message has been read on this instance yet.") Send one above to watch @engineName read it, step by step: the entries it makes, who the house lets see them, and what waits for a person.</p>
+            </div>
+        </section>
+    }
+}
+
+<ol class="flow" aria-label="How a message moves through the house">
+    <li class="flow--person">
+        <span class="flow-icon">@Icons.Get("person")</span>
+        <strong>1. Someone says it</strong>
+        <span class="flow-text">On this page, or through their own assistant over the sealed relay.</span>
+    </li>
+    <li class="flow--model">
+        <span class="flow-icon">@Icons.Get("spark")</span>
+        <strong>2. @(live ? "Muse Spark" : "The model") reads it</strong>
+        <span class="flow-text">Into typed entries: who, what, when, and any action to propose.</span>
+    </li>
+    <li class="flow--house">
+        <span class="flow-icon">@Icons.Get("shield")</span>
+        <strong>3. House rules check it</strong>
+        <span class="flow-text">Verbatim words, real people only, and who is allowed to see it.</span>
+    </li>
+    <li class="flow--wait">
+        <span class="flow-icon">@Icons.Get("clock")</span>
+        <strong>4. A person decides</strong>
+        <span class="flow-text">A proposal waits for a yes. Silence is never a yes.</span>
+    </li>
+    <li class="flow--delivery">
+        <span class="flow-icon">@Icons.Get("send")</span>
+        <strong>5. It reaches the person</strong>
+        <span class="flow-text">In their inbox, or sealed to their own assistant.</span>
+    </li>
+</ol>
+
+<div class="section-head">
+    <h2>The household right now</h2>
+    <p>Choose whose view to see. The household view shows shared entries only; a person's view shows what that person may see, and lets you answer as them.</p>
+</div>
+<partial name="_Lens" model="lensView" />
+
+@if (Model.PendingAsks.Count > 0)
+{
+    <div class="section-head"><h2>Needs your answer</h2></div>
+    <div class="waiting-list">
+        @foreach (var ask in Model.PendingAsks)
+        {
+            <div class="waiting-row">
+                <div class="waiting-text">
+                    <strong>Who should see this entry?</strong>
+                    <span>Until you choose, only the people it names can see it.</span>
+                </div>
                 <form method="post">
-                    @Html.AntiForgeryToken()
                     <input type="hidden" name="askId" value="@ask.Id" />
                     <input type="hidden" name="actorPersonId" value="@Model.ViewerId" />
-                    <label>
-                        Who should see this entry
+                    <label class="decide-as">
+                        <span class="visually-hidden">Who should see this entry</span>
                         <select name="choice">
                             <option value="Private">Only the people it names</option>
                             <option value="Household">Everyone in the household</option>
                         </select>
                     </label>
-                    <div class="form-actions">
-                        <button type="submit" formaction="?handler=AnswerAsk" class="primary">Save choice</button>
-                    </div>
+                    <button type="submit" formaction="?handler=AnswerAsk" class="primary">Save choice</button>
                 </form>
-            }
-        </div>
-    }
+            </div>
+        }
+    </div>
+}
 
-
-    <h2>Recent</h2>
-    <form method="get">
-        <label>
-            Viewing as
-            <select name="viewerId" onchange="this.form.submit()">
-                <option value="">Household view</option>
-                @foreach (var person in Model.People)
-                {
-                    if (Model.ViewerId == person.Id)
-                    {
-                        <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                    }
-                    else
-                    {
-                        <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                    }
-                }
-            </select>
-        </label>
-    </form>
-    @if (Model.RecentEvents.Count == 0)
-    {
-        <p>Nothing here yet. Messages you send show up here.</p>
-    }
-    else
-    {
-        <ul class="record-list">
-            @foreach (var item in Model.RecentEvents)
+@if (Model.Waiting.Count > 0)
+{
+    <div class="section-head">
+        <h2>Waiting on a person</h2>
+        <a class="more" href="@waitingHref">All waiting &rarr;</a>
+        <p>The model proposed these. Nothing happens until someone answers.</p>
+    </div>
+    <div class="waiting-list">
+        @foreach (var item in Model.Waiting)
+        {
+            foreach (var entry in item.Entries.Where(e => e.Waiting || e.RecordPending))
             {
-                <li class="record-item">
-                    <div class="record-body">@item.Body</div>
-                    <div class="record-meta">
-                        @if (item.AuthorPerson is not null)
-                        {
-                            <text>@HomeNode.Data.NameWording.First(item.AuthorPerson.DisplayName)</text>
-                        }
-                        else
-                        {
-                            <text>The house</text>
-                        }
-                        &middot; @HomeNode.Data.HouseholdTime.TimeOrDate(item.CreatedAtUtc, Model.HouseholdZone)
-                        @if (item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
-                        {
-                            <text> &middot; </text><span class="chip-action">Needs confirmation</span>
-                            @if (Model.ViewerId is null)
-                            {
-                                <div class="muted-note">Pick a person above to answer.</div>
-                            }
-                            @if (Model.ViewerId is int recentViewer)
-                            {
-                                <form method="post" asp-page-handler="Confirm" class="inline-form">
-                                    <input type="hidden" name="eventId" value="@item.Id" />
-                                    <input type="hidden" name="actorPersonId" value="@recentViewer" />
-                                    <button type="submit">Confirm</button>
-                                </form>
-                                <form method="post" asp-page-handler="Decline" class="inline-form">
-                                    <input type="hidden" name="eventId" value="@item.Id" />
-                                    <input type="hidden" name="actorPersonId" value="@recentViewer" />
-                                    <button type="submit">Don&rsquo;t send</button>
-                                </form>
-                            }
-                        }
-                        @if (HomeNode.Services.ProvenanceRendering.Describe(item) is { } provenance)
-                        {
-                            <div>@provenance</div>
-                        }
+                <div class="waiting-row">
+                    <span class="avatar avatar--@PersonStyle.Slot(item.SpeakerId)" aria-hidden="true">@PersonStyle.Initial(item.SpeakerName)</span>
+                    <div class="waiting-text">
+                        <strong>@(entry.Action?.Summary ?? entry.Title)</strong>
+                        <span>@item.SpeakerName &middot; @HouseholdTime.TimeOrDate(item.AtUtc, Model.HouseholdZone) &middot; <a href="@(timelineHref)#@item.Key">see the trace</a></span>
                     </div>
-                </li>
+                    @if (Model.ViewerId is int actor)
+                    {
+                        <form method="post">
+                            <input type="hidden" name="eventId" value="@entry.Event.Id" />
+                            <input type="hidden" name="actorPersonId" value="@actor" />
+                            <input type="hidden" name="viewerId" value="@actor" />
+                            <button type="submit" class="primary" formaction="?handler=Confirm">@(entry.Action?.ConfirmLabel ?? "Confirm")</button>
+                            <button type="submit" formaction="?handler=Decline">@(entry.Action is null ? "Not right" : "Don’t send")</button>
+                        </form>
+                    }
+                </div>
             }
-        </ul>
-    }
-
-    @if (Model.StandIns.Count > 0)
+        }
+    </div>
+    @if (Model.ViewerId is null)
     {
-        <div class="panel">
-            <h3 class="panel-title">Try a connected assistant</h3>
+        <p class="muted small">Choose who you are under <strong>Viewing as</strong> to answer.</p>
+    }
+}
+
+<div class="section-head">
+    <h2>Latest activity</h2>
+    <a class="more" href="@timelineHref">The full timeline &rarr;</a>
+    <p>Each message, what @engineName made of it, and what happened next.@(viewer is null ? " The household view shows shared entries only." : $" Shown as {viewerFirst} may see it.")</p>
+</div>
+@if (Model.Activity.Count == 0)
+{
+    <div class="empty"><p>Nothing here yet. Messages you send show up here, step by step.</p></div>
+}
+else
+{
+    <div class="trace-list">
+        @foreach (var item in Model.Activity)
+        {
+            <partial name="_Trace" model="new TraceView(item, lens)" />
+        }
+    </div>
+}
+
+@if (Model.StandIns.Count > 0)
+{
+    <div class="section-head">
+        <h2>Messages from an assistant</h2>
+        <p>Members can talk to the house through their own AI assistant. A note travels sealed through the relay and is read by the same pipeline as this page.</p>
+    </div>
+    @if (testSendNote is not null)
+    {
+        <p class="note">@testSendNote</p>
+    }
+    <form method="post" data-busy data-busy-label="Sending…">
+        <div class="assistants">
             @foreach (var standIn in Model.StandIns)
             {
-                <p>@HomeNode.Data.NameWording.First(standIn.PersonName) uses their own AI assistant. Ask it to send the house a note.</p>
+                var standInFirst = NameWording.First(standIn.PersonName);
+                <div class="assistant-card">
+                    <strong>@standInFirst's assistant</strong>
+                    <p class="muted">@standInFirst uses their own AI assistant. Ask it to send the house a note.</p>
+                    <button type="submit" formaction="?handler=TestSend" name="standInName" value="@standIn.Name">Send a note from @standInFirst's assistant</button>
+                </div>
             }
-            @if (Model.TestSendNote is not null)
-            {
-                <p>@Model.TestSendNote</p>
-            }
-            <form method="post" onsubmit="var b=this.querySelector('button[type=submit][data-sending]'); if(b){ b.disabled=true; b.textContent='Sending...'; }">
-                @Html.AntiForgeryToken()
-                @foreach (var standIn in Model.StandIns)
-                {
-                    <button type="submit" formaction="?handler=TestSend" name="standInName" value="@standIn.Name" data-sending="true">Send a note from @HomeNode.Data.NameWording.First(standIn.PersonName)'s assistant</button>
-                }
-            </form>
         </div>
-    }
+    </form>
+}
 
-
-    <div class="panel">
-        <h3 class="panel-title">Who sees your messages by default</h3>
-        <p>Each person chooses who usually sees messages they add when
-           they do not name anyone. Only that person can change their
-           own choice, and a change applies only to messages added
-           afterwards.</p>
-        @if (Model.DefaultNote is not null)
+<details class="disclose" @(defaultNote is not null || readBackText is not null ? "open" : null)>
+    <summary>Who sees your messages by default <span class="muted">Sharing defaults</span></summary>
+    <div class="disclose-body">
+        <p>Each person chooses who usually sees messages they add when they do not name anyone. Only that person can change their own choice, and a change applies only to messages added afterwards.</p>
+        @if (defaultNote is not null)
         {
-            <p>@Model.DefaultNote</p>
+            <p class="note">@defaultNote</p>
         }
-        @if (Model.ReadBackText is not null)
+        @if (readBackText is not null)
         {
             <div class="panel panel-reply">
-                <p>@Model.ReadBackText</p>
-                @if (Model.PendingDefaultRequestId is int requestId)
+                <p>@readBackText</p>
+                @if (pendingDefaultRequestId is int requestId)
                 {
                     <form method="post">
-                        @Html.AntiForgeryToken()
                         <input type="hidden" name="requestId" value="@requestId" />
-                        <input type="hidden" name="actorPersonId" value="@Model.PendingDefaultHolderId" />
+                        <input type="hidden" name="actorPersonId" value="@pendingDefaultHolderId" />
                         <div class="form-actions">
                             <button type="submit" formaction="?handler=ConfirmDefault" class="primary">Save</button>
                             <button type="submit" formaction="?handler=DeclineDefault">Cancel</button>
@@ -243,23 +441,23 @@
                 }
             </div>
         }
-        <ul class="default-list">
+        <ul class="defaults-list">
             @foreach (var row in Model.Defaults.Where(r => r.IsSet))
             {
-                <li>@HomeNode.Data.NameWording.First(row.Person.DisplayName): @row.Label</li>
+                <li><span class="avatar avatar--@PersonStyle.Slot(row.Person.Id) avatar--sm" aria-hidden="true">@PersonStyle.Initial(NameWording.First(row.Person.DisplayName))</span>@NameWording.First(row.Person.DisplayName): @row.Label</li>
             }
         </ul>
         @if (Model.Defaults.Any(r => !r.IsSet))
         {
-            <p>Some people in the household have not chosen a default yet.</p>
+            <p class="muted small">Some people in the household have not chosen a default yet.</p>
         }
-        <form method="post" asp-page-handler="SetDefault">
+        <form method="post" asp-page-handler="SetDefault" class="form-row">
             <label>
                 Acting as
                 <select name="actorPersonId">
                     @foreach (var person in Model.People)
                     {
-                        <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                        <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
                     }
                 </select>
             </label>
@@ -268,7 +466,7 @@
                 <select name="holderPersonId">
                     @foreach (var person in Model.People)
                     {
-                        <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                        <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
                     }
                 </select>
             </label>
@@ -280,12 +478,8 @@
                     <option value="Ask">Ask me each time</option>
                 </select>
             </label>
-            <div class="form-actions">
-                <button type="submit" class="primary">Save</button>
-            </div>
+            <button type="submit" class="primary">Save</button>
         </form>
-        <p>A change for someone else is only a suggestion. Only that
-           person can set their own default.</p>
+        <p class="muted small">A change for someone else is only a suggestion. Only that person can set their own default.</p>
     </div>
-
-    </div>
+</details>

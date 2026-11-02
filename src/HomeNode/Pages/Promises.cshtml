@@ -1,91 +1,110 @@
 @page "/Promises"
 @model HomeNode.Pages.PromisesModel
+@using HomeNode.Data
+@using HomeNode.Services
 @{
     ViewData["Title"] = "Claims";
+    var note = Model.Note;
+    var lensView = new LensView("/Promises", "ViewerId", Model.ViewerId, Model.People, true);
+    var timelineHref = Model.ViewerId is int tv ? $"/Timeline?ActorId={tv}" : "/Timeline";
+    var open = Model.Promises.Count(p => p.State == HomeNode.Data.PromiseState.Made);
+    string EngineSentence(ActivityItem? trace) => trace?.Engine.Kind switch
+    {
+        "live" => "Muse Spark read it as a claim",
+        "mock" => "The local stand-in read it as a claim",
+        "rule" => "A house rule shaped it",
+        "seed" => "Part of the demo's starting record; no model read it",
+        _ => "Recorded"
+    };
 }
 
-<h1>Claims</h1>
-<p>What people in the household have said they'll do, in their own words.</p>
+<div class="page-head">
+    <span class="eyebrow">@Icons.Get("check", 13) What people have taken on</span>
+    <h1>Claims</h1>
+    <p class="lede">When someone says &ldquo;I'll&hellip;&rdquo;, the model turns it into a claim the household can see: who took it on, for whom, and by when. It stays open until a person closes it in their own words. The house never closes a claim on a clock.</p>
+</div>
 
-@if (Model.Note is not null)
+<partial name="_Lens" model="lensView" />
+
+@if (note is not null)
 {
-    <p>@Model.Note</p>
+    <p class="note">@note</p>
 }
 
-<form method="get">
-    <label>
-        Viewing as
-        <select name="ViewerId" onchange="this.form.submit()">
-            <option value="">Household view</option>
-            @foreach (var person in Model.People)
-            {
-                if (Model.ViewerId == person.Id)
-                {
-                    <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                }
-                else
-                {
-                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                }
-            }
-        </select>
-    </label>
-</form>
 @if (Model.Promises.Count == 0)
 {
-    <p>No claims yet. When someone says &ldquo;I'll&hellip;&rdquo;, it shows up here.</p>
+    <div class="empty"><p>No claims yet. When someone says &ldquo;I'll&hellip;&rdquo;, it shows up here.</p></div>
 }
 else
 {
-    <div class="panel panel-table claims-panel">
-    <table class="table claims-table">
-        <thead>
-            <tr>
-                <th>Claim</th>
-                <th>By</th>
-                <th>For</th>
-                <th>Due</th>
-                <th>Status</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var promise in Model.Promises)
+    <p class="muted small">@open open &middot; @(Model.Promises.Count - open) closed</p>
+    <div class="claim-list">
+        @foreach (var promise in Model.Promises)
+        {
+            var maker = NameWording.First(promise.PromisorPerson?.DisplayName);
+            var forWhom = promise.PromiseePerson is null ? "the household" : NameWording.First(promise.PromiseePerson.DisplayName);
+            var due = promise.DueAtLocal is { } dueAt ? dueAt.ToString("ddd MMM d, h:mm tt") : promise.DueText;
+            Model.Sources.TryGetValue(promise.SourceEventId, out var source);
+            Model.SourceTraces.TryGetValue(promise.SourceEventId, out var trace);
+            var (stateKey, stateLabel) = promise.State switch
             {
-                <tr>
-                    <td>@promise.CommitmentText</td>
-                    <td><span class="cell-label">By</span>@HomeNode.Data.NameWording.First(promise.PromisorPerson?.DisplayName)</td>
-                    <td><span class="cell-label">For</span>@(promise.PromiseePerson is null ? "Household" : HomeNode.Data.NameWording.First(promise.PromiseePerson.DisplayName))</td>
-                    <td><span class="cell-label">Due</span>@(promise.DueAtLocal is { } dueAt ? dueAt.ToString("MMM d, h:mm tt") : promise.DueText ?? "")</td>
-                    <td><span class="cell-label">Status</span>
-                        @switch (promise.State)
+                HomeNode.Data.PromiseState.Made => ("waiting", "Open"),
+                HomeNode.Data.PromiseState.Kept => ("done", "Done"),
+                HomeNode.Data.PromiseState.Broken => ("stopped", "Closed, not done"),
+                HomeNode.Data.PromiseState.Released => ("stopped", "No longer needed"),
+                _ => ("recorded", promise.State.ToString())
+            };
+            <article class="claim@(promise.State == HomeNode.Data.PromiseState.Made ? " claim--open" : "")">
+                <header class="claim-head">
+                    <span class="avatar avatar--@PersonStyle.Slot(promise.PromisorPersonId)" aria-hidden="true">@PersonStyle.Initial(maker)</span>
+                    <div class="trace-head-text">
+                        <span class="trace-who">@maker took it on</span>
+                        <span class="trace-sub">For @forWhom@(due is null ? "" : $" · due {due}")</span>
+                    </div>
+                    <span class="status status--@stateKey">@stateLabel</span>
+                </header>
+                <p class="claim-text">&ldquo;@promise.CommitmentText&rdquo;</p>
+                <ol class="chain">
+                    @if (source is not null)
+                    {
+                        <li class="chain--person">
+                            <span class="chain-icon">@Icons.Get("person", 12)</span>
+                            <span>@maker said: &ldquo;@source.Body&rdquo; <span class="chain-when">&middot; @HouseholdTime.TimeOrDate(source.CreatedAtUtc, Model.HouseholdZone)@(trace is not null ? $" · {trace.ChannelLabel}" : "")</span></span>
+                        </li>
+                        <li class="chain--@(trace?.Engine.Kind is "live" or "mock" ? "model" : "house")">
+                            <span class="chain-icon">@Icons.Get(trace?.Engine.Kind is "live" or "mock" ? "spark" : trace?.Engine.Kind == "seed" ? "seed" : "shield", 12)</span>
+                            <span>@EngineSentence(trace)@if (trace is not null) {<text> &middot; <a href="@(timelineHref)#@trace.Key">see the trace</a></text>}</span>
+                        </li>
+                        @if (trace?.Entries.FirstOrDefault(e => e.Event.Id == promise.SourceEventId) is { } sourceEntry)
                         {
-                            case HomeNode.Data.PromiseState.Made:
-                                <text>Open</text>
-                                break;
-                            case HomeNode.Data.PromiseState.Kept:
-                                <text>Done &middot; &ldquo;@(promise.ClosedByEvent?.Body ?? "")&rdquo; &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } keptAt ? HomeNode.Data.HouseholdTime.Time(keptAt, Model.HouseholdZone) : "")</text>
-                                break;
-                            case HomeNode.Data.PromiseState.Broken:
-                                <text>Closed &middot; Not done &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } brokenAt ? HomeNode.Data.HouseholdTime.Time(brokenAt, Model.HouseholdZone) : "")</text>
-                                if (promise.ClosedByEvent?.Body is { } brokenWords)
-                                {
-                                    <br /><text>In their words: &ldquo;@brokenWords&rdquo;</text>
-                                }
-                                break;
-                            case HomeNode.Data.PromiseState.Released:
-                                <text>No longer needed &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } releasedAt ? HomeNode.Data.HouseholdTime.Time(releasedAt, Model.HouseholdZone) : "")</text>
-                                if (promise.ClosedByEvent?.Body is { } releasedWords)
-                                {
-                                    <br /><text>In their words: &ldquo;@releasedWords&rdquo;</text>
-                                }
-                                break;
+                            <li class="chain--house">
+                                <span class="chain-icon">@Icons.Get("shield", 12)</span>
+                                <span>Who can see it: <strong>@sourceEntry.AudienceLabel</strong></span>
+                            </li>
                         }
-                    </td>
-                    <td>
-                        @if (promise.State == HomeNode.Data.PromiseState.Made)
-                        {
-                            <form method="post" asp-page-handler="Close" class="claim-close-form" data-promisor="@promise.PromisorPersonId" data-promisee="@(promise.PromiseePersonId?.ToString() ?? "")">
+                    }
+                    @switch (promise.State)
+                    {
+                        case HomeNode.Data.PromiseState.Made:
+                            <li class="chain--person">
+                                <span class="chain-icon">@Icons.Get("clock", 12)</span>
+                                <span>Open until a person closes it in their own words.</span>
+                            </li>
+                            break;
+                        default:
+                            <li class="chain--person">
+                                <span class="chain-icon">@Icons.Get(promise.State == HomeNode.Data.PromiseState.Kept ? "check" : "stop", 12)</span>
+                                <span>@NameWording.First(promise.ClosedByPerson?.DisplayName) closed it as @stateLabel.ToLowerInvariant()@if (promise.ClosedByEvent?.Body is { } closingWords) {<text>: &ldquo;@closingWords&rdquo;</text>}<span class="chain-when">@(promise.ClosedAtUtc is { } closedAt ? " · " + HouseholdTime.TimeOrDate(closedAt, Model.HouseholdZone) : "")</span></span>
+                            </li>
+                            break;
+                    }
+                </ol>
+                @if (promise.State == HomeNode.Data.PromiseState.Made)
+                {
+                    <details class="disclose" style="margin:0.85rem 0 0">
+                        <summary>Close this claim <span class="muted">In the closer's own words</span></summary>
+                        <div class="disclose-body">
+                            <form method="post" asp-page-handler="Close" class="claim-close-form form-row" data-promisor="@promise.PromisorPersonId" data-promisee="@(promise.PromiseePersonId?.ToString() ?? "")">
                                 <input type="hidden" name="promiseId" value="@promise.Id" />
                                 <label>
                                     Closed by
@@ -98,11 +117,11 @@ else
                                         {
                                             if (Model.ViewerId == person.Id)
                                             {
-                                                <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                                                <option value="@person.Id" selected>@NameWording.First(person.DisplayName)</option>
                                             }
                                             else
                                             {
-                                                <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                                                <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
                                             }
                                         }
                                     </select>
@@ -115,18 +134,17 @@ else
                                         <option value="Released">No longer needed</option>
                                     </select>
                                 </label>
-                                <label>
+                                <label style="flex:1 1 16rem">
                                     In their words
-                                    <input type="text" name="closingWords" placeholder="e.g., &quot;Home, like I said this morning.&quot;" />
+                                    <input type="text" name="closingWords" style="width:100%" placeholder="e.g., &quot;Home, like I said this morning.&quot;" />
                                 </label>
-                                <button type="submit">Close claim</button>
+                                <button type="submit" class="primary">Close claim</button>
                             </form>
-                        }
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+                        </div>
+                    </details>
+                }
+            </article>
+        }
     </div>
 }
 

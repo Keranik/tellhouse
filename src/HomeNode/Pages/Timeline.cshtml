@@ -1,190 +1,166 @@
 @page "/Timeline"
 @model HomeNode.Pages.TimelineModel
+@using HomeNode.Data
+@using HomeNode.Services
+@inject Microsoft.Extensions.Options.IOptions<HomeNode.Services.Extraction.ExtractionOptions> ExtractionSettings
 @{
     ViewData["Title"] = "Timeline";
+    var live = ExtractionSettings.Value.Mode.Equals("Live", StringComparison.OrdinalIgnoreCase);
+    var engineName = live ? "Muse Spark" : "the local stand-in";
+    var note = Model.Note;
+    var viewer = Model.People.FirstOrDefault(p => p.Id == Model.ActorId);
+    var viewerFirst = NameWording.First(viewer?.DisplayName);
+    var lensView = new LensView("/Timeline", "ActorId", Model.ActorId, Model.People, true);
+    var options = new TraceOptions
+    {
+        PagePath = "/Timeline",
+        ActorField = "actorId",
+        ActorId = Model.ActorId,
+        HasCloseHandler = true,
+        Zone = Model.HouseholdZone,
+        Compact = true
+    };
+    var actorQuery = Model.ActorId is int a ? $"ActorId={a}" : "";
+    string TabHref(string? show)
+    {
+        var parts = new List<string>();
+        if (show is not null) { parts.Add($"show={show}"); }
+        if (actorQuery.Length > 0) { parts.Add(actorQuery); }
+        return parts.Count == 0 ? "/Timeline" : "/Timeline?" + string.Join("&", parts);
+    }
+    var current = Model.Show is "waiting" or "sent" ? Model.Show : null;
+    var today = HouseholdTime.ToLocal(DateTime.UtcNow, Model.HouseholdZone).Date;
+    string DayLabel(DateTime local) =>
+        local.Date == today ? "Today"
+        : local.Date == today.AddDays(-1) ? "Yesterday"
+        : local.ToString("dddd, MMM d");
 }
 
-<h1>Timeline</h1>
-<p>Everything the household has told Tellhouse, newest first.</p>
+<div class="page-head">
+    <span class="eyebrow">@Icons.Get("spark", 13) Every message, step by step</span>
+    <h1>Timeline</h1>
+    <p class="lede">What came in, what @engineName turned it into, what the house's rules decided, what is waiting on a person, and where it went. Newest first.</p>
+</div>
 
-<form method="get">
-    <label>
-        Viewing as
-        <select name="ActorId" onchange="this.form.submit()">
-            @if (Model.ActorId is null)
-            {
-                <option value="" selected>Household view</option>
-            }
-            else
-            {
-                <option value="">Household view</option>
-            }
-            @foreach (var person in Model.People)
-            {
-                if (Model.ActorId == person.Id)
-                {
-                    <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                }
-                else
-                {
-                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                }
-            }
-        </select>
-    </label>
-</form>
+<partial name="_Lens" model="lensView" />
 
-@if (Model.Note is not null)
+@if (note is not null)
 {
-    <p>@Model.Note</p>
+    <p class="note">@note</p>
 }
 
-@if (Model.Events.Count == 0)
+<div class="stats" aria-label="This view in numbers">
+    <div class="stat"><span class="stat-value">@Model.CountAll</span><span class="stat-label">messages and entries @(viewer is null ? "in the household view" : $"{viewerFirst} may see")</span></div>
+    <div class="stat stat--model"><span class="stat-value">@Model.CountRead</span><span class="stat-label">read by @engineName@(live ? "" : " or a house rule")</span></div>
+    <div class="stat stat--wait"><span class="stat-value">@Model.CountWaiting</span><span class="stat-label">waiting on a person</span></div>
+    <div class="stat stat--ok"><span class="stat-value">@Model.CountSent</span><span class="stat-label">sent to someone</span></div>
+</div>
+
+<div class="toolbar">
+    <nav class="tabs" aria-label="Show">
+        <a class="tab@(current is null ? " active" : "")" href="@TabHref(null)">All <span class="count">@Model.CountAll</span></a>
+        <a class="tab@(current == "waiting" ? " active" : "")" href="@TabHref("waiting")">Waiting on a person <span class="count">@Model.CountWaiting</span></a>
+        <a class="tab@(current == "sent" ? " active" : "")" href="@TabHref("sent")">Sent <span class="count">@Model.CountSent</span></a>
+    </nav>
+    @if (viewer is null)
+    {
+        <span class="muted small">The household view shows shared entries only. Choose a person to see what they may see, and to answer.</span>
+    }
+</div>
+
+@if (Model.Activity.Count == 0)
 {
-    <p>Nothing recorded yet.</p>
+    <div class="empty"><p>@(current switch { "waiting" => "Nothing is waiting on a person in this view.", "sent" => "Nothing in this view has been sent to anyone yet.", _ => "Nothing recorded yet." })</p></div>
 }
 else
 {
-    <div class="panel panel-table timeline-entries-panel">
-    <table class="table timeline-entries">
-        <thead>
-            <tr>
-                <th>Entry</th>
-                <th>From</th>
-                <th>About</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>When</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in Model.Events)
-            {
-                <tr class="@(item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed ? "" : "settled")">
-                    <td>
-                        @item.Body
-                        @if (HomeNode.Services.ProvenanceRendering.Describe(item) is { } provenance)
-                        {
-                            <br />@provenance
-                        }
-                    </td>
-                    <td><span class="cell-label">From</span>@(item.AuthorPerson is not null ? HomeNode.Data.NameWording.First(item.AuthorPerson.DisplayName) : "The house")</td>
-                    <td><span class="cell-label">About</span>@HomeNode.Data.NameWording.First(item.SubjectPerson?.DisplayName)</td>
-                    <td><span class="cell-label">Type</span>@HomeNode.Data.EventKindWording.For(item.Type)</td>
-                    <td><span class="cell-label">Status</span>
-                        @if (item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
-                        {
-                            <span class="state-action">@HomeNode.Data.ConfirmationWording.For(item.ConfirmationState)</span>
-                        }
-                        else
-                        {
-                            @Model.StateText(item)
-                        }
-                    </td>
-                    <td class="when-cell"><span class="cell-label">When</span>@Model.ToHouseholdTime(item.CreatedAtUtc).ToString("MMM d, h:mm tt")</td>
-                    <td>
-                        @if (Model.ActorId is null && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
-                        {
-                            <span class="muted-note">Pick a person above to answer.</span>
-                        }
-                        @if (Model.ActorId is not null && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed && !item.RecordPending)
-                        {
-                            <form method="post" asp-page-handler="Confirm">
-                                <input type="hidden" name="eventId" value="@item.Id" />
-                                <input type="hidden" name="actorId" value="@Model.ActorId" />
-                                <button type="submit">Confirm</button>
-                            </form>
-                            <form method="post" asp-page-handler="Decline">
-                                <input type="hidden" name="eventId" value="@item.Id" />
-                                <input type="hidden" name="actorId" value="@Model.ActorId" />
-                                <button type="submit">Don't send</button>
-                            </form>
-                        }
-                        else if (Model.ActorId is not null && item.RecordPending && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
-                        {
-                            <form method="post" asp-page-handler="Close">
-                                <input type="hidden" name="eventId" value="@item.Id" />
-                                <input type="hidden" name="actorId" value="@Model.ActorId" />
-                                <button type="submit">Confirm</button>
-                            </form>
-                            <form method="post" asp-page-handler="Decline">
-                                <input type="hidden" name="eventId" value="@item.Id" />
-                                <input type="hidden" name="actorId" value="@Model.ActorId" />
-                                <button type="submit">Don't send</button>
-                            </form>
-                        }
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
-    </div>
+    var lastDay = "";
+    foreach (var item in Model.Activity)
+    {
+        var day = DayLabel(HouseholdTime.ToLocal(item.AtUtc, Model.HouseholdZone));
+        if (day != lastDay)
+        {
+            lastDay = day;
+            <h2 class="day">@day</h2>
+        }
+        <partial name="_Trace" model="new TraceView(item, options)" />
+    }
 }
 
 @if (Model.Deliveries.Count > 0)
 {
-    <div class="panel panel-table">
-    <h2>Delivered to @HomeNode.Data.NameWording.First(Model.People.FirstOrDefault(p => p.Id == Model.ActorId)?.DisplayName)</h2>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>When</th>
-                <th>To</th>
-                <th>Message</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var delivery in Model.Deliveries)
-            {
-                <tr>
-                    <td>@Model.ToHouseholdTime(delivery.DeliveredAtUtc).ToString("MMM d, h:mm tt")</td>
-                    <td>@HomeNode.Data.NameWording.First(delivery.ToPerson?.DisplayName)</td>
-                    <td>
-                        @delivery.BodyText
+    <div class="section-head">
+        <h2>Delivered to @viewerFirst</h2>
+        <p>What the house has handed to @viewerFirst, in the words it carried. Only @viewerFirst sees this list.</p>
+    </div>
+    <div class="delivery-list">
+        @foreach (var delivery in Model.Deliveries)
+        {
+            <div class="delivery-row">
+                <span class="delivery-icon">@Icons.Get("send")</span>
+                <div>
+                    <p>&ldquo;@delivery.BodyText&rdquo;</p>
+                    <p class="delivery-meta">
+                        @Model.ToHouseholdTime(delivery.DeliveredAtUtc).ToString("MMM d, h:mm tt")
+                        @if (delivery.Event?.AuthorPerson is { } from)
+                        {
+                            <text> &middot; from @NameWording.First(from.DisplayName)</text>
+                        }
                         @if (delivery.Event is not null && HomeNode.Services.ProvenanceRendering.Describe(delivery.Event) is { } deliveryProvenance)
                         {
-                            <br />@deliveryProvenance
+                            <text> &middot; @deliveryProvenance</text>
                         }
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+                        @if (delivery.AcknowledgedAtUtc is DateTime seenAt)
+                        {
+                            <text> &middot; seen @HouseholdTime.TimeOrDate(seenAt, Model.HouseholdZone)</text>
+                        }
+                    </p>
+                </div>
+            </div>
+        }
     </div>
 }
 
-<div class="panel panel-table">
-<h2>Household supplies</h2>
+<div class="section-head">
+    <h2>Supplies the house is tracking</h2>
+    <p>Counts move when someone says something ran low, ran out, or was restocked. Run-out days come from each item's usual rate.</p>
+</div>
 @if (Model.Supplies.Count == 0)
 {
-    <p>No supplies tracked yet.</p>
+    <div class="empty"><p>No supplies tracked yet.</p></div>
 }
 else
 {
-    var today = DateOnly.FromDateTime(Model.ToHouseholdTime(DateTime.UtcNow));
-    <table class="table supplies-table">
-        <thead>
-            <tr>
-                <th>Item</th>
-                <th>On hand</th>
-                <th>Runs out</th>
-                <th>Order by</th>
-                <th>Who orders</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in Model.Supplies)
-            {
-                <tr>
-                    <td>@Model.SupplyName(item)</td>
-                    <td>@Model.HandText(item)</td>
-                    <td>@(item.GetRunOutDate(today) == DateOnly.MaxValue ? "" : item.GetRunOutDate(today).ToString("MMM d"))</td>
-                    <td>@(item.GetOrderByDate(today) == DateOnly.MaxValue ? "" : item.GetOrderByDate(today).ToString("MMM d"))</td>
-                    <td>@HomeNode.Data.NameWording.First(item.AssignedPerson?.DisplayName)</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    var supplyToday = DateOnly.FromDateTime(Model.ToHouseholdTime(DateTime.UtcNow));
+    <div class="supply-grid">
+        @foreach (var item in Model.Supplies)
+        {
+            var runOut = item.GetRunOutDate(supplyToday);
+            var orderBy = item.GetOrderByDate(supplyToday);
+            var (supplyKey, supplyLabel) = item.QuantityOnHand <= 0
+                ? ("owed", "Out")
+                : orderBy != DateOnly.MaxValue && orderBy <= supplyToday
+                    ? ("waiting", "Order now")
+                    : ("recorded", "In stock");
+            <div class="supply@(supplyKey == "owed" ? " supply--out" : supplyKey == "waiting" ? " supply--soon" : "")">
+                <span class="status status--@supplyKey">@supplyLabel</span>
+                <div class="supply-name">@Model.SupplyName(item)</div>
+                <div class="supply-qty">@Model.HandText(item) on hand</div>
+                <div class="supply-meta">
+                    @if (runOut != DateOnly.MaxValue)
+                    {
+                        <text>Runs out around @runOut.ToString("MMM d")</text>
+                    }
+                    @if (orderBy != DateOnly.MaxValue)
+                    {
+                        <text> &middot; order by @orderBy.ToString("MMM d")</text>
+                    }
+                    @if (item.AssignedPerson is not null)
+                    {
+                        <text> &middot; @NameWording.First(item.AssignedPerson.DisplayName) orders</text>
+                    }
+                </div>
+            </div>
+        }
+    </div>
 }
-</div>

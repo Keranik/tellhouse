@@ -1,220 +1,282 @@
 @page "/Plans"
 @model HomeNode.Pages.PlansModel
+@using HomeNode.Data
+@using HomeNode.Services
 @{
     ViewData["Title"] = "Plans";
+    var note = Model.Note;
+    var lensView = new LensView("/Plans", "ViewerId", Model.ViewerId, Model.People, true);
+    var timelineHref = Model.ViewerId is int tv ? $"/Timeline?ActorId={tv}" : "/Timeline";
+    string PlanStateKey(PlanState state) => state switch
+    {
+        PlanState.Assembling => "recorded",
+        PlanState.Proposed => "waiting",
+        PlanState.Acknowledged => "sent",
+        PlanState.Completed => "done",
+        _ => "stopped"
+    };
 }
 
-<h1>Plans</h1>
-<p>Plan dinner and errands together. A plan is settled when everyone on it agrees.</p>
-
-@if (Model.Note is not null)
-{
-    <p>@Model.Note</p>
-}
-
-<form method="get">
-    <label>
-        Viewing as
-        <select name="ViewerId" onchange="this.form.submit()">
-            <option value="">Household view</option>
-            @foreach (var person in Model.People)
-            {
-                if (Model.ViewerId == person.Id)
-                {
-                    <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                }
-                else
-                {
-                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                }
-            }
-        </select>
-    </label>
-</form>
-
-<div class="panel">
-<h2>Start a plan</h2>
-<form method="post" asp-page-handler="CreatePlan">
-    <label>Plan name <input type="text" name="label" placeholder="e.g., Tonight's dinner" /></label>
-    <label>Start time (optional) <input type="time" name="anchorTime" /></label>
-    <button type="submit">Create plan</button>
-</form>
+<div class="page-head">
+    <span class="eyebrow">@Icons.Get("record", 13) Arranged together</span>
+    <h1>Plans</h1>
+    <p class="lede">Dinner and errands the household is arranging. The house assembles the pieces; people answer them. A piece is settled when everyone it names agrees, and the person going says when they have taken it on.</p>
 </div>
+
+<partial name="_Lens" model="lensView" />
+
+@if (note is not null)
+{
+    <p class="note">@note</p>
+}
 
 @if (Model.OpenDecisions.Count > 0)
 {
-    <h2>Open decisions</h2>
-    <ul class="record-list">
+    <div class="section-head" style="margin-top:0.5rem">
+        <h2>Open decisions from messages</h2>
+        <p>When a message leaves something undecided, such as what is for dinner, the model flags it. A plan can start from it.</p>
+    </div>
+    <div class="delivery-list">
         @foreach (var decision in Model.OpenDecisions)
         {
-            <li class="record-item">@decision.Body</li>
+            Model.DecisionTraces.TryGetValue(decision.Id, out var decisionTrace);
+            <div class="decision-row">
+                <span class="decision-icon">@Icons.Get("spark")</span>
+                <div>
+                    <p>&ldquo;@decision.Body&rdquo;</p>
+                    <p class="delivery-meta">
+                        @(decisionTrace?.Engine.Kind switch { "live" => "Flagged by Muse Spark", "mock" => "Flagged by the local stand-in", _ => "An open decision on the record" })
+                        &middot; @HouseholdTime.TimeOrDate(decision.CreatedAtUtc, Model.HouseholdZone)
+                        @if (decisionTrace is not null)
+                        {
+                            <text> &middot; <a href="@(timelineHref)#@decisionTrace.Key">see the trace</a></text>
+                        }
+                    </p>
+                </div>
+            </div>
         }
-    </ul>
+    </div>
 }
+
+<details class="disclose">
+    <summary>Start a plan <span class="muted">A name, and a start time if it has one</span></summary>
+    <div class="disclose-body">
+        <form method="post" asp-page-handler="CreatePlan" class="form-row">
+            <label style="flex:1 1 14rem">Plan name <input type="text" name="label" style="width:100%" placeholder="e.g., Tonight's dinner" /></label>
+            <label>Start time (optional) <input type="time" name="anchorTime" /></label>
+            <button type="submit" class="primary">Create plan</button>
+        </form>
+    </div>
+</details>
 
 @if (Model.Plans.Count == 0)
 {
-    <p>No plans yet. Start one for tonight's dinner or this week's errands.</p>
+    <div class="empty"><p>No plans yet. Start one for tonight's dinner or this week's errands.</p></div>
 }
 
+<div class="plan-list">
 @foreach (var plan in Model.Plans)
 {
-    <div class="panel plan-panel">
-    <h2>@plan.Label</h2>
-    <p>
-        @HomeNode.Data.StateWording.ForPlan(plan.State)
-        @if (plan.AnchorAtLocal is { } anchor)
-        {
-            <text> &middot; Starts @anchor.ToString("h:mm tt")</text>
-        }
-        @if (plan.RunnerPerson is not null)
-        {
-            <text> &middot; @HomeNode.Data.NameWording.First(plan.RunnerPerson.DisplayName) is going</text>
-        }
-    </p>
+    <article class="plan-card">
+        <header class="plan-head">
+            <span class="avatar avatar--0" aria-hidden="true">@Icons.Get("record", 15)</span>
+            <div class="trace-head-text">
+                <span class="trace-who">@plan.Label</span>
+                <span class="trace-sub">
+                    @(plan.AnchorAtLocal is { } anchor ? $"Starts {anchor:h:mm tt}" : "No start time")
+                    @if (plan.RunnerPerson is not null)
+                    {
+                        <text> &middot; @NameWording.First(plan.RunnerPerson.DisplayName) is going</text>
+                    }
+                </span>
+            </div>
+            <span class="status status--@PlanStateKey(plan.State)">@StateWording.ForPlan(plan.State)</span>
+        </header>
 
-    @foreach (var element in plan.Elements)
-    {
-        if (!Model.ElementVisibleToViewer(element))
+        @if (plan.Elements.Count == 0)
         {
-            continue;
+            <p class="muted small" style="margin:0.75rem 0 0">Nothing in this plan yet. Add a dinner, a shopping list, or travel times below.</p>
         }
-        var required = HomeNode.Services.PlanAssemblyService.RequiredDisposers(element);
-        var rounds = element.Agreements.Select(a => a.Round).Distinct().Count();
-        <h3>@HomeNode.Data.PlanKindWording.For(element.Kind): @element.BodyText</h3>
-        <p>@HomeNode.Data.StateWording.ForElement(element.State)</p>
-        @if (required.Count > 0)
+
+        @foreach (var element in plan.Elements)
         {
-            <ul>
-                @foreach (var agreement in element.Agreements.OrderBy(a => a.Round).ThenBy(a => a.AtUtc))
+            if (!Model.ElementVisibleToViewer(element))
+            {
+                continue;
+            }
+            var required = HomeNode.Services.PlanAssemblyService.RequiredDisposers(element);
+            var rounds = element.Agreements.Select(a => a.Round).Distinct().Count();
+            <section class="plan-element">
+                <div class="plan-element-head">
+                    <span class="kind">@PlanKindWording.For(element.Kind)</span>
+                    <span class="plan-element-text">@element.BodyText</span>
+                    <span class="status status--@(element.State == PlanElementState.Settled ? "done" : element.State == PlanElementState.Dropped ? "stopped" : "waiting")">@StateWording.ForElement(element.State)</span>
+                </div>
+                @if (required.Count > 0)
                 {
-                    <li>
-                        @if (rounds > 1)
-                        {
-                            <text>Round @agreement.Round · </text>
-                        }
-                        @switch (agreement.Disposal)
-                        {
-                            case HomeNode.Data.PlanDisposal.Agreed:
-                                <text>@HomeNode.Data.NameWording.First(agreement.Person?.DisplayName) agreed</text>
-                                break;
-                            case HomeNode.Data.PlanDisposal.Declined:
-                                <text>@HomeNode.Data.NameWording.First(agreement.Person?.DisplayName) declined</text>
-                                break;
-                            case HomeNode.Data.PlanDisposal.Countered:
-                                <text>@HomeNode.Data.NameWording.First(agreement.Person?.DisplayName) suggested &ldquo;@agreement.CounterText&rdquo;</text>
-                                break;
-                        }
-                    </li>
-                }
-            </ul>
-            <form method="post" asp-page-handler="Dispose">
-                <input type="hidden" name="elementId" value="@element.Id" />
-                <label>
-                    Answering as
-                    <select name="personId">
+                    <ul class="agreements">
                         @foreach (var personId in required)
                         {
                             var person = Model.People.FirstOrDefault(p => p.Id == personId);
-                            <option value="@personId">@HomeNode.Data.NameWording.First(person?.DisplayName)</option>
+                            var answer = element.Agreements.Where(a => a.PersonId == personId).OrderBy(a => a.Round).ThenBy(a => a.AtUtc).LastOrDefault();
+                            var css = answer?.Disposal switch
+                            {
+                                PlanDisposal.Agreed => "agreed",
+                                PlanDisposal.Declined => "declined",
+                                PlanDisposal.Countered => "countered",
+                                _ => "open"
+                            };
+                            <li class="agreement agreement--@css">
+                                <span class="avatar avatar--@PersonStyle.Slot(personId) avatar--sm" aria-hidden="true">@PersonStyle.Initial(NameWording.First(person?.DisplayName))</span>
+                                @NameWording.First(person?.DisplayName):
+                                @(answer?.Disposal switch
+                                {
+                                    PlanDisposal.Agreed => "agreed",
+                                    PlanDisposal.Declined => "declined",
+                                    PlanDisposal.Countered => $"suggested “{answer.CounterText}”",
+                                    _ => "hasn't answered"
+                                })
+                            </li>
                         }
-                    </select>
-                </label>
-                <label>
-                    Your suggestion
-                    <input type="text" name="counterText" placeholder="What you suggest instead, word for word" />
-                </label>
-                <div class="form-actions">
-                    <button type="submit" name="disposal" value="Agreed" class="primary">Agree</button>
-                    <button type="submit" name="disposal" value="Declined">Decline</button>
-                    <button type="submit" name="disposal" value="Countered">Suggest a change</button>
-                </div>
-            </form>
-        }
-        <form method="post" asp-page-handler="Retime">
-            <input type="hidden" name="elementId" value="@element.Id" />
-            <label>
-                New wording
-                <input type="text" name="newText" value="@element.BodyText" />
-            </label>
-            <label>
-                Changed by
-                <select name="actorPersonId">
-                    @foreach (var person in Model.People)
+                    </ul>
+                    @if (rounds > 1)
                     {
-                        <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                        <ul class="agreements">
+                            @foreach (var agreement in element.Agreements.OrderBy(a => a.Round).ThenBy(a => a.AtUtc))
+                            {
+                                <li class="agreement">Round @agreement.Round &middot; @NameWording.First(agreement.Person?.DisplayName) @StateWording.ForDisposal(agreement.Disposal).ToLowerInvariant()@(agreement.Disposal == PlanDisposal.Countered ? $": “{agreement.CounterText}”" : "")</li>
+                            }
+                        </ul>
                     }
-                </select>
-            </label>
-            <button type="submit">Save</button>
-        </form>
-    }
+                    <details class="disclose" style="margin:0.6rem 0 0">
+                        <summary>Answer for someone <span class="muted">Agree, decline, or suggest a change</span></summary>
+                        <div class="disclose-body">
+                            <form method="post" asp-page-handler="Dispose" class="form-row">
+                                <input type="hidden" name="elementId" value="@element.Id" />
+                                <label>
+                                    Answering as
+                                    <select name="personId">
+                                        @foreach (var personId in required)
+                                        {
+                                            var person = Model.People.FirstOrDefault(p => p.Id == personId);
+                                            <option value="@personId">@NameWording.First(person?.DisplayName)</option>
+                                        }
+                                    </select>
+                                </label>
+                                <label style="flex:1 1 14rem">
+                                    Your suggestion
+                                    <input type="text" name="counterText" style="width:100%" placeholder="What you suggest instead, word for word" />
+                                </label>
+                                <div class="form-actions" style="width:100%;justify-content:flex-start">
+                                    <button type="submit" name="disposal" value="Agreed" class="primary">Agree</button>
+                                    <button type="submit" name="disposal" value="Declined">Decline</button>
+                                    <button type="submit" name="disposal" value="Countered">Suggest a change</button>
+                                </div>
+                            </form>
+                        </div>
+                    </details>
+                }
+                <details class="disclose" style="margin:0.6rem 0 0">
+                    <summary>Change the wording <span class="muted">The person it affects is told</span></summary>
+                    <div class="disclose-body">
+                        <form method="post" asp-page-handler="Retime" class="form-row">
+                            <input type="hidden" name="elementId" value="@element.Id" />
+                            <label style="flex:1 1 14rem">
+                                New wording
+                                <input type="text" name="newText" style="width:100%" value="@element.BodyText" />
+                            </label>
+                            <label>
+                                Changed by
+                                <select name="actorPersonId">
+                                    @foreach (var person in Model.People)
+                                    {
+                                        <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
+                                    }
+                                </select>
+                            </label>
+                            <button type="submit">Save</button>
+                        </form>
+                    </div>
+                </details>
+            </section>
+        }
 
-    <h3>Add to this plan</h3>
-    <form method="post" asp-page-handler="AddDinner">
-        <input type="hidden" name="planId" value="@plan.Id" />
-        <input type="hidden" name="viewerId" value="@Model.ViewerId" />
-        @if (Model.OpenDecisions.Count > 0)
-        {
-            <label>
-                Based on
-                <select name="sourceEventId">
-                    <option value="">Nothing</option>
-                    @foreach (var decision in Model.OpenDecisions)
-                    {
-                        <option value="@decision.Id">@decision.Body</option>
-                    }
-                </select>
-            </label>
-        }
-        <label>Suggest dinner <input type="text" name="mealText" placeholder="e.g., Tacos" /></label>
-        <fieldset>
-            <legend>Who needs to agree</legend>
-            @foreach (var person in Model.People)
-            {
-                <label>
-                    <input type="checkbox" name="disposerIds" value="@person.Id" />
-                    @HomeNode.Data.NameWording.First(person.DisplayName)
-                </label>
-            }
-        </fieldset>
-        <button type="submit">Suggest dinner</button>
-    </form>
-    <form method="post" asp-page-handler="AddList">
-        <input type="hidden" name="planId" value="@plan.Id" />
-        <label>Shopping list <input type="text" name="listText" placeholder="e.g., eggs, milk, gauze" /></label>
-        <label>
-            Who's going
-            <select name="runnerPersonId">
-                @foreach (var person in Model.People)
-                {
-                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                }
-            </select>
-        </label>
-        <button type="submit">Add list</button>
-    </form>
-    <form method="post" asp-page-handler="AddLeaveBy">
-        <input type="hidden" name="planId" value="@plan.Id" />
-        <label>
-            Travel and prep times
-            <textarea name="durationsText" rows="3" placeholder="Drive to the store, 25"></textarea>
-        </label>
-        <p>One per line, e.g., Drive to the store, 25</p>
-        <button type="submit">Calculate leave time</button>
-    </form>
-    <form method="post" asp-page-handler="Acknowledge">
-        <input type="hidden" name="planId" value="@plan.Id" />
-        <label>
-            Who's going
-            <select name="runnerPersonId">
-                @foreach (var person in Model.People)
-                {
-                    <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
-                }
-            </select>
-        </label>
-        <button type="submit">Confirm they've taken it on</button>
-    </form>
-    </div>
+        <details class="disclose" style="margin:0.9rem 0 0">
+            <summary>Add to this plan <span class="muted">Dinner, a shopping list, travel times, who is going</span></summary>
+            <div class="disclose-body">
+                <div class="plan-tools">
+                    <form method="post" asp-page-handler="AddDinner" class="plan-tool">
+                        <h3>Suggest dinner</h3>
+                        <input type="hidden" name="planId" value="@plan.Id" />
+                        <input type="hidden" name="viewerId" value="@Model.ViewerId" />
+                        @if (Model.OpenDecisions.Count > 0)
+                        {
+                            <label>
+                                Based on
+                                <select name="sourceEventId">
+                                    <option value="">Nothing</option>
+                                    @foreach (var decision in Model.OpenDecisions)
+                                    {
+                                        <option value="@decision.Id">@decision.Body</option>
+                                    }
+                                </select>
+                            </label>
+                        }
+                        <label>Dinner <input type="text" name="mealText" placeholder="e.g., Tacos" /></label>
+                        <fieldset>
+                            <legend>Who needs to agree</legend>
+                            @foreach (var person in Model.People)
+                            {
+                                <label>
+                                    <input type="checkbox" name="disposerIds" value="@person.Id" />
+                                    @NameWording.First(person.DisplayName)
+                                </label>
+                            }
+                        </fieldset>
+                        <button type="submit" class="primary">Suggest dinner</button>
+                    </form>
+                    <form method="post" asp-page-handler="AddList" class="plan-tool">
+                        <h3>Shopping list</h3>
+                        <input type="hidden" name="planId" value="@plan.Id" />
+                        <label>Items <input type="text" name="listText" placeholder="e.g., eggs, milk, gauze" /></label>
+                        <label>
+                            Who's going
+                            <select name="runnerPersonId">
+                                @foreach (var person in Model.People)
+                                {
+                                    <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
+                                }
+                            </select>
+                        </label>
+                        <button type="submit">Add list</button>
+                    </form>
+                    <form method="post" asp-page-handler="AddLeaveBy" class="plan-tool">
+                        <h3>Leave time</h3>
+                        <input type="hidden" name="planId" value="@plan.Id" />
+                        <label>
+                            Travel and prep times
+                            <textarea name="durationsText" rows="3" placeholder="Drive to the store, 25"></textarea>
+                        </label>
+                        <p class="muted small" style="margin:0.35rem 0 0">One per line, e.g., Drive to the store, 25</p>
+                        <button type="submit">Calculate leave time</button>
+                    </form>
+                    <form method="post" asp-page-handler="Acknowledge" class="plan-tool">
+                        <h3>Taken on</h3>
+                        <input type="hidden" name="planId" value="@plan.Id" />
+                        <label>
+                            Who's going
+                            <select name="runnerPersonId">
+                                @foreach (var person in Model.People)
+                                {
+                                    <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
+                                }
+                            </select>
+                        </label>
+                        <button type="submit">Confirm they've taken it on</button>
+                    </form>
+                </div>
+            </div>
+        </details>
+    </article>
 }
+</div>

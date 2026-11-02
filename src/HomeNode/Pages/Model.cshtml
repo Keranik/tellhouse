@@ -1,0 +1,241 @@
+@page "/Model"
+@model HomeNode.Pages.ModelPageModel
+@using HomeNode.Data
+@using HomeNode.Services
+@{
+    ViewData["Title"] = "Model";
+    var stats = Model.Stats;
+    var lensView = new LensView("/Model", "viewerId", Model.ViewerId, Model.People, true);
+    var recentOptions = new TraceOptions
+    {
+        PagePath = "/Timeline",
+        ActorField = "actorId",
+        ActorId = null,
+        Zone = Model.HouseholdZone,
+        Compact = true,
+        AllowDecision = false
+    };
+    var maxKind = stats.EntriesByKind.Count == 0 ? 1 : stats.EntriesByKind.Values.Max();
+    string Ms(int ms) => ms >= 1000 ? $"{ms / 1000.0:0.0} s" : $"{ms} ms";
+    var answered = stats.Outcomes.GetValueOrDefault(ModelReadingOutcome.Answered);
+    var clarify = stats.Outcomes.GetValueOrDefault(ModelReadingOutcome.Clarify);
+    var refused = stats.Outcomes.GetValueOrDefault(ModelReadingOutcome.Refused);
+    var withEntries = stats.Outcomes.GetValueOrDefault(ModelReadingOutcome.Entries);
+    (string Kind, string Text)[] entryTypes =
+    {
+        ("Request", "Someone wants something done: pass on a message, play something, set a reminder, bring something."),
+        ("Claim", "The speaker says what they will do (\"I'll get Mia at 3\"). It becomes a claim the household can see until it is closed."),
+        ("Task", "Household work that needs doing, a pickup, an errand, or whose turn a job is."),
+        ("Supply", "Something running low, out, used, or restocked. Tracked items move their count."),
+        ("Location", "Where someone is, is heading, or has arrived."),
+        ("Health", "Anything about a body or a medication. Written down in the speaker's own words, never advised on, and only ever handed to a person."),
+        ("Note", "Anything else for the household, including open decisions such as what is for dinner."),
+        ("Journal", "An answer to a journal prompt; personal to the person it is about."),
+        ("Building notice", "A notice from outside the household, such as a water shut-off."),
+    };
+}
+
+<div class="page-head">
+    <span class="eyebrow">@Icons.Get("spark", 13) Under the hood</span>
+    <h1>How Tellhouse uses @(Model.Live ? "Muse Spark" : "its model")</h1>
+    @if (Model.Live)
+    {
+        <p class="lede">Tellhouse does not chat. Every message here is read once by Meta's Muse Spark into a typed record that the house's own code then checks, fences, and acts on only after a person says yes. This page shows the setup this instance runs, the path every message takes, and what the model has done here so far.</p>
+    }
+    else
+    {
+        <p class="lede">Tellhouse does not chat. In the live configuration every message is read once by Meta's Muse Spark into a typed record that the house's own code then checks, fences, and acts on only after a person says yes. This instance runs the local stand-in, which speaks the same contract without calling a model. The path, the checks, and the counts below are the same either way.</p>
+    }
+</div>
+
+<div class="panel">
+    <h2 class="panel-title">This instance</h2>
+    <dl class="config-list">
+        <dt>Engine</dt>
+        <dd>
+            @if (Model.Live)
+            {
+                <span class="engine-badge"><span class="dot" aria-hidden="true"></span>Live: Muse Spark</span>
+                @if (!Model.KeyPresent)
+                {
+                    <span class="muted small"> &middot; no Meta Model API key is set here, so readings will fail and nothing will be saved</span>
+                }
+            }
+            else
+            {
+                <span class="engine-badge engine-badge--mock"><span class="dot" aria-hidden="true"></span>Local stand-in</span>
+                <span class="muted small"> &middot; a deterministic stand-in with the same contract; no model calls are made. Set Extraction:Mode to Live and MODEL_API_KEY to read with Muse Spark.</span>
+            }
+        </dd>
+        <dt>Model</dt>
+        <dd><code>@Model.ModelId</code> (Muse Spark), through the Meta Model API at <code>api.meta.ai/v1/chat/completions</code></dd>
+        <dt>Output</dt>
+        <dd>Strict structured output: a JSON schema named <code>extraction_output</code> with <code>strict: true</code>, so every answer has exactly the fields below and no others</dd>
+        <dt>Settings</dt>
+        <dd>temperature 0 &middot; reasoning effort low &middot; up to 4,096 completion tokens</dd>
+        <dt>Context per message</dt>
+        <dd>The household's people, tracked supplies, schedules, alert levels, glossary, and the recent entries the speaker is allowed to see, fenced by code before the model receives anything</dd>
+        <dt>Reserved</dt>
+        <dd><code>@Model.ClarificationModelId</code> (Muse Wonder) is named for a clarification role; this build never calls it</dd>
+    </dl>
+</div>
+
+<div class="section-head">
+    <h2>The path every message takes</h2>
+    <p>Blue is the model's work. Teal is the house's own code. Coral is a person. The model proposes; code and people decide.</p>
+</div>
+<ol class="pipeline">
+    <li class="stage--person">
+        <span class="stage-icon">@Icons.Get("person", 17)</span>
+        <div>
+            <h3>1. The words arrive <span class="who">A person</span></h3>
+            <p>Typed on Home, or sent by a member's own AI assistant as a sealed packet through the relay, which carries ciphertext it cannot read.</p>
+        </div>
+    </li>
+    <li class="stage--house">
+        <span class="stage-icon">@Icons.Get("shield", 17)</span>
+        <div>
+            <h3>2. Context, fenced first <span class="who">House code</span></h3>
+            <p>The house builds the context slice and removes every recent entry the speaker is not allowed to see before any model receives it. A fixed rule also catches whose-turn messages and shapes them without a model call.</p>
+        </div>
+    </li>
+    <li class="stage--model">
+        <span class="stage-icon">@Icons.Get("spark", 17)</span>
+        <div>
+            <h3>3. Muse Spark reads it <span class="who">The model</span></h3>
+            <p>Up to five typed entries in the speaker's exact words, with structured details (who, what, when, where, which supply), any audience the words themselves state, at most one proposed action, and a reply chosen from fixed templates. It never composes advice.</p>
+        </div>
+    </li>
+    <li class="stage--house">
+        <span class="stage-icon">@Icons.Get("shield", 17)</span>
+        <div>
+            <h3>4. The house checks the reading <span class="who">House code</span></h3>
+            <p>Every entry's words must appear verbatim in the message, every person must be in this household, health stays a single health entry, no alert fires from words alone, and the reply carries no medication instruction. A reading that fails is not saved.</p>
+        </div>
+    </li>
+    <li class="stage--house">
+        <span class="stage-icon">@Icons.Get("shield", 17)</span>
+        <div>
+            <h3>5. Code decides who can see it <span class="who">House code</span></h3>
+            <p>The audience of every entry is decided by deterministic rules (health, claims, whose-turn tasks, each person's sharing default) and stored with the entry. The model is never asked who should see anything.</p>
+        </div>
+    </li>
+    <li class="stage--person">
+        <span class="stage-icon">@Icons.Get("clock", 17)</span>
+        <div>
+            <h3>6. A person says yes or no <span class="who">A person</span></h3>
+            <p>A proposed action waits for a named person. Silence is never a yes: an unanswered proposal lapses after 24 hours and nothing is sent.</p>
+        </div>
+    </li>
+    <li class="stage--delivery">
+        <span class="stage-icon">@Icons.Get("send", 17)</span>
+        <div>
+            <h3>7. It reaches the person it names <span class="who">Delivery</span></h3>
+            <p>Into their inbox here, or sealed to their own assistant through the relay, with every step on the record.</p>
+        </div>
+    </li>
+</ol>
+
+<div class="section-head">
+    <h2>What the model has done here</h2>
+    <p>Counted from the readings on file. Messages that wrote nothing (questions, requests to clarify) are counted without their words, because they leave nothing on the record.</p>
+</div>
+<partial name="_Lens" model="lensView" />
+<div class="stats">
+    <div class="stat stat--model"><span class="stat-value">@stats.Total</span><span class="stat-label">messages read</span></div>
+    <div class="stat"><span class="stat-value">@withEntries</span><span class="stat-label">became record entries</span></div>
+    <div class="stat"><span class="stat-value">@answered</span><span class="stat-label">answered from the record</span></div>
+    <div class="stat"><span class="stat-value">@(clarify + refused)</span><span class="stat-label">asked back or refused, nothing saved</span></div>
+</div>
+@if (stats.Engines.Count > 0)
+{
+    <div class="panel">
+        <h2 class="panel-title">By engine</h2>
+        <div class="bars">
+            @{ var maxEngine = stats.Engines.Max(e => e.Count); }
+            @foreach (var engine in stats.Engines)
+            {
+                <div class="bar-row">
+                    <span class="bar-label">@engine.Label</span>
+                    <span class="bar-track"><span class="bar-fill" style="width:@(Math.Max(4, engine.Count * 100 / Math.Max(1, maxEngine)))%"></span></span>
+                    <span class="bar-value">@engine.Count</span>
+                </div>
+                <p class="step-meta">Median read time @Ms(engine.MedianMs)@(engine.PromptTokens > 0 ? $" · {engine.PromptTokens:N0} tokens in, {engine.CompletionTokens:N0} out" : "")@(engine.Engine == "live" ? "" : engine.Engine == "rule" ? " · a fixed rule, no model call" : " · no model call")</p>
+            }
+        </div>
+    </div>
+}
+<div class="brief-grid">
+    <div class="brief-card">
+        <h2>Entries it made, in this view <span class="count">@stats.EntriesByKind.Values.Sum()</span></h2>
+        @if (stats.EntriesByKind.Count == 0)
+        {
+            <p class="muted small">None in this view yet.</p>
+        }
+        else
+        {
+            <div class="bars">
+                @foreach (var kind in stats.EntriesByKind.OrderByDescending(k => k.Value))
+                {
+                    <div class="bar-row">
+                        <span class="bar-label">@kind.Key</span>
+                        <span class="bar-track"><span class="bar-fill" style="width:@(Math.Max(4, kind.Value * 100 / maxKind))%"></span></span>
+                        <span class="bar-value">@kind.Value</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    <div class="brief-card">
+        <h2>Actions it proposed, in this view <span class="count">@stats.ActionsProposed</span></h2>
+        <div class="bars">
+            @{ var maxAction = Math.Max(1, new[] { stats.ActionsConfirmed, stats.ActionsNotSent, stats.ActionsWaiting }.Max()); }
+            <div class="bar-row"><span class="bar-label">A person said yes</span><span class="bar-track"><span class="bar-fill" style="width:@(Math.Max(4, stats.ActionsConfirmed * 100 / maxAction))%;background:var(--ok)"></span></span><span class="bar-value">@stats.ActionsConfirmed</span></div>
+            <div class="bar-row"><span class="bar-label">Not sent</span><span class="bar-track"><span class="bar-fill" style="width:@(Math.Max(4, stats.ActionsNotSent * 100 / maxAction))%;background:var(--stop)"></span></span><span class="bar-value">@stats.ActionsNotSent</span></div>
+            <div class="bar-row"><span class="bar-label">Waiting</span><span class="bar-track"><span class="bar-fill" style="width:@(Math.Max(4, stats.ActionsWaiting * 100 / maxAction))%;background:var(--wait)"></span></span><span class="bar-value">@stats.ActionsWaiting</span></div>
+        </div>
+        <p class="step-meta">Nothing the model proposes happens until a person confirms it.</p>
+    </div>
+</div>
+
+@if (stats.Recent.Count > 0)
+{
+    <div class="section-head">
+        <h2>Latest readings</h2>
+        <a class="more" href="/Timeline">The full timeline &rarr;</a>
+    </div>
+    <div class="trace-list">
+        @foreach (var item in stats.Recent.Take(3))
+        {
+            <partial name="_Trace" model="new TraceView(item, recentOptions)" />
+        }
+    </div>
+}
+
+<div class="section-head">
+    <h2>What it can return</h2>
+    <p>Nine kinds of entry and four kinds of action, nothing else. The schema forbids any other field.</p>
+</div>
+<div class="type-grid">
+    @foreach (var (kind, text) in entryTypes)
+    {
+        <div class="type-card">
+            <span class="kind kind--@(kind switch { "Claim" => "commitment", "Location" => "whereabouts", "Health" => "healthmention", "Building notice" => "facilitynotice", _ => kind.ToLowerInvariant() })">@kind</span>
+            <p>@text</p>
+        </div>
+    }
+</div>
+<p class="muted small" style="margin-top:0.75rem">Actions it may propose, one per message at most: tell a person, pass on a message, set a reminder, play something. Each waits for a person's yes.</p>
+
+<details class="disclose">
+    <summary>The instructions Muse Spark is given <span class="muted">System prompt, verbatim</span></summary>
+    <div class="disclose-body">
+        <pre class="source"><code>@Model.SystemPrompt</code></pre>
+    </div>
+</details>
+<details class="disclose">
+    <summary>The output schema it must match <span class="muted">JSON schema, strict</span></summary>
+    <div class="disclose-body">
+        <pre class="source"><code>@Model.Schema</code></pre>
+    </div>
+</details>

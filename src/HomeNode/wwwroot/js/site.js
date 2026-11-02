@@ -125,3 +125,53 @@
         if (window.innerWidth > 768 && isOpen()) closeDrawer();
     });
 })();
+
+// Home's example chips: a tap puts the example in the message box,
+// ready to send or edit. Nothing is sent until the person sends it.
+(function () {
+    var box = document.querySelector("[data-composer]");
+    if (!box) return;
+    document.querySelectorAll("[data-example]").forEach(function (chip) {
+        chip.addEventListener("click", function () {
+            box.value = chip.getAttribute("data-example");
+            box.focus();
+        });
+    });
+    // Enter sends; Shift+Enter keeps a new line.
+    box.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+            event.preventDefault();
+            if (box.value.trim().length > 0 && box.form) {
+                if (box.form.requestSubmit) box.form.requestSubmit(); else box.form.submit();
+            }
+        }
+    });
+})();
+
+// Busy forms: while a message is being read (a live model call takes
+// a few seconds), the button that sent it says so, and a second
+// submit is ignored. The submitter is never disabled, so its own
+// name and value still travel with the form.
+(function () {
+    document.querySelectorAll("form[data-busy]").forEach(function (form) {
+        form.addEventListener("submit", function (event) {
+            if (form.getAttribute("data-busy") === "on") {
+                event.preventDefault();
+                return;
+            }
+            form.setAttribute("data-busy", "on");
+            var button = event.submitter || form.querySelector("button[type=submit]");
+            if (button) {
+                button.setAttribute("aria-disabled", "true");
+                button.classList.add("is-busy");
+                button.textContent = form.getAttribute("data-busy-label") || "Working…";
+            }
+        });
+    });
+    // A page restored from the back/forward cache comes back usable.
+    window.addEventListener("pageshow", function () {
+        document.querySelectorAll("form[data-busy='on']").forEach(function (form) {
+            form.setAttribute("data-busy", "");
+        });
+    });
+})();

@@ -31,6 +31,13 @@ public static class DbSeeder
     private static DateTime DemoDay(int hour, int minute) =>
         ChicagoToUtc(2026, 10, 27, hour, minute);
 
+    // The record time of the last entry this seeder writes (8:45 PM
+    // on the scenario's Tuesday). Every seeded entry is at or before
+    // it. The pages use it, together with the absence of any model
+    // reading, to label the starting record as seeded rather than
+    // read by a model; nothing about the seed itself depends on it.
+    public static DateTime LastSeededEntryUtc => DemoDay(20, 45);
+
     public static void Seed(AppDbContext db)
     {
         if (db.Households.Any())

@@ -44,6 +44,37 @@ public class AudienceDefaultRow
     public required bool IsSet { get; init; }
 }
 
+// A message just sent that left nothing on the record, held for the
+// one view that follows the send (see FrontDoorModel.JustRead).
+public class JustReadView
+{
+    public string Words { get; set; } = "";
+    public int? SpeakerId { get; set; }
+    public string Outcome { get; set; } = "";
+    public string Engine { get; set; } = "";
+    public string? Model { get; set; }
+    public int? ElapsedMs { get; set; }
+    public int? PromptTokens { get; set; }
+    public int? CompletionTokens { get; set; }
+    public string? Reply { get; set; }
+    public string? OutputJson { get; set; }
+
+    public static string Serialize(JustReadView view) =>
+        System.Text.Json.JsonSerializer.Serialize(view);
+
+    public static JustReadView? Deserialize(string json)
+    {
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<JustReadView>(json);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+}
+
 public class FrontDoorModel : PageModel
 {
     private readonly AppDbContext _db;
@@ -143,6 +174,32 @@ public class FrontDoorModel : PageModel
     public TimeZoneInfo HouseholdZone { get; private set; } =
         TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
 
+    // The model's work, as the page shows it (ActivityService): the
+    // newest messages the reader may see, each as a step by step
+    // trace, and the ones waiting on a person's answer.
+    public List<ActivityItem> Activity { get; private set; } = new();
+    public List<ActivityItem> Waiting { get; private set; } = new();
+
+    // The message just sent, or the one whose proposal was just
+    // answered, traced for the person who sent or answered it and
+    // fenced to that person exactly as every other surface is.
+    public ActivityItem? JustNow { get; private set; }
+
+    // What an answer just did, in the house's words ("Sent to
+    // Daniel."), shown above the answered message's trace.
+    public string? AnswerNote => TempData["AnswerNote"] as string;
+
+    // A message just sent that left nothing on the record (a
+    // question, a request to clarify, a refused reading): its words,
+    // the engine that read it, and its reply exist only for this one
+    // view, carried in the session's own TempData, never stored.
+    public JustReadView? JustRead { get; private set; }
+
+    // The newest message a model read that this reader may see, shown
+    // in full when nothing was just sent.
+    public ActivityItem? Featured { get; private set; }
+    public bool AnyReadings { get; private set; }
+
     public async Task OnGetAsync()
     {
         await LoadAsync();
@@ -182,8 +239,69 @@ public class FrontDoorModel : PageModel
         {
             TempData["LastSpeakerId"] = speaker.Id;
         }
-        var result = await _extraction.ProcessAsync(input);
+        // The engine can fail (the model API refuses, times out, or
+        // answers in a shape that will not parse). The page says so in
+        // plain words instead of landing on the error page, and says
+        // whether anything was saved by looking at the record, not by
+        // assuming: the engine is called before anything is written,
+        // so a failure there leaves the record untouched.
+        var lastEventId = await _db.Events
+            .Where(e => e.HouseholdId == household.Id)
+            .MaxAsync(e => (int?)e.Id) ?? 0;
+        ExtractionResult result;
+        try
+        {
+            result = await _extraction.ProcessAsync(input);
+        }
+        catch (Exception ex) when (HttpContext?.RequestAborted.IsCancellationRequested != true)
+        {
+            _logger.LogError(ex, "The house could not read a message from speaker {SpeakerId}", speakerId);
+            var wroteSomething = await _db.Events.AnyAsync(e => e.HouseholdId == household.Id && e.Id > lastEventId);
+            TempData["JustRead"] = JustReadView.Serialize(new JustReadView
+            {
+                Words = telling.Trim(),
+                SpeakerId = speaker?.Id,
+                Outcome = "Failed",
+                Engine = _extraction.EngineName,
+                Reply = wroteSomething
+                    ? "Something went wrong partway through. Check the timeline before you send it again."
+                    : EngineFailureNote(ex)
+            });
+            return RedirectToPage(new { viewerId = speaker?.Id });
+        }
         TempData["HouseReply"] = result.HouseReply;
+        if (result.Reading is { } reading)
+        {
+            if (reading.Outcome == ModelReadingOutcome.Entries)
+            {
+                TempData["ReadingId"] = reading.Id;
+                if (speaker is not null)
+                {
+                    TempData["ReadingViewer"] = speaker.Id;
+                }
+            }
+            else
+            {
+                TempData["JustRead"] = JustReadView.Serialize(new JustReadView
+                {
+                    Words = telling.Trim(),
+                    SpeakerId = speaker?.Id,
+                    Outcome = reading.Outcome,
+                    Engine = reading.Engine,
+                    Model = reading.Model,
+                    ElapsedMs = reading.ElapsedMs,
+                    PromptTokens = reading.PromptTokens,
+                    CompletionTokens = reading.CompletionTokens,
+                    Reply = result.HouseReply,
+                    // The raw output is shown for an answer or a
+                    // request to clarify; a refused reading's output
+                    // stays in the server log with its errors.
+                    OutputJson = reading.Outcome is ModelReadingOutcome.Answered or ModelReadingOutcome.Clarify
+                        ? result.ReturnedJson
+                        : null
+                });
+            }
+        }
         if (!result.Validation.IsValid)
         {
             // The validator's own words are internal: they go to the
@@ -249,7 +367,10 @@ public class FrontDoorModel : PageModel
             TempData["PipelineNote"] = (TempData["PipelineNote"] as string ?? "")
                 + " One entry stays private until the right person decides who sees it.";
         }
-        return RedirectToPage();
+        // The page comes back as the person who spoke, so the
+        // message's own entries show in the activity below under that
+        // person's view, not only in the just-sent trace.
+        return RedirectToPage(new { viewerId = speaker?.Id });
     }
 
     // The Test Send control: a remote trigger only. This handler
@@ -400,7 +521,22 @@ public class FrontDoorModel : PageModel
         {
             TempData["HouseReply"] = "Confirmed.";
         }
-        return RedirectToPage();
+        await KeepTraceAsync(eventId, actorPersonId);
+        return RedirectToPage(new { viewerId = actorPersonId });
+    }
+
+    // After an answer, the page shows the answered message's trace
+    // again, now carrying the answer and what it set off, for the
+    // person who answered and fenced to them.
+    private async Task KeepTraceAsync(int eventId, int actorPersonId)
+    {
+        var readingId = await new ActivityService(_db).ReadingIdForEventAsync(eventId);
+        if (readingId is int id)
+        {
+            TempData["ReadingId"] = id;
+            TempData["ReadingViewer"] = actorPersonId;
+            TempData["AnswerNote"] = TempData.Peek("HouseReply") as string;
+        }
     }
 
     // The day words a reminder action carries, read from its stored
@@ -439,7 +575,8 @@ public class FrontDoorModel : PageModel
         }
         TempData["HouseReply"] = "Not sent.";
         TempData["PipelineNote"] = "Not sent. It stays in the record, marked Not sent.";
-        return RedirectToPage();
+        await KeepTraceAsync(eventId, actorPersonId);
+        return RedirectToPage(new { viewerId = actorPersonId });
     }
 
     private async Task LoadAsync()
@@ -488,6 +625,64 @@ public class FrontDoorModel : PageModel
         {
             PendingAsks = await _audience.PendingAsksForAsync(reader, DateTime.UtcNow);
         }
+
+        // The model's work: the newest traces this reader may see,
+        // and the ones a person still has to answer.
+        var activity = new ActivityService(_db);
+        // TempData is absent when the page model runs outside a request
+        // (the suites construct it directly); there is then nothing just
+        // sent to show.
+        var tempData = TempData;
+        if (tempData?["ReadingId"] is int justReadingId)
+        {
+            JustNow = await activity.ForReadingAsync(justReadingId, tempData["ReadingViewer"] as int?);
+        }
+        if (tempData?["JustRead"] is string justRead)
+        {
+            JustRead = JustReadView.Deserialize(justRead);
+        }
+        var feed = await activity.BuildAsync(ViewerId, take: 60);
+        Waiting = feed.Items.Where(i => i.NeedsDecision).Take(6).ToList();
+        // With nothing just sent, the newest message a model read leads
+        // the page, traced in full, so the model's work is the first
+        // thing a visitor sees.
+        Featured = JustNow is null && JustRead is null
+            ? feed.Items.FirstOrDefault(i => i.Engine.HasReading)
+            : null;
+        Activity = feed.Items
+            .Where(i => i.Key != JustNow?.Key && i.Key != Featured?.Key)
+            .Take(4)
+            .ToList();
+        AnyReadings = feed.Items.Any(i => i.Engine.HasReading);
+    }
+
+    // A failed reading in plain words. The exception's own text goes
+    // to the server log only; the page names what kind of failure it
+    // was and that nothing was saved.
+    private static string EngineFailureNote(Exception ex)
+    {
+        var message = ex.Message ?? "";
+        if (message.Contains("MODEL_API_KEY", StringComparison.Ordinal))
+        {
+            return "The house could not reach Muse Spark: no Meta Model API key is set on this server. Nothing was saved.";
+        }
+        var status = System.Text.RegularExpressions.Regex.Match(message, @"Meta Model API returned (\d{3})");
+        if (status.Success)
+        {
+            return status.Groups[1].Value == "429"
+                ? "Muse Spark is busy right now. Nothing was saved. Try again in a moment."
+                : $"The Meta Model API answered with an error ({status.Groups[1].Value}). Nothing was saved. Try again in a moment.";
+        }
+        return ex switch
+        {
+            TaskCanceledException or TimeoutException =>
+                "Muse Spark took too long to answer. Nothing was saved. Try again in a moment.",
+            HttpRequestException =>
+                "The house could not reach the Meta Model API. Nothing was saved. Try again in a moment.",
+            System.Text.Json.JsonException =>
+                "The model's answer did not come back in the expected shape. Nothing was saved. Try again.",
+            _ => "The house could not read that message. Nothing was saved. Try again in a moment."
+        };
     }
 
     // The plain words a stored audience default is shown in.
