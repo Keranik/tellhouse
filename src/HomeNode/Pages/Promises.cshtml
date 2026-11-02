@@ -16,7 +16,7 @@
     <label>
         Viewing as
         <select name="ViewerId" onchange="this.form.submit()">
-            <option value="">No reader named (house entries only)</option>
+            <option value="">Household view</option>
             @foreach (var person in Model.People)
             {
                 if (Model.ViewerId == person.Id)

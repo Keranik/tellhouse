@@ -211,19 +211,6 @@ strong { color: var(--ink); }
   font-weight: 500;
 }
 
-.app-demo-chip {
-  background: var(--demo-bg);
-  border: 1px solid var(--demo-border);
-  color: var(--demo-ink);
-  border-radius: 999px;
-  padding: 0.28rem 0.85rem;
-  font-size: 0.82rem;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-}
-
-.app-demo-chip strong { color: var(--demo-ink); }
-
 .app-demo-banner {
   padding: 0.625rem 1.5rem;
   background: var(--demo-bg);
@@ -755,12 +742,6 @@ textarea:focus-visible, input:focus-visible,
     transition: background-color 150ms var(--ease), color 150ms var(--ease);
   }
   .app-drawer-toggle:hover { background: var(--rail-hover); border: none; color: var(--accent); }
-
-  .app-demo-chip {
-    font-size: 0.75rem;
-    letter-spacing: 0.04em;
-    padding: 0.24rem 0.6rem;
-  }
 
   .app-demo-banner { padding: 0.6rem 1rem; }
 

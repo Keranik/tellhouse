@@ -144,7 +144,7 @@ public class TimelineModel : PageModel
 
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
 
-        // No reader named means the house view only: the landing
+        // Household view means the house entries only: the landing
         // shows what any reader may see (Open and Household
         // entries) and nothing written for named people, matching
         // the front door, the promises page, and the plans page.

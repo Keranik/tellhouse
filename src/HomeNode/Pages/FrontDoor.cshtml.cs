@@ -36,6 +36,12 @@ public class AudienceDefaultRow
 {
     public required Person Person { get; init; }
     public required string Label { get; init; }
+
+    // Whether this person has a default at all: a stored row, or
+    // an effective value (the minor's Ask). A person with neither
+    // is not listed with a status of their own; the panel says so
+    // once, about the settings, not about the person.
+    public required bool IsSet { get; init; }
 }
 
 public class FrontDoorModel : PageModel
@@ -402,13 +408,14 @@ public class FrontDoorModel : PageModel
             Defaults.Add(new AudienceDefaultRow
             {
                 Person = person,
+                IsSet = row is not null || effective is not null,
                 Label = row is not null
                     ? DefaultLabel(row.Value)
                     : effective == AudienceDefaultValue.Ask
                         ? "Ask each time (default for under-18s)"
                         : effective is not null
                             ? DefaultLabel(effective.Value)
-                            : "Not set yet"
+                            : ""
             });
         }
         if (ViewerId is int reader)

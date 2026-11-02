@@ -63,9 +63,9 @@ public class BriefService
                 ? "You said"
                 : ev.AuthorPerson is not null
                     ? $"{ev.AuthorPerson.DisplayName.Split(' ')[0]} said"
-                    : "Told to the house";
+                    : "Someone in the household";
             var stateNote = ev.RecordPending || ev.ConfirmationState == ConfirmationState.Proposed
-                ? " (needs confirmation)"
+                ? " (Needs confirmation)"
                 : "";
             lines.Add(new BriefLine
             {

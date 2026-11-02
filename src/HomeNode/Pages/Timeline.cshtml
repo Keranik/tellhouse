@@ -13,11 +13,11 @@
         <select name="ActorId" onchange="this.form.submit()">
             @if (Model.ActorId is null)
             {
-                <option value="" selected>No reader named (house entries only)</option>
+                <option value="" selected>Household view</option>
             }
             else
             {
-                <option value="">No reader named (house entries only)</option>
+                <option value="">Household view</option>
             }
             @foreach (var person in Model.People)
             {
@@ -103,6 +103,11 @@ else
                                 <input type="hidden" name="eventId" value="@item.Id" />
                                 <input type="hidden" name="actorId" value="@Model.ActorId" />
                                 <button type="submit">Confirm</button>
+                            </form>
+                            <form method="post" asp-page-handler="Decline">
+                                <input type="hidden" name="eventId" value="@item.Id" />
+                                <input type="hidden" name="actorId" value="@Model.ActorId" />
+                                <button type="submit">Don't send</button>
                             </form>
                         }
                     </td>

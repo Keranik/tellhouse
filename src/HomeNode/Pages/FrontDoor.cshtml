@@ -6,7 +6,7 @@
 
 <div class="front-door">
     <div class="hero">
-        <h1>Tell the house.</h1>
+        <h1>Tell the house</h1>
 
         @if (Model.Household is not null)
         {
@@ -118,7 +118,7 @@
         <label>
             Viewing as
             <select name="viewerId" onchange="this.form.submit()">
-                <option value="">No one (shared entries only)</option>
+                <option value="">Household view</option>
                 @foreach (var person in Model.People)
                 {
                     if (Model.ViewerId == person.Id)
@@ -163,6 +163,11 @@
                                     <input type="hidden" name="eventId" value="@item.Id" />
                                     <input type="hidden" name="actorPersonId" value="@recentViewer" />
                                     <button type="submit">Confirm</button>
+                                </form>
+                                <form method="post" asp-page-handler="Decline" class="inline-form">
+                                    <input type="hidden" name="eventId" value="@item.Id" />
+                                    <input type="hidden" name="actorPersonId" value="@recentViewer" />
+                                    <button type="submit">Don&rsquo;t send</button>
                                 </form>
                             }
                         }
@@ -228,11 +233,15 @@
             </div>
         }
         <ul class="default-list">
-            @foreach (var row in Model.Defaults)
+            @foreach (var row in Model.Defaults.Where(r => r.IsSet))
             {
                 <li>@HomeNode.Data.NameWording.First(row.Person.DisplayName): @row.Label</li>
             }
         </ul>
+        @if (Model.Defaults.Any(r => !r.IsSet))
+        {
+            <p>Some people in the household have not chosen a default yet.</p>
+        }
         <form method="post" asp-page-handler="SetDefault">
             <label>
                 Viewing as
