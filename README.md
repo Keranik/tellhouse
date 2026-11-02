@@ -22,11 +22,11 @@ An agent proposes, a human confirms, and there is a written record of both.
 
 The first load may take a minute while the services wake.
 
-1. Open Home and send a short message, such as “We're out of milk.”
-2. Confirm what Tellhouse proposes, then look for the entry in Recent and Timeline.
+1. Open Home and send a short message, such as “Ask Daniel to pick up the milk.”
+2. Confirm what Tellhouse proposes, then look for the entry in Recent and Timeline. (A plain statement, such as “We're out of milk,” is simply written down; there is nothing to confirm.)
 3. Open Inbox and Connections to see how a message reaches one person and how a member's assistant joins the household.
 
-![Tellhouse Home in the demo: the dark app shell with the household rail on the left, the "Tell the house." message box with its coral Send button, and the start of the Recent list.](docs/images/tellhouse-home-desktop.png)
+![Tellhouse Home in the demo: the dark app shell with the household rail on the left, the "Tell the house" message box with its coral Send button, and the start of the Recent list.](docs/images/tellhouse-home-desktop.png)
 
 *Screenshot: Tellhouse Home, served from the build in this repository. The rail lists the house's surfaces, the message box is where a person tells the house something in their own words, and Recent shows what the record already holds.*
 
@@ -36,7 +36,7 @@ Demo: the people in this house are invented, and no real family's data is in it.
 
 The demo is open on purpose: anyone with its link can look around and try messages, because everyone in it is invented. That openness belongs to the demo. In the product, a house's record is not public: it is visible only to the household's own members, each through the door, under the audience stored on every entry.
 
-Demo data and public release, stated plainly: this repository is populated with demo data for demo purposes. The household, its people, and its records are invented. The keys, phrases, and tokens in the demo seed are toy material published for the demo; the live deployed demo runs on fresh values set at deployment time, not on anything in this repository. Some functionality is limited or removed in this public release version.
+Demo data and public release, stated plainly: this repository is populated with demo data for demo purposes. The household, its people, and its records are invented. The keys, phrases, and tokens in the demo seed are toy material published for the demo; the live deployed demo runs on fresh values set at deployment time, not on anything in this repository. In this public release, the two member assistants are scripted stand-ins that send set lines, and the message understanding runs on a deterministic local stand-in unless a Meta Model API key is supplied for the live model path.
 
 There is no Tellhouse app to install. Home is where a person sends the house a message in their own words, and the shared record is what the household can read. In the live configuration, a message is understood by Meta's Muse Spark model, through the Meta Model API, into record entries. A person confirms what needs confirming, and the confirmed record is what the house works from. The model proposes structured events; the house's own machinery confirms, routes, and records them. By default, the local demo runs the same path on a deterministic local stand-in.
 
@@ -48,7 +48,7 @@ The house layer's surfaces are:
 - **Timeline:** the shared record, newest first.
 - **Briefing:** what matters to one person, filtered by who is asking.
 - **Plans:** what the household is arranging, who agreed, and what is still open.
-- **My Claims:** what people have taken on, in their own words.
+- **Claims:** what people have taken on, in their own words.
 - **Inbox:** what the house has delivered to one person.
 - **Connections:** who is connected to the house, and through which assistant.
 
@@ -58,11 +58,13 @@ Run the home node:
 
     dotnet run --project src/HomeNode
 
-Then open Home in a browser. On first start, the demo seeds a fictional household and one ordinary day. Extraction defaults to a deterministic local stand-in, so the demo runs with no API key and no spend.
+Then open Home in a browser at http://localhost:5042. On first start, the demo seeds a fictional household and one ordinary day. Extraction defaults to a deterministic local stand-in, so the demo runs with no API key and no spend.
 
 To run the same extraction path with Meta's model, supply a Meta Model API key through the environment. The repository's `.env.example` shows the variable name, `MODEL_API_KEY`, with a redacted value.
 
 Set the real `MODEL_API_KEY` in the host's secret store or environment, never in the repository. Set the extraction mode to Live and the model to `muse-spark-1.3` (Muse Spark) in the host configuration. DEPLOY.md documents the live configuration used for the judged demo environment, including the deployed environment-variable form.
+
+Two folders are the build's own records rather than services: `lane-i-integration/` and `lane-o-e2e/` hold the test lanes used while building, and `src/HouseholdCoordinator/` holds the first build of the house, kept as a record. The deployed demo runs `src/HomeNode`.
 
 The relay and the stand-ins are separate services, started alongside the home node when you want the full federated demo. The relay is a Python service (see `relay/README.md` for its configuration and start command), and each stand-in is its own project under `standins/` (see the README in each stand-in's folder for the environment it needs). `src/HomeNode/README.md` describes how the node talks to both.
 

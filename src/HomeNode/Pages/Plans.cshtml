@@ -111,7 +111,7 @@
             <form method="post" asp-page-handler="Dispose">
                 <input type="hidden" name="elementId" value="@element.Id" />
                 <label>
-                    Viewing as
+                    Answering as
                     <select name="personId">
                         @foreach (var personId in required)
                         {
@@ -214,7 +214,7 @@
                 }
             </select>
         </label>
-        <button type="submit">Confirm I'm going</button>
+        <button type="submit">Confirm they've taken it on</button>
     </form>
     </div>
 }

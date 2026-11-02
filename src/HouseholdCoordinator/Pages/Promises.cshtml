@@ -1,10 +1,10 @@
 @page "/Promises"
 @model HouseholdCoordinator.Pages.PromisesModel
 @{
-    ViewData["Title"] = "My Claims";
+    ViewData["Title"] = "Claims";
 }
 
-<h1>My Claims</h1>
+<h1>Claims</h1>
 <p>Things a person has taken on themselves, in their own words, kept
    as a record in its own right. Nobody is handed a claim: a person
    takes it on themselves. A claim is settled only when a person
@@ -73,10 +73,10 @@ else
                                 <text>Done, closed by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
                                 break;
                             case HouseholdCoordinator.Data.PromiseState.Broken:
-                                <text>Still unclaimed, closed by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                <text>Not done, closed by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
                                 break;
                             case HouseholdCoordinator.Data.PromiseState.Released:
-                                <text>Released by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
+                                <text>No longer needed, released by @(promise.ClosedByPerson?.DisplayName ?? "")</text>
                                 break;
                         }
                     </td>
@@ -98,8 +98,8 @@ else
                                     Outcome
                                     <select name="outcome">
                                         <option value="Kept">Done</option>
-                                        <option value="Broken">Still unclaimed</option>
-                                        <option value="Released">Released</option>
+                                        <option value="Broken">Not done</option>
+                                        <option value="Released">No longer needed</option>
                                     </select>
                                 </label>
                                 <label>

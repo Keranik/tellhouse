@@ -122,7 +122,7 @@ public static class DemoSuite
             && ex1.WrittenEvents[0].ConfirmationState == ConfirmationState.Proposed
             && GetStr(ex1.WrittenEvents[0], "RequestKind") == "Relay");
         Check("Ex1 prompt is the exact relay confirm", ex1.HouseReply ==
-            "Do you want me to tell Lisa: Could you ask Lisa to print two copies of the bus pass??");
+            "Do you want me to tell Lisa this: \u201cCould you ask Lisa to print two copies of the bus pass?\u201d?");
         Check("Ex1 no alert from a relay", ex1.Output.AlertDecision.Fire == false
             && ex1.Output.AlertDecision.Reason == "RelayIsAnActionNotAnAlert");
 
@@ -281,6 +281,69 @@ public static class DemoSuite
             && commit.PromisesBorn[0].State == PromiseState.Made
             && commit.PromisesBorn[0].DueAtLocal == new DateTime(2026, 10, 27, 15, 0, 0)
             && commit.PromisesBorn[0].SourceEventId == commit.WrittenEvents[0].Id);
+
+        // Audit 2, Decision A (ruled Nov 1, 2026): the answer to
+        // an "I'll..." message names the claim and points at the
+        // Claims page, instead of the bare recorded line.
+        Check("A: the answer to an I'll... message names the claim and points at Claims",
+            commit.HouseReply == "Saved as Daniel's claim. It's on Claims.");
+
+        // Audit 2, Decision B (ruled Nov 1, 2026): a claim that
+        // names no person is addressed to the household. Its
+        // stored audience is the household, so the whole household
+        // sees it on Claims; a claim naming a person keeps the
+        // narrow maker-plus-recipient shape. Both directions are
+        // pinned here at the decision seam and on the page.
+        Check("B: a claim with no named person is stored with a household audience",
+            commit.WrittenEvents[0].SensitivityClass == SensitivityClass.Household
+            && (commit.WrittenEvents[0].AudienceRule ?? "").Contains("\"Class\":\"Household\""));
+        var claimsPageB = new HomeNode.Pages.PromisesModel(db, confirmations)
+        {
+            TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+                new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+                new PassthroughTempDataProvider())
+        };
+        claimsPageB.ViewerId = 3;
+        await claimsPageB.OnGetAsync();
+        Check("B: another member's Claims page lists the household claim",
+            claimsPageB.Promises.Any(p => p.Id == commit.PromisesBorn[0].Id));
+        var ctxB = await builder.BuildAsync(householdId);
+        ExtractionInput CommitmentInput() => new()
+        {
+            UtteranceId = "audit2-b-seam",
+            Transcript = "I'll be home by three.",
+            SourceType = "tap",
+            OccurredAtLocal = DateTimeOffset.Parse("2026-10-27T21:05:00-05:00"),
+            Speaker = new ExtractionPersonRef { PersonId = 2, DisplayName = "Daniel Ellis", Role = "Family" },
+            Context = ctxB
+        };
+        ExtractionEvent CommitmentEvent(int? promiseeId) => new()
+        {
+            Type = "Commitment",
+            Body = "I'll be home by three.",
+            SubjectPersonId = 2,
+            AuthorPersonId = 2,
+            ConfirmationState = "Confirmed",
+            Details = promiseeId is int pid
+                ? new System.Text.Json.Nodes.JsonObject
+                {
+                    ["CommitmentText"] = "I'll be home by three.",
+                    ["PromiseePersonId"] = pid
+                }
+                : new System.Text.Json.Nodes.JsonObject
+                {
+                    ["CommitmentText"] = "I'll be home by three."
+                }
+        };
+        var unnamedDecision = await audience.DecideAsync(CommitmentInput(), CommitmentEvent(null));
+        var namedDecision = await audience.DecideAsync(CommitmentInput(), CommitmentEvent(3));
+        Check("B: the decision seam gives a household claim the household audience",
+            unnamedDecision.Class == SensitivityClass.Household
+            && unnamedDecision.FinalAudienceIds.Contains(1)
+            && unnamedDecision.FinalAudienceIds.Contains(3));
+        Check("B: the decision seam keeps a named claim with maker and recipient only",
+            namedDecision.Class == SensitivityClass.Named
+            && namedDecision.FinalAudienceIds.SequenceEqual(new[] { 2, 3 }));
 
         var task = await svc.ProcessAsync(Input("Daniel needs picking up from the depot at five.", 3, "13:20"));
         Check("Pickup is a Task, not a whereabouts or a request", task.WrittenEvents.Count == 1
@@ -1783,7 +1846,7 @@ public static class DemoSuite
         // has already been confirmed used to throw out of the page
         // handlers and land the visitor on the error page. Both the
         // timeline's and the front door's confirm and decline now
-        // answer "Already confirmed." and change nothing further.
+        // answer "Already answered." and change nothing further.
         var t5Event = await confirmations.ProposeAsync(new Event
         {
             HouseholdId = householdId,
@@ -1801,12 +1864,12 @@ public static class DemoSuite
         await t5Timeline.OnPostConfirmAsync(t5Event.Id, 2);
         var t5AfterFirst = await db.Events.FirstAsync(e => e.Id == t5Event.Id);
         await t5Timeline.OnPostConfirmAsync(t5Event.Id, 2);
-        Check("Double submit: a second confirm on the timeline answers Already confirmed and the entry stays confirmed",
+        Check("T5: a second confirm on the timeline answers Already answered and the entry stays confirmed",
             t5AfterFirst.ConfirmationState is ConfirmationState.Confirmed or ConfirmationState.Done
-            && t5Timeline.Note == "Already confirmed.");
+            && t5Timeline.Note == "Already answered.");
         await t5Timeline.OnPostDeclineAsync(t5Event.Id, 2);
-        Check("Double submit: a decline after the confirm on the timeline answers Already confirmed",
-            t5Timeline.Note == "Already confirmed.");
+        Check("T5: a decline after the confirm on the timeline answers Already answered",
+            t5Timeline.Note == "Already answered.");
         var t5Event2 = await confirmations.ProposeAsync(new Event
         {
             HouseholdId = householdId,
@@ -1825,11 +1888,11 @@ public static class DemoSuite
         };
         await t5Door.OnPostConfirmAsync(t5Event2.Id, 2);
         await t5Door.OnPostConfirmAsync(t5Event2.Id, 2);
-        Check("Double submit: a second confirm on the front door answers Already confirmed",
-            t5Door.HouseReply == "Already confirmed.");
+        Check("T5: a second confirm on the front door answers Already answered",
+            t5Door.HouseReply == "Already answered.");
         await t5Door.OnPostDeclineAsync(t5Event2.Id, 2);
-        Check("Double submit: a decline after the confirm on the front door answers Already confirmed",
-            t5Door.HouseReply == "Already confirmed.");
+        Check("T5: a decline after the confirm on the front door answers Already answered",
+            t5Door.HouseReply == "Already answered.");
 
         // Health mention routing: the route person
         // reports his own health mention. Daniel (2) is the default
@@ -1971,6 +2034,49 @@ public static class DemoSuite
         Check("Stored audience: /Plans with no reader named shows Household open decisions and never the Private note",
             plansPageC.OpenDecisions.Any(e => e.SensitivityClass == SensitivityClass.Household)
             && !plansPageC.OpenDecisions.Any(e => e.Id == privateDecision.Id));
+
+        // Audit 2, Decision C (ruled Nov 1, 2026): a confirmed
+        // relayed message lands in the recipient's Inbox on the
+        // house, and in no one else's; the confirm answer says
+        // what actually happened, shaped by the action.
+        var inboxService = sp.GetRequiredService<MemberDeliveryService>();
+        var doorC = new HomeNode.Pages.FrontDoorModel(db, builder, svc, confirmations, audience)
+        {
+            TempData = new Microsoft.AspNetCore.Mvc.ViewFeatures.TempDataDictionary(
+                new Microsoft.AspNetCore.Http.DefaultHttpContext(),
+                new PassthroughTempDataProvider())
+        };
+        await doorC.OnPostTellAsync(1, "Ask Daniel to bring the charger down.");
+        var relayEventC = (await db.Events
+            .Where(e => e.Type == EventType.Request
+                && e.ConfirmationState == ConfirmationState.Proposed)
+            .OrderByDescending(e => e.Id)
+            .ToListAsync())
+            .First(e => GetStr(e, "RequestKind") == "Relay");
+        await doorC.OnPostConfirmAsync(relayEventC.Id, 1);
+        Check("C: the confirm answer for a relay says who it was sent to",
+            doorC.HouseReply == "Sent to Daniel.");
+        var relayAfterC = await db.Events.FirstAsync(e => e.Id == relayEventC.Id);
+        var danielInboxC = await inboxService.ReceivedForAsync(2);
+        var lisaInboxC2 = await inboxService.ReceivedForAsync(3);
+        var margaretInboxC = await inboxService.ReceivedForAsync(1);
+        Check("C: a confirmed relay completes and lands in the recipient's Inbox only",
+            relayAfterC.ConfirmationState == ConfirmationState.Done
+            && danielInboxC.Any(i => i.Source == "Message"
+                && i.Text.Contains("bring the charger down"))
+            && !lisaInboxC2.Any(i => i.Text.Contains("bring the charger down"))
+            && !margaretInboxC.Any(i => i.Text.Contains("bring the charger down")));
+
+        await doorC.OnPostTellAsync(1, "Remind me on Friday to order more gauze.");
+        var reminderEventC = (await db.Events
+            .Where(e => e.Type == EventType.Request
+                && e.ConfirmationState == ConfirmationState.Proposed)
+            .OrderByDescending(e => e.Id)
+            .ToListAsync())
+            .First(e => GetStr(e, "RequestKind") == "Reminder");
+        await doorC.OnPostConfirmAsync(reminderEventC.Id, 1);
+        Check("C: the confirm answer for a reminder says when it was set for",
+            doorC.HouseReply == "Reminder set for Friday.");
 
         Console.WriteLine();
         Console.WriteLine($"Demo suite: {_passed} passed, {_failed} failed.");

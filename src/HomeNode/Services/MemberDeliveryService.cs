@@ -83,11 +83,12 @@ public class MemberDeliveryService
 
         var alerts = await _db.AlertDeliveries
             .Include(d => d.Event).ThenInclude(e => e!.AuthorPerson)
+            .Include(d => d.EventAction)
             .Where(d => d.ToPersonId == personId)
             .OrderBy(d => d.DeliveredAtUtc)
             .ToListAsync();
         items.AddRange(alerts.Select(d => new MemberDeliveryItem(
-            "Alert",
+            d.EventAction?.ActionType == EventActionType.RelayMessage ? "Message" : "Alert",
             d.BodyText,
             d.DeliveredAtUtc,
             "",

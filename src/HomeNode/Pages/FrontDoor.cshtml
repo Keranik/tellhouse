@@ -20,11 +20,18 @@
         <form method="post" asp-page-handler="Tell">
             <div class="speaker-row">
                 <label>
-                    Viewing as
+                    Sending as
                     <select name="speakerId">
                         @foreach (var person in Model.People)
                         {
-                            <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                            if (Model.LastSpeakerId == person.Id)
+                            {
+                                <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                            }
+                            else
+                            {
+                                <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                            }
                         }
                         <option value="">No name given</option>
                     </select>
@@ -32,7 +39,7 @@
             </div>
             <label>
                 <span class="visually-hidden">Message to the house</span>
-                <textarea name="telling" rows="3" placeholder="Try &quot;We're out of milk&quot;, &quot;I'll get Mia at 3&quot;, or &quot;Where's Daniel?&quot;"></textarea>
+                <textarea name="telling" rows="3" placeholder="Try &quot;Ask Daniel to pick up milk&quot;, &quot;I'll get Mia at 3&quot;, or &quot;We're out of milk&quot;"></textarea>
             </label>
             <div class="form-actions">
                 <button type="submit" class="primary">Send</button>
@@ -60,7 +67,7 @@
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="eventId" value="@proposedId" />
                     <label>
-                        Viewing as
+                        Confirming as
                         <select name="actorPersonId">
                             @foreach (var person in Model.People)
                             {
@@ -153,10 +160,14 @@
                         {
                             <text>The house</text>
                         }
-                        &middot; @HomeNode.Data.HouseholdTime.Time(item.CreatedAtUtc, Model.HouseholdZone)
+                        &middot; @HomeNode.Data.HouseholdTime.TimeOrDate(item.CreatedAtUtc, Model.HouseholdZone)
                         @if (item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
                         {
                             <text> &middot; </text><span class="chip-action">Needs confirmation</span>
+                            @if (Model.ViewerId is null)
+                            {
+                                <div class="muted-note">Pick a person above to answer.</div>
+                            }
                             @if (Model.ViewerId is int recentViewer)
                             {
                                 <form method="post" asp-page-handler="Confirm" class="inline-form">
@@ -187,7 +198,7 @@
             <h3 class="panel-title">Try a connected assistant</h3>
             @foreach (var standIn in Model.StandIns)
             {
-                <p>@HomeNode.Data.NameWording.First(standIn.PersonName) uses their own AI assistant. Ask it to send the house a note; it writes the words itself.</p>
+                <p>@HomeNode.Data.NameWording.First(standIn.PersonName) uses their own AI assistant. Ask it to send the house a note.</p>
             }
             @if (Model.TestSendNote is not null)
             {
@@ -244,7 +255,7 @@
         }
         <form method="post" asp-page-handler="SetDefault">
             <label>
-                Viewing as
+                Acting as
                 <select name="actorPersonId">
                     @foreach (var person in Model.People)
                     {

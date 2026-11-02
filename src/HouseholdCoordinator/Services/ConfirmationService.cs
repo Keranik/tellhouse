@@ -173,7 +173,7 @@ public class ConfirmationService
         if (outcome is not (nameof(PromiseState.Kept) or nameof(PromiseState.Broken) or nameof(PromiseState.Released)))
         {
             throw new InvalidOperationException(
-                $"A claim can be closed only as Done, Still unclaimed, or Released; '{outcome}' is not one of those.");
+                $"A claim can be closed only as Done, Not done, or No longer needed; '{outcome}' is not one of those.");
         }
         var promise = await _db.Promises.FirstOrDefaultAsync(p => p.Id == promiseId)
             ?? throw new InvalidOperationException("That claim cannot be found.");

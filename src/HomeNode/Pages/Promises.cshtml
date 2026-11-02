@@ -1,10 +1,10 @@
 @page "/Promises"
 @model HomeNode.Pages.PromisesModel
 @{
-    ViewData["Title"] = "My Claims";
+    ViewData["Title"] = "Claims";
 }
 
-<h1>My Claims</h1>
+<h1>Claims</h1>
 <p>What people in the household have said they'll do, in their own words.</p>
 
 @if (Model.Note is not null)
@@ -54,10 +54,10 @@ else
             {
                 <tr>
                     <td>@promise.CommitmentText</td>
-                    <td>@HomeNode.Data.NameWording.First(promise.PromisorPerson?.DisplayName)</td>
-                    <td>@(promise.PromiseePerson is null ? "Household" : HomeNode.Data.NameWording.First(promise.PromiseePerson.DisplayName))</td>
-                    <td>@(promise.DueAtLocal is { } dueAt ? dueAt.ToString("MMM d, h:mm tt") : promise.DueText ?? "")</td>
-                    <td>
+                    <td><span class="cell-label">By</span>@HomeNode.Data.NameWording.First(promise.PromisorPerson?.DisplayName)</td>
+                    <td><span class="cell-label">For</span>@(promise.PromiseePerson is null ? "Household" : HomeNode.Data.NameWording.First(promise.PromiseePerson.DisplayName))</td>
+                    <td><span class="cell-label">Due</span>@(promise.DueAtLocal is { } dueAt ? dueAt.ToString("MMM d, h:mm tt") : promise.DueText ?? "")</td>
+                    <td><span class="cell-label">Status</span>
                         @switch (promise.State)
                         {
                             case HomeNode.Data.PromiseState.Made:
@@ -67,14 +67,14 @@ else
                                 <text>Done &middot; &ldquo;@(promise.ClosedByEvent?.Body ?? "")&rdquo; &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } keptAt ? HomeNode.Data.HouseholdTime.Time(keptAt, Model.HouseholdZone) : "")</text>
                                 break;
                             case HomeNode.Data.PromiseState.Broken:
-                                <text>Closed &middot; still unclaimed &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } brokenAt ? HomeNode.Data.HouseholdTime.Time(brokenAt, Model.HouseholdZone) : "")</text>
+                                <text>Closed &middot; Not done &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } brokenAt ? HomeNode.Data.HouseholdTime.Time(brokenAt, Model.HouseholdZone) : "")</text>
                                 if (promise.ClosedByEvent?.Body is { } brokenWords)
                                 {
                                     <br /><text>In their words: &ldquo;@brokenWords&rdquo;</text>
                                 }
                                 break;
                             case HomeNode.Data.PromiseState.Released:
-                                <text>Released &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } releasedAt ? HomeNode.Data.HouseholdTime.Time(releasedAt, Model.HouseholdZone) : "")</text>
+                                <text>No longer needed &middot; @HomeNode.Data.NameWording.First(promise.ClosedByPerson?.DisplayName), @(promise.ClosedAtUtc is { } releasedAt ? HomeNode.Data.HouseholdTime.Time(releasedAt, Model.HouseholdZone) : "")</text>
                                 if (promise.ClosedByEvent?.Body is { } releasedWords)
                                 {
                                     <br /><text>In their words: &ldquo;@releasedWords&rdquo;</text>
@@ -90,9 +90,20 @@ else
                                 <label>
                                     Closed by
                                     <select name="closerPersonId">
+                                        @if (Model.ViewerId is null)
+                                        {
+                                            <option value="" selected>Choose who closed it</option>
+                                        }
                                         @foreach (var person in Model.People)
                                         {
-                                            <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                                            if (Model.ViewerId == person.Id)
+                                            {
+                                                <option value="@person.Id" selected>@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@person.Id">@HomeNode.Data.NameWording.First(person.DisplayName)</option>
+                                            }
                                         }
                                     </select>
                                 </label>
@@ -100,8 +111,8 @@ else
                                     Outcome
                                     <select name="outcome">
                                         <option value="Kept">Done</option>
-                                        <option value="Broken">Still unclaimed</option>
-                                        <option value="Released">Released</option>
+                                        <option value="Broken">Not done</option>
+                                        <option value="Released">No longer needed</option>
                                     </select>
                                 </label>
                                 <label>

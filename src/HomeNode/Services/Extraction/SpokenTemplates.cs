@@ -16,7 +16,7 @@ public static class SpokenTemplates
     public const string Recorded = "Written down.";
 
     public static string RelayConfirm(string firstName, string messageText) =>
-        $"Do you want me to tell {firstName}: {messageText}?";
+        $"Do you want me to tell {firstName} this: \u201c{messageText}\u201d?";
 
     public static string MediaConfirm(string whatText) =>
         $"Shall I put {whatText} on?";

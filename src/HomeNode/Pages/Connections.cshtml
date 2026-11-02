@@ -20,7 +20,7 @@
 {
     <div class="panel">
     <h2>Admin controls are locked</h2>
-    <p>The admin controls are locked. You can still see who's connected.</p>
+    <p>You can still see who's connected.</p>
     <form method="post" asp-page-handler="Unlock">
         <label>Admin passcode
             <input type="password" name="houseSecret" />
@@ -84,7 +84,7 @@ else
         <p>Requested @HomeNode.Data.HouseholdTime.Stamp(card.CreatedAtUtc, Model.HouseholdZone)</p>
         <details>
             <summary>Technical details</summary>
-            <p>Claimed id: @card.ClaimedPartyId<br />
+            <p>Stated id: @card.ClaimedPartyId<br />
             Key fingerprint: <code>@card.Fingerprint</code><br />
             Provider: @card.ProviderClaim (@card.ProviderClaimLabel)<br />
             Invited by @HomeNode.Data.NameWording.First(card.InviterName)</p>
@@ -145,7 +145,7 @@ else
             <details>
                 <summary>Technical details</summary>
                 <p>Connection @connection.ConnectionId<br />
-                Claimed id: @connection.PartyId<br />
+                Stated id: @connection.PartyId<br />
                 Key fingerprint: <code>@connection.Fingerprint</code><br />
                 Provider: @connection.ProviderClaim (their own claim, not checked)<br />
                 Enrolled by @(connection.EnrollingInviterPerson?.DisplayName ?? "")</p>

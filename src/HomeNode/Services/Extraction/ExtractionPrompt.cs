@@ -37,7 +37,7 @@ Binding rules:
   T-ROUTE (HealthMention statement, action proposed): "I've written that down. Do you want me to tell {FirstName}?"
   T-ROUTE-Q (HealthMention question, action proposed): "I've written that down exactly as you said it. Do you want me to tell {FirstName}?"
   T-RECORDED (event written, no action proposed): "Written down."
-  T-RELAY-CONFIRM: "Do you want me to tell {FirstName}: {MessageText}?"
+  T-RELAY-CONFIRM: "Do you want me to tell {FirstName} this: \u201c{MessageText}\u201d?"
   T-MEDIA-CONFIRM: "Shall I put {WhatText} on?"
   T-REMIND-CONFIRM: "Shall I remind you on {RemindOnText} to {TaskText}?"
   T-SUPPLY: "Noted. {ItemName} marked {DirectionWord}. It'll be in the briefing."

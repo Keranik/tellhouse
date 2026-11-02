@@ -525,9 +525,11 @@ def make_handler(service):
         def do_GET(self):
             if self.path == "/":
                 self._send_text(200,
-                    "Tellhouse relay. Carries sealed messages between "
-                    "the house and members' assistants. It can't read "
-                    "them and keeps nothing.")
+                    "Tellhouse relay (demo). Carries sealed messages "
+                    "between the house and members' assistants. It "
+                    "cannot read them: each message is sealed to its "
+                    "recipient. It holds a message only to pass it on, "
+                    "for up to five minutes, then it is gone.")
                 return
             if self.path == "/health":
                 self._send(200, {

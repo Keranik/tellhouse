@@ -130,6 +130,21 @@ public class AudienceDecisionService
             }
             case "Commitment":
             {
+                var hasPromisee = ev.Details.TryGetPropertyValue("PromiseePersonId", out var promisee)
+                    && promisee is not null;
+                if (!hasPromisee)
+                {
+                    // A claim that names no recipient is addressed
+                    // to the household: that is what its "For:
+                    // Household" label says, and the stored audience
+                    // now matches the label (ruled Nov 1, 2026).
+                    // The maker stays structural. A claim naming a
+                    // person keeps the narrow shape below.
+                    var householdRule = new JsonObject { ["Class"] = "Household" };
+                    var makerOnly = new HashSet<int>();
+                    if (author is int ha) makerOnly.Add(ha);
+                    return (SensitivityClass.Household, householdRule, makerOnly, circle);
+                }
                 var rule = new JsonObject
                 {
                     ["Class"] = "Named",
@@ -137,11 +152,8 @@ public class AudienceDecisionService
                 };
                 var structural = new HashSet<int>();
                 if (author is int a) structural.Add(a);
-                if (ev.Details.TryGetPropertyValue("PromiseePersonId", out var promisee) && promisee is not null)
-                {
-                    rule["PromiseePersonId"] = promisee.DeepClone();
-                    if (promisee is JsonValue pv && pv.TryGetValue<int>(out var pid)) structural.Add(pid);
-                }
+                rule["PromiseePersonId"] = promisee!.DeepClone();
+                if (promisee is JsonValue pv && pv.TryGetValue<int>(out var pid)) structural.Add(pid);
                 return (SensitivityClass.Named, rule, structural, new HashSet<int>(structural));
             }
             // A stated turn (the stated-turn audience case from the
@@ -213,6 +225,20 @@ public class AudienceDecisionService
         // then, because extraction is when it is called, and any ask
         // it reaches starts its clock at presentation, below.)
         if (subject is null && author is null)
+        {
+            return CeilingOnly();
+        }
+
+        // A claim that names no recipient resolves by its ceiling
+        // alone, the same treatment clause 9 gives a person-free
+        // telling: the claim's addressee is stated in its own shape
+        // (the household, or the one named person), so the default
+        // and ask lanes, which exist for tellings whose audience is
+        // not stated, do not reopen it. A claim naming a person
+        // keeps the narrow ceiling above and also resolves here,
+        // exactly as it did when every claim took this shape: its
+        // stored audience is its maker plus the person it names.
+        if (ev.Type == "Commitment")
         {
             return CeilingOnly();
         }

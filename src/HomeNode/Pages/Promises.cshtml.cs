@@ -68,8 +68,16 @@ public class PromisesModel : PageModel
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
     }
 
-    public async Task<IActionResult> OnPostCloseAsync(int promiseId, int closerPersonId, string outcome, string? closingWords)
+    public async Task<IActionResult> OnPostCloseAsync(int promiseId, int? closerPersonId, string outcome, string? closingWords)
     {
+        // With no reader named there is nobody to default the
+        // closer to: an unnamed closer is refused, never silently
+        // read as the first person in the list.
+        if (closerPersonId is not int closerId)
+        {
+            TempData["PromiseNote"] = "Choose who closed the claim.";
+            return RedirectToPage();
+        }
         // A promise closes in the closer's own words, so the words are
         // required: with no words the close does not happen, no event
         // is written, and no promise state changes. The house never
@@ -86,8 +94,8 @@ public class PromisesModel : PageModel
         // every caller goes through; this check only keeps the page
         // from recording a close that service will refuse.
         if (outcome == nameof(PromiseState.Released)
-            && closerPersonId != promise.PromiseePersonId
-            && !(promise.PromiseePersonId is null && closerPersonId == promise.PromisorPersonId))
+            && closerId != promise.PromiseePersonId
+            && !(promise.PromiseePersonId is null && closerId == promise.PromisorPersonId))
         {
             var promisee = await _db.Persons.FirstOrDefaultAsync(p => p.Id == promise.PromiseePersonId);
             var promisor = await _db.Persons.FirstOrDefaultAsync(p => p.Id == promise.PromisorPersonId);
@@ -102,7 +110,7 @@ public class PromisesModel : PageModel
             Type = EventType.HouseholdNote,
             Body = closingWords.Trim(),
             SubjectPersonId = promise.PromisorPersonId,
-            AuthorPersonId = closerPersonId,
+            AuthorPersonId = closerId,
             CreatedAtUtc = DateTime.UtcNow,
             SensitivityClass = SensitivityClass.Household,
             AudienceRule = """{"Class":"Household"}"""
@@ -110,7 +118,7 @@ public class PromisesModel : PageModel
         await _confirmations.WriteStatementAsync(closingEvent, "tap");
         try
         {
-            await _confirmations.ClosePromiseAsync(promiseId, closingEvent.Id, closerPersonId, outcome, "tap");
+            await _confirmations.ClosePromiseAsync(promiseId, closingEvent.Id, closerId, outcome, "tap");
             TempData["PromiseNote"] = "Claim closed.";
         }
         catch (InvalidOperationException ex)

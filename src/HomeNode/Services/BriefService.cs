@@ -54,7 +54,7 @@ public class BriefService
             .Include(e => e.AuthorPerson)
             .Include(e => e.SubjectPerson)
             .Where(e => e.HouseholdId == person.HouseholdId)
-            .OrderBy(e => e.CreatedAtUtc)
+            .OrderByDescending(e => e.CreatedAtUtc)
             .ToListAsync();
 
         foreach (var ev in events.Where(e => IsVisibleTo(e, personId)))
@@ -63,7 +63,7 @@ public class BriefService
                 ? "You said"
                 : ev.AuthorPerson is not null
                     ? $"{ev.AuthorPerson.DisplayName.Split(' ')[0]} said"
-                    : "Someone in the household";
+                    : "The house";
             var stateNote = ev.RecordPending || ev.ConfirmationState == ConfirmationState.Proposed
                 ? " (Needs confirmation)"
                 : "";
@@ -164,7 +164,18 @@ public class BriefService
             }
         }
 
-        return lines;
+        // Sections in the order the page's own introduction
+        // names them: open claims, things to order, the person's
+        // tasks, then recent entries. The sort is stable, so each
+        // section keeps its own order.
+        var sectionRank = new Dictionary<string, int>
+        {
+            ["Claims still open"] = 0,
+            ["To order"] = 1,
+            ["Your tasks"] = 2,
+            ["Recent"] = 3
+        };
+        return lines.OrderBy(l => sectionRank.GetValueOrDefault(l.Section, 4)).ToList();
     }
 
     public static bool IsVisibleTo(Event ev, int personId) =>

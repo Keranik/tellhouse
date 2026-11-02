@@ -156,7 +156,7 @@ public class ConfirmationService
         if (outcome is not (nameof(PromiseState.Kept) or nameof(PromiseState.Broken) or nameof(PromiseState.Released)))
         {
             throw new InvalidOperationException(
-                $"A claim can be closed only as Done, Still unclaimed, or Released; '{outcome}' is not one of those.");
+                $"A claim can be closed only as Done, Not done, or No longer needed; '{outcome}' is not one of those.");
         }
         var promise = await _db.Promises.FirstOrDefaultAsync(p => p.Id == promiseId)
             ?? throw new InvalidOperationException("That claim cannot be found.");
@@ -239,6 +239,11 @@ public class ConfirmationService
         var action = await _db.EventActions.FirstOrDefaultAsync(a => a.EventId == ev.Id);
         if (action is null)
         {
+            return;
+        }
+        if (action.ActionType == EventActionType.RelayMessage)
+        {
+            await DispatchRelayAsync(ev, action);
             return;
         }
         if (action.ActionType != EventActionType.NotifyPerson)
@@ -325,6 +330,89 @@ public class ConfirmationService
         });
         await _db.SaveChangesAsync();
         await CompleteAsync(ev.Id);
+    }
+
+    // A confirmed relay: the message goes to the one person the
+    // action names, the person the confirmer was asked about. The
+    // target is stored on the action at write time; nothing is
+    // routed from current state. The fences are the alert path's:
+    // the delivery audience governs (the action's named target is
+    // inside it by the stored action's own terms, as a plan
+    // element's named participants are), and a connection level
+    // that blocks the delivery gets nothing, the failure recorded
+    // with the event left Confirmed, owed and visible. The
+    // delivery row written here
+    // is the recipient's Inbox record of the relay, visible to that
+    // recipient only, exactly as an alert delivery is; when the
+    // recipient holds an Active connection the same words also
+    // travel as a sealed packet to their assistant, and the event
+    // completes only when the member's acknowledgement comes back,
+    // the same completion rule the alert path keeps. Guarded by
+    // the deliveries table itself: at most one relay landing per
+    // event, ever.
+    private async Task DispatchRelayAsync(Event ev, EventAction action)
+    {
+        if (await _db.AlertDeliveries.AnyAsync(d => d.EventId == ev.Id))
+        {
+            return;
+        }
+        var recipient = action.TargetPersonId is int targetId
+            ? await FindAudiencePersonAsync(targetId, ev.HouseholdId)
+            : null;
+        if (recipient is null)
+        {
+            await RecordExecutionFailureAsync(ev.Id);
+            return;
+        }
+        var deliveryService = new SealedDeliveryService(_db, _nodeKeys);
+        if (await deliveryService.IsDeliveryBlockedAsync(recipient.Value, sourceEventId: ev.Id))
+        {
+            await RecordExecutionFailureAsync(ev.Id);
+            return;
+        }
+        var messageText = ev.Body;
+        if (!string.IsNullOrWhiteSpace(action.Payload))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(action.Payload);
+                if (doc.RootElement.TryGetProperty("MessageText", out var message)
+                    && message.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(message.GetString()))
+                {
+                    messageText = message.GetString()!;
+                }
+            }
+            catch (JsonException)
+            {
+                // The event's own words stand when the payload
+                // cannot be read; the relay is never reworded.
+            }
+        }
+        var queued = false;
+        if (await _db.HouseConnections.AnyAsync(c =>
+                c.PersonId == recipient.Value && c.Standing == ConnectionStanding.Active)
+            && !await _db.SealedOutbox.AnyAsync(o => o.SourceEventId == ev.Id && o.SourceKind == "Alert"))
+        {
+            queued = await deliveryService.QueueDeliveryAsync(
+                ev.HouseholdId, recipient.Value, messageText, "Alert", sourceEventId: ev.Id) is not null;
+        }
+        var household = await _db.Households.FirstAsync(h => h.Id == ev.HouseholdId);
+        _db.AlertDeliveries.Add(new AlertDelivery
+        {
+            EventId = ev.Id,
+            EventActionId = action.Id,
+            LevelKey = household.HealthMentionLevelKey ?? "now",
+            ToPersonId = recipient.Value,
+            BodyText = messageText,
+            DeliveredAtUtc = DateTime.UtcNow,
+            IsBackupHop = false
+        });
+        await _db.SaveChangesAsync();
+        if (!queued)
+        {
+            await CompleteAsync(ev.Id);
+        }
     }
 
     // The route stored on the event at write time: the route person

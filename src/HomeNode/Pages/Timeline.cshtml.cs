@@ -62,7 +62,7 @@ public class TimelineModel : PageModel
         {
             // A second click on an entry that has already moved on:
             // a plain note, never the error page.
-            TempData["TimelineNote"] = "Already confirmed.";
+            TempData["TimelineNote"] = "Already answered.";
         }
         return RedirectToPage(new { ActorId = actorId });
     }
@@ -76,7 +76,7 @@ public class TimelineModel : PageModel
         }
         catch (InvalidOperationException)
         {
-            TempData["TimelineNote"] = "Already confirmed.";
+            TempData["TimelineNote"] = "Already answered.";
         }
         return RedirectToPage(new { ActorId = actorId });
     }
@@ -90,7 +90,7 @@ public class TimelineModel : PageModel
         }
         catch (InvalidOperationException)
         {
-            TempData["TimelineNote"] = "Already confirmed.";
+            TempData["TimelineNote"] = "Already answered.";
         }
         return RedirectToPage(new { ActorId = actorId });
     }

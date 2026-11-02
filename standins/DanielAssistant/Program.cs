@@ -824,10 +824,29 @@ if (AutoJoinEnabled())
     });
 }
 
-app.MapGet("/", () => Results.Text(
-    "Daniel's assistant (demo stand-in). A stand-in for the personal assistant of Daniel, " +
-    "a fictional member of the Ellis household. It talks to Tellhouse for Daniel and shows " +
-    "connection status only. It never shows message contents."));
+app.MapGet("/", () =>
+{
+    var state = LoadJson(StatePath, new JsonObject());
+    var joined = state["joined"]?.GetValue<bool>() ?? false;
+    var statusLine = joined
+        ? "Connected to the house."
+        : "Not connected to the house yet.";
+    var html = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\" />"
+        + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />"
+        + "<title>Daniel's assistant · Tellhouse demo</title>"
+        + "<style>body{font-family:system-ui,sans-serif;margin:2rem auto;max-width:34rem;padding:0 1rem;color:#1B2A41}"
+        + ".demo{border:1px solid #B97F14;border-radius:8px;padding:.6rem .9rem;background:#FDF6E0}"
+        + "a{color:#C8432F}</style></head><body>"
+        + "<h1>Tellhouse</h1>"
+        + "<p class=\"demo\"><strong>DEMO ENVIRONMENT</strong> · The people in this house are invented, and no real family's data is in it.</p>"
+        + "<p>This page belongs to Daniel's assistant, a scripted stand-in for the personal assistant of Daniel, "
+        + "a fictional member of the Ellis household. It carries notes between Daniel and the house; "
+        + "message contents are never shown on this page.</p>"
+        + "<p>" + statusLine + " Details are at <a href=\"/status\">/status</a>.</p>"
+        + "<p><a href=\"https://tellhouse.onrender.com\">Back to the house</a></p>"
+        + "</body></html>";
+    return Results.Content(html, "text/html");
+});
 
 app.MapGet("/status", () =>
 {

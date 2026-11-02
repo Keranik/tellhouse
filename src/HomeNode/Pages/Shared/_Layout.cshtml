@@ -64,7 +64,7 @@
                 </a>
                 <a class="@NavClass("/Promises")" asp-area="" asp-page="/Promises">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3.5 8.2-7 10-3.5-1.8-7-5-7-10V6z" /><path d="M9 11.8l2.2 2.2 4-4.2" /></svg>
-                    <span>My Claims</span>
+                    <span>Claims</span>
                 </a>
                 <a class="@NavClass("/Member")" asp-area="" asp-page="/Member">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z" /></svg>
@@ -85,11 +85,12 @@
                         aria-expanded="false" aria-controls="app-sidebar"
                         aria-label="Open navigation">
                     <img src="~/img/tellhouse-mark-white.svg" alt="" width="26" height="26" aria-hidden="true" />
+                    <span class="app-drawer-toggle-menu" aria-hidden="true"><span></span><span></span><span></span></span>
                 </button>
                 <span class="app-topbar-title">@ViewData["Title"]</span>
             </header>
             <div class="app-demo-banner">
-                <p><strong>DEMO ENVIRONMENT</strong> &middot; Demo: the people in this house are invented, and <strong>no real family's data is in it.</strong></p>
+                <p><strong>DEMO ENVIRONMENT</strong> &middot; The people in this house are invented, and <strong>no real family's data is in it.</strong></p>
             </div>
             <main role="main" class="app-canvas">
                 @RenderBody()

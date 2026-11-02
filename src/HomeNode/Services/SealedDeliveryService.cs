@@ -173,7 +173,21 @@ public class SealedDeliveryService
         {
             return false;
         }
-        return sourceEvents.Any(ev => !IsInDeliveryAudience(ev, toPersonId));
+        // A relay action stored on a source event names its own
+        // recipient: the confirmed action is a proposal addressed
+        // to that person, so for a delivery carrying that action's
+        // message the named target is inside, on the same terms
+        // as a plan element's named participants above. This is
+        // the delivery audience only; who may READ the entry is
+        // unchanged.
+        var relayAddressed = await _db.EventActions
+            .Where(a => sourceEvents.Select(e => e.Id).Contains(a.EventId)
+                && a.ActionType == EventActionType.RelayMessage
+                && a.TargetPersonId == toPersonId)
+            .Select(a => a.EventId)
+            .ToListAsync();
+        return sourceEvents.Any(ev => !IsInDeliveryAudience(ev, toPersonId)
+            && !relayAddressed.Contains(ev.Id));
     }
 
     private static bool IsInDeliveryAudience(Event ev, int personId) =>

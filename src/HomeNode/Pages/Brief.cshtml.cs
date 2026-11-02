@@ -81,8 +81,22 @@ public class BriefModel : PageModel
     public async Task<IActionResult> OnPostLookupAsync(int askerPersonId, int subjectPersonId)
     {
         var parts = await _lookup.AnswerWhereaboutsPartsAsync(askerPersonId, subjectPersonId);
+        var asker = await _db.Persons.FirstOrDefaultAsync(p => p.Id == askerPersonId);
+        var askerHousehold = asker is null
+            ? null
+            : await _db.Households.FirstOrDefaultAsync(h => h.Id == asker.HouseholdId);
+        TimeZoneInfo zone;
+        try
+        {
+            zone = TimeZoneInfo.FindSystemTimeZoneById(askerHousehold?.TimeZoneId ?? "America/Chicago");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            zone = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+        }
+        var todayLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone);
         TempData["LookupAnswer"] = parts is { } answer
-            ? $"{answer.FirstName} · {answer.StatedLocal:h:mm tt} · \"{answer.Body}\""
+            ? $"{answer.FirstName} · {(answer.StatedLocal.Date == todayLocal.Date ? $"{answer.StatedLocal:h:mm tt}" : $"{answer.StatedLocal:MMM d, h:mm tt}")} · \"{answer.Body}\""
             : SpokenTemplates.DoNotKnow;
         return RedirectToPage(new { PersonId = askerPersonId });
     }

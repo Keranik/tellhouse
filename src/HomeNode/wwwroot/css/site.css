@@ -258,7 +258,10 @@ strong { color: var(--ink); }
 .panel-table { padding: 0.75rem 1.25rem 1rem; overflow-x: auto; }
 .panel-table .table { margin: 0; }
 .panel-table .table tbody tr:last-child td { border-bottom: none; }
-.panel-table .table td:first-child { white-space: nowrap; }
+/* Entry text wraps: a long first column must never push the
+   status, time and action columns out of the panel. */
+.panel-table .table td:first-child { white-space: normal; overflow-wrap: break-word; }
+.panel-table .table td form { display: inline-block; margin-right: 0.35rem; }
 
 /* The Member page's demo note: the demo family's outline
    treatment, quieter than the full banner. */
@@ -575,6 +578,31 @@ textarea:focus-visible, input:focus-visible,
     margin-right: 0.35rem;
   }
 
+  .timeline-entries .cell-label,
+  .claims-table .cell-label {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.1rem;
+  }
+
+  /* A settled entry's status already carries its time; the When
+     cell would print the same time twice on the card. */
+  .timeline-entries tr.settled td.when-cell { display: none; }
+
+  /* The supplies table wraps its words at phone width instead of
+     clipping its last column. */
+  .supplies-table th,
+  .supplies-table td {
+    white-space: normal;
+    overflow-wrap: break-word;
+    font-size: 0.84rem;
+    padding: 0.45rem 0.4rem;
+  }
+
   .claim-close-form {
     display: grid;
     gap: 0.15rem;
@@ -621,6 +649,25 @@ textarea:focus-visible, input:focus-visible,
 /* Desktop: the mobile furniture is not rendered at all. The
    household name stays visible under the wordmark, and the
    top bar does not repeat the page title. */
+.cell-label { display: none; }
+
+@media (max-width: 1200px) {
+  .timeline-entries td:last-child form {
+    display: block;
+    margin: 0 0 0.35rem;
+  }
+
+  .timeline-entries th,
+  .timeline-entries td {
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+  }
+
+  .timeline-entries td:last-child button {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.84rem;
+  }
+}
 .app-drawer-toggle { display: none; }
 .app-bottombar { display: none; }
 .app-brand-house {
@@ -636,6 +683,26 @@ textarea:focus-visible, input:focus-visible,
 
 @media (max-width: 768px) {
   .app-shell { flex-direction: column; }
+
+  .app-drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  .app-drawer-toggle-menu {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .app-drawer-toggle-menu span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--ink);
+  }
 
   body.drawer-open { overflow: hidden; }
 

@@ -61,7 +61,7 @@ else
         <tbody>
             @foreach (var item in Model.Events)
             {
-                <tr>
+                <tr class="@(item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed ? "" : "settled")">
                     <td>
                         @item.Body
                         @if (HomeNode.Services.ProvenanceRendering.Describe(item) is { } provenance)
@@ -69,10 +69,10 @@ else
                             <br />@provenance
                         }
                     </td>
-                    <td>@(item.AuthorPerson is not null ? HomeNode.Data.NameWording.First(item.AuthorPerson.DisplayName) : "The house")</td>
-                    <td>@HomeNode.Data.NameWording.First(item.SubjectPerson?.DisplayName)</td>
-                    <td>@HomeNode.Data.EventKindWording.For(item.Type)</td>
-                    <td>
+                    <td><span class="cell-label">From</span>@(item.AuthorPerson is not null ? HomeNode.Data.NameWording.First(item.AuthorPerson.DisplayName) : "The house")</td>
+                    <td><span class="cell-label">About</span>@HomeNode.Data.NameWording.First(item.SubjectPerson?.DisplayName)</td>
+                    <td><span class="cell-label">Type</span>@HomeNode.Data.EventKindWording.For(item.Type)</td>
+                    <td><span class="cell-label">Status</span>
                         @if (item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
                         {
                             <span class="state-action">@HomeNode.Data.ConfirmationWording.For(item.ConfirmationState)</span>
@@ -82,8 +82,12 @@ else
                             @Model.StateText(item)
                         }
                     </td>
-                    <td>@Model.ToHouseholdTime(item.CreatedAtUtc).ToString("MMM d, h:mm tt")</td>
+                    <td class="when-cell"><span class="cell-label">When</span>@Model.ToHouseholdTime(item.CreatedAtUtc).ToString("MMM d, h:mm tt")</td>
                     <td>
+                        @if (Model.ActorId is null && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed)
+                        {
+                            <span class="muted-note">Pick a person above to answer.</span>
+                        }
                         @if (Model.ActorId is not null && item.ConfirmationState == HomeNode.Data.ConfirmationState.Proposed && !item.RecordPending)
                         {
                             <form method="post" asp-page-handler="Confirm">
@@ -158,8 +162,8 @@ else
 }
 else
 {
-    var today = DateOnly.FromDateTime(DateTime.UtcNow);
-    <table class="table">
+    var today = DateOnly.FromDateTime(Model.ToHouseholdTime(DateTime.UtcNow));
+    <table class="table supplies-table">
         <thead>
             <tr>
                 <th>Item</th>

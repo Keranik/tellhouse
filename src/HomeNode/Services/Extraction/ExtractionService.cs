@@ -169,6 +169,19 @@ public class ExtractionService
         result.HouseReply = output.ProposedAction is not null
             ? output.ConfirmationPrompt ?? output.SpokenResponse
             : ApplyForecastWording(input, output, result.WrittenEvents.FirstOrDefault());
+        if (output.ProposedAction is null && result.PromisesBorn.Count > 0)
+        {
+            // A claim was just taken on: the reply names it and
+            // points at the page where it lives, in the maker's
+            // first name (ruled Nov 1, 2026). Other statements keep
+            // the recorded template.
+            var maker = input.Context.Persons.FirstOrDefault(
+                person => person.PersonId == result.PromisesBorn[0].PromisorPersonId);
+            if (maker is not null)
+            {
+                result.HouseReply = $"Saved as {maker.FirstName}'s claim. It's on Claims.";
+            }
+        }
         return result;
     }
 

@@ -26,4 +26,16 @@ public static class HouseholdTime
 
     public static string Time(DateTime utc, TimeZoneInfo zone) =>
         ToLocal(utc, zone).ToString("h:mm tt");
+
+    // A bare time for today, a dated stamp for any other day: a
+    // list that mixes days never leaves the reader to guess which
+    // day a bare time belongs to.
+    public static string TimeOrDate(DateTime utc, TimeZoneInfo zone)
+    {
+        var local = ToLocal(utc, zone);
+        var today = ToLocal(DateTime.UtcNow, zone);
+        return local.Date == today.Date
+            ? local.ToString("h:mm tt")
+            : local.ToString("MMM d, h:mm tt");
+    }
 }

@@ -27,7 +27,7 @@ public static class StateWording
     {
         PlanState.Assembling => "Draft",
         PlanState.Proposed => "Waiting on answers",
-        PlanState.Acknowledged => "Has the plan",
+        PlanState.Acknowledged => "Has taken it on",
         PlanState.Completed => "Done",
         PlanState.Superseded => "Replaced by a newer plan",
         PlanState.Dropped => "Dropped",

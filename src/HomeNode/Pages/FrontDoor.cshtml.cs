@@ -123,6 +123,11 @@ public class FrontDoorModel : PageModel
     public List<Event> RecentEvents { get; private set; } = new();
 
     public string? HouseReply => TempData["HouseReply"] as string;
+
+    // The speaker chosen for the last send: the message box keeps
+    // it selected after the send, so a follow-up message is
+    // attributed to the same person unless the reader changes it.
+    public int? LastSpeakerId => TempData.Peek("LastSpeakerId") as int?;
     public string? PipelineNote => TempData["PipelineNote"] as string;
     public int? ProposedEventId => TempData["ProposedEventId"] as int?;
     public int? ProposedAuthorId => TempData["ProposedAuthorId"] as int?;
@@ -132,7 +137,7 @@ public class FrontDoorModel : PageModel
     // the action-named words on the reply's two buttons.
     public string? ProposedWords => TempData["ProposedWords"] as string;
     public string ConfirmLabel => TempData["ConfirmLabel"] as string ?? "Confirm";
-    public string DeclineLabel => TempData["DeclineLabel"] as string ?? "Don't tell";
+    public string DeclineLabel => TempData["DeclineLabel"] as string ?? "Don't send";
 
     // The household zone the recent list's times are shown in.
     public TimeZoneInfo HouseholdZone { get; private set; } =
@@ -173,6 +178,10 @@ public class FrontDoorModel : PageModel
             Context = context
         };
 
+        if (speaker is not null)
+        {
+            TempData["LastSpeakerId"] = speaker.Id;
+        }
         var result = await _extraction.ProcessAsync(input);
         TempData["HouseReply"] = result.HouseReply;
         if (!result.Validation.IsValid)
@@ -187,7 +196,7 @@ public class FrontDoorModel : PageModel
         }
         else if (result.Output.ClarificationNeeded)
         {
-            TempData["PipelineNote"] = "Nothing is saved yet. Reply in the box below.";
+            TempData["PipelineNote"] = "Nothing is saved yet. Reply to save it.";
         }
         else if (result.ProposedEvent is not null)
         {
@@ -205,11 +214,11 @@ public class FrontDoorModel : PageModel
             {
                 case EventActionType.MediaPlay:
                     TempData["ConfirmLabel"] = "Put it on";
-                    TempData["DeclineLabel"] = "No, don't";
+                    TempData["DeclineLabel"] = "Don't send";
                     break;
                 case EventActionType.CreateReminder:
                     TempData["ConfirmLabel"] = "Set reminder";
-                    TempData["DeclineLabel"] = "No, don't";
+                    TempData["DeclineLabel"] = "Don't send";
                     break;
                 case EventActionType.NotifyPerson or EventActionType.RelayMessage:
                     var target = pendingAction.TargetPersonId is int targetId
@@ -218,15 +227,15 @@ public class FrontDoorModel : PageModel
                     TempData["ConfirmLabel"] = target is null
                         ? "Tell them"
                         : $"Tell {NameWording.First(target.DisplayName)}";
-                    TempData["DeclineLabel"] = "Don't tell";
+                    TempData["DeclineLabel"] = "Don't send";
                     break;
                 default:
                     TempData["ConfirmLabel"] = "Confirm";
-                    TempData["DeclineLabel"] = "Don't tell";
+                    TempData["DeclineLabel"] = "Don't send";
                     break;
             }
         }
-        else if (result.WrittenEvents.Count > 0)
+        else if (result.WrittenEvents.Count > 0 && result.PromisesBorn.Count == 0)
         {
             TempData["PipelineNote"] = result.WrittenEvents.Count == 1
                 ? "Saved."
@@ -265,7 +274,7 @@ public class FrontDoorModel : PageModel
         TempData["TestSendNote"] = result.Status switch
         {
             "sent" =>
-                $"{personFirst}'s assistant sent a note. It's at the top of Recent.",
+                $"{personFirst}'s assistant sent a note to the house.",
             "queued-unrecorded" or "unreachable" =>
                 $"{personFirst}'s assistant couldn't reach the house. Nothing was sent. Try again in a minute.",
             _ =>
@@ -344,20 +353,77 @@ public class FrontDoorModel : PageModel
         {
             // A second click on an entry that has already moved on:
             // the answer is a plain note, never the error page.
-            TempData["HouseReply"] = "Already confirmed.";
+            TempData["HouseReply"] = "Already answered.";
             return RedirectToPage();
         }
         var ev = await _db.Events.FirstAsync(e => e.Id == eventId);
-        TempData["HouseReply"] = ev.ConfirmationState == ConfirmationState.Done
-            ? SpokenTemplates.Done
-            : "Confirmed.";
+        var action = await _db.EventActions.FirstOrDefaultAsync(a => a.EventId == eventId);
         var delivery = await _db.AlertDeliveries
             .Include(d => d.ToPerson)
             .FirstOrDefaultAsync(d => d.EventId == eventId);
-        TempData["PipelineNote"] = delivery?.ToPerson is not null
-            ? $"Sent to {NameWording.First(delivery.ToPerson.DisplayName)}."
-            : "Confirmed.";
+        // The result line says what actually happened, once, in the
+        // shape of the action that was confirmed (ruled Nov 1,
+        // 2026): a delivery names where it went, a reminder names
+        // when it is set for, and only an action with no visible
+        // effect yet keeps the bare word.
+        if (delivery?.ToPerson is not null)
+        {
+            var first = NameWording.First(delivery.ToPerson.DisplayName);
+            var viaAssistant = await _db.HouseConnections.AnyAsync(c =>
+                c.PersonId == delivery.ToPersonId && c.Standing == ConnectionStanding.Active);
+            if (action?.ActionType == EventActionType.RelayMessage)
+            {
+                TempData["HouseReply"] = viaAssistant
+                    ? $"Sent to {first}'s assistant."
+                    : $"Sent to {first}.";
+            }
+            else if (ev.ConfirmationState == ConfirmationState.Done)
+            {
+                TempData["HouseReply"] = SpokenTemplates.Done;
+                TempData["PipelineNote"] = $"Sent to {first}.";
+            }
+            else
+            {
+                TempData["HouseReply"] = viaAssistant
+                    ? $"Sent to {first}'s assistant."
+                    : $"Sent to {first}.";
+            }
+        }
+        else if (action?.ActionType == EventActionType.CreateReminder)
+        {
+            var remindOn = ReminderText(action);
+            TempData["HouseReply"] = remindOn is not null
+                ? $"Reminder set for {remindOn}."
+                : "Reminder set.";
+        }
+        else
+        {
+            TempData["HouseReply"] = "Confirmed.";
+        }
         return RedirectToPage();
+    }
+
+    // The day words a reminder action carries, read from its stored
+    // payload; null when the payload does not name them.
+    private static string? ReminderText(EventAction action)
+    {
+        if (string.IsNullOrWhiteSpace(action.Payload))
+        {
+            return null;
+        }
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(action.Payload);
+            return doc.RootElement.TryGetProperty("RemindOnText", out var value)
+                && value.ValueKind == System.Text.Json.JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(value.GetString())
+                ? value.GetString()
+                : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
     }
 
     public async Task<IActionResult> OnPostDeclineAsync(int eventId, int actorPersonId)
@@ -368,7 +434,7 @@ public class FrontDoorModel : PageModel
         }
         catch (InvalidOperationException)
         {
-            TempData["HouseReply"] = "Already confirmed.";
+            TempData["HouseReply"] = "Already answered.";
             return RedirectToPage();
         }
         TempData["HouseReply"] = "Not sent.";
@@ -412,7 +478,7 @@ public class FrontDoorModel : PageModel
                 Label = row is not null
                     ? DefaultLabel(row.Value)
                     : effective == AudienceDefaultValue.Ask
-                        ? "Ask each time (default for under-18s)"
+                        ? "Ask me each time (default for under-18s)"
                         : effective is not null
                             ? DefaultLabel(effective.Value)
                             : ""
