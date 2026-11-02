@@ -5,7 +5,8 @@
 @{
     ViewData["Title"] = "Plans";
     var note = Model.Note;
-    var lensView = new LensView("/Plans", "ViewerId", Model.ViewerId, Model.People, true);
+    // The person this page shows, for the shell's person switcher.
+    ViewData["AsPersonId"] = Model.ViewerId;
     var timelineHref = Model.ViewerId is int tv ? $"/Timeline?ActorId={tv}" : "/Timeline";
     string PlanStateKey(PlanState state) => state switch
     {
@@ -23,7 +24,6 @@
     <p class="lede">Dinner and errands the household is arranging. The house assembles the pieces; people answer them. A piece is settled when everyone it names agrees, and the person going says when they have taken it on.</p>
 </div>
 
-<partial name="_Lens" model="lensView" />
 
 @if (note is not null)
 {

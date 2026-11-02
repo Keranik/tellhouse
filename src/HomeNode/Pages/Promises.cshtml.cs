@@ -44,6 +44,7 @@ public class PromisesModel : PageModel
 
     public async Task OnGetAsync()
     {
+        ViewerId = CurrentPerson.Resolve(HttpContext, ViewerId, await _db.Persons.ToListAsync());
         // The list follows the stored audience of each promise's
         // source telling, through the same rule the
         // brief uses: a reader sees the promises that reader may

@@ -5,7 +5,8 @@
 @{
     ViewData["Title"] = "Claims";
     var note = Model.Note;
-    var lensView = new LensView("/Promises", "ViewerId", Model.ViewerId, Model.People, true);
+    // The person this page shows, for the shell's person switcher.
+    ViewData["AsPersonId"] = Model.ViewerId;
     var timelineHref = Model.ViewerId is int tv ? $"/Timeline?ActorId={tv}" : "/Timeline";
     var open = Model.Promises.Count(p => p.State == HomeNode.Data.PromiseState.Made);
     string EngineSentence(ActivityItem? trace) => trace?.Engine.Kind switch
@@ -24,7 +25,6 @@
     <p class="lede">When someone says &ldquo;I'll&hellip;&rdquo;, the model turns it into a claim the household can see: who took it on, for whom, and by when. It stays open until a person closes it in their own words. The house never closes a claim on a clock.</p>
 </div>
 
-<partial name="_Lens" model="lensView" />
 
 @if (note is not null)
 {

@@ -19,6 +19,7 @@
         "live" => ("model", "spark", "Muse Spark", $"read it and made {entryCount}"),
         "mock" => ("model", "spark", "Local stand-in", $"read it and made {entryCount}"),
         "rule" => ("rule", "shield", "Turn rule", $"shaped it into {entryCount}"),
+        "private" => ("private", "lock", "Kept private.", $"No model read it. The house's own rules wrote it down as {entryCount}, in these words"),
         "other" => ("model", "spark", engine.Label, $"read it and made {entryCount}"),
         "seed" => ("seed", "seed", "Demo seed", "wrote this entry for the starting day"),
         "page" => ("page", "pen", "Written by hand", "on the Claims page, as the closing words"),
@@ -36,6 +37,12 @@
             break;
         case "rule":
             engineMeta.Add("No model call: a fixed rule answers whose-turn messages");
+            break;
+        case "private":
+            engineMeta.Add(engine.PrivateBy == HomeNode.Services.Extraction.PrivacyRule.BySwitch
+                ? "Marked private, so no model was given these words"
+                : "It touches on health or medicine, so no model was given these words");
+            engineMeta.Add("Read on this server only");
             break;
         case "seed":
             engineMeta.Add("Seeded data; no model read it");
@@ -57,6 +64,38 @@
     }
     var audiences = item.Entries.Select(e => e.AudienceLabel).Distinct().ToList();
     var multi = item.Entries.Count > 1;
+
+    // The folded receipt: one short line per step, in the order the
+    // message moved. "See every step" opens the full chain.
+    var receipt = new List<(string Actor, string Icon, string Text)>();
+    if (engine.HeardModel is not null)
+    {
+        receipt.Add(("model", "mic", "Heard by voice: Muse Voice Transcribe" + (engine.HeardEdited ? ", then changed" : "")));
+    }
+    if (engine.DraftCallId is not null)
+    {
+        receipt.Add(("model", "bulb", "Drafted by Muse Wonder" + (engine.DraftEdited ? ", then changed" : "")));
+    }
+    var kinds = string.Join(", ", item.Entries.Select(e => e.KindLabel).Distinct());
+    receipt.Add(engine.Kind switch
+    {
+        "private" => ("private", "lock", $"Kept private: no model read it ({kinds})"),
+        "live" => ("model", "spark", $"Muse Spark made {entryCount}: {kinds}"),
+        "mock" => ("model", "spark", $"The stand-in made {entryCount}: {kinds}"),
+        "rule" => ("rule", "shield", $"The turn rule made {entryCount}: {kinds}"),
+        _ => ("model", "spark", $"{engine.Label} made {entryCount}: {kinds}")
+    });
+    receipt.Add(("house", "shield", "Who can see it: " + string.Join("; ", audiences)));
+    var waitingEntry = item.Entries.FirstOrDefault(e => e.Waiting || e.RecordPending);
+    if (waitingEntry is not null)
+    {
+        receipt.Add(("wait", "clock", waitingEntry.Action is { } waitAction ? $"Waiting for a yes: {waitAction.Summary}" : "Waiting for someone to confirm it"));
+    }
+    else if (item.Entries.SelectMany(e => e.Outcome).OrderBy(st => st.AtUtc ?? DateTime.MinValue).LastOrDefault() is { } lastStep)
+    {
+        var lastIcon = lastStep.State switch { "stopped" => "stop", "failed" => "alert", _ => lastStep.Actor == "delivery" ? "send" : lastStep.Actor is "person" or "assistant" ? "check" : "house" };
+        receipt.Add((lastStep.Actor == "delivery" ? "delivery" : lastStep.State == "stopped" ? "stop" : "person", lastIcon, $"{lastStep.Who} {lastStep.Text}"));
+    }
 }
 @if (o.Compact && !engine.HasReading)
 {
@@ -131,7 +170,7 @@
             }
             else
             {
-                <p class="row-meta">@Icons.Get("clock", 13) <span>Anyone in the household can confirm it. Choose who you are under <strong>Viewing as</strong> to answer.</span></p>
+                <p class="row-meta">@Icons.Get("clock", 13) <span>Anyone in the household can confirm it. Choose who you are at the top of the page to answer.</span></p>
             }
         }
     </article>
@@ -152,239 +191,333 @@
         <p class="trace-words">&ldquo;@item.Words&rdquo;</p>
     }
 
-    <ol class="steps">
-        <li class="step step--@engineActor">
-            <span class="step-icon">@Icons.Get(engineIcon)</span>
-            <div class="step-body">
-                <p class="step-title"><span class="step-who">@engineWho</span> @engineVerb</p>
-                @if (engineMeta.Count > 0)
-                {
-                    <p class="step-meta">@string.Join(" · ", engineMeta)</p>
-                }
-                @if (!o.Compact && engine.ContextLine is not null)
-                {
-                    <p class="step-meta">@engine.ContextLine</p>
-                }
-                <div class="entries">
-                    @foreach (var entry in item.Entries)
-                    {
-                        <div class="entry">
-                            <div class="entry-head">
-                                <span class="kind kind--@entry.KindKey">@entry.KindLabel</span>
-                                <span class="entry-title">@entry.Title</span>
-                            </div>
-                            @if (multi)
-                            {
-                                <p class="entry-words">&ldquo;@entry.Event.Body&rdquo;</p>
-                            }
-                            @if (entry.Fields.Count > 0)
-                            {
-                                <dl class="fields">
-                                    @foreach (var field in entry.Fields)
-                                    {
-                                        <div class="field"><dt>@field.Label</dt><dd>@field.Value</dd></div>
-                                    }
-                                </dl>
-                            }
-                            @if (entry.Action is { } action)
-                            {
-                                <p class="proposal"><span class="proposal-tag">Proposed action</span> <span>@action.Summary</span></p>
-                            }
-                            @if (entry.Claim is { } claim)
-                            {
-                                <p class="entry-line">@Icons.Get("check", 14) Claim on record: <strong>@claim.Text</strong> &middot; @claim.State</p>
-                            }
-                            @if (entry.SupplyLine is not null)
-                            {
-                                <p class="entry-line">@Icons.Get("record", 14) @entry.SupplyLine</p>
-                            }
-                            @if (entry.Note is not null)
-                            {
-                                <p class="entry-note">@entry.Note</p>
-                            }
-                        </div>
-                    }
-                </div>
-            </div>
-        </li>
-
-        <li class="step step--house">
-            <span class="step-icon">@Icons.Get("shield")</span>
-            <div class="step-body">
-                <p class="step-title"><span class="step-who">House rules</span> @(engine.HasReading ? "checked it and set who can see it" : "set who can see it")</p>
-                @if (audiences.Count == 1)
-                {
-                    <p class="step-meta">Who can see it: <strong>@audiences[0]</strong>@if (!o.Compact && item.Entries[0].AudienceBasis is { } basis) {<text> &middot; @basis</text>}</p>
-                }
-                else
-                {
-                    @foreach (var entry in item.Entries)
-                    {
-                        <p class="step-meta">@entry.Title: <strong>@entry.AudienceLabel</strong></p>
-                    }
-                }
-                @if (!o.Compact && engine.HasReading)
-                {
-                    <p class="step-meta">Checks passed: words kept verbatim &middot; only people in this household &middot; health kept as health &middot; no advice in the reply</p>
-                }
-                @foreach (var entry in item.Entries)
-                {
-                    foreach (var mark in entry.StatedMarks)
-                    {
-                        <p class="step-meta">The words named who should see it: &ldquo;@mark.Clause&rdquo;. The rules weighed that, the model did not decide it.</p>
-                    }
-                    if (entry.AskPending)
-                    {
-                        <p class="step-meta">A wider audience is waiting on one person's answer. Until then it stays this narrow.</p>
-                    }
-                }
-                @if (engine.Reply is not null)
-                {
-                    <p class="step-reply">@Icons.Get("chat", 14) <span>Replied: &ldquo;@engine.Reply&rdquo;</span></p>
-                }
-            </div>
-        </li>
-
-        @foreach (var entry in item.Entries)
+    @{
+        // The full chain of steps, shared by the open trace and the
+        // folded receipt. withForms: the decision buttons sit inside
+        // the steps (an open trace) or above the fold (a receipt).
+        async Task Steps(bool withForms)
         {
-            if (entry.Waiting)
+        <ol class="steps">
+            @if (engine.HeardModel is not null)
             {
-                var confirmLabel = entry.Action?.ConfirmLabel ?? "Confirm";
-                <li class="step step--person step--waiting">
-                    <span class="step-icon">@Icons.Get("clock")</span>
+                <li class="step step--model">
+                    <span class="step-icon">@Icons.Get("mic")</span>
                     <div class="step-body">
-                        @if (multi)
-                        {
-                            <p class="step-for">@entry.Title</p>
-                        }
-                        <p class="step-title"><span class="step-who">A person decides.</span> @(entry.Action is null ? "Nothing happens until someone confirms it." : "Nothing is sent until then.")</p>
-                        @if (!o.AllowDecision)
-                        {
-                            <p class="step-meta">Waiting for an answer on Home or the Timeline.</p>
-                        }
-                        else if (o.ActorId is int actor)
-                        {
-                            <form method="post" class="decide">
-                                <input type="hidden" name="eventId" value="@entry.Event.Id" />
-                                <input type="hidden" name="@o.ActorField" value="@actor" />
-                                @if (o.LensField is not null)
-                                {
-                                    <input type="hidden" name="@o.LensField" value="@actor" />
-                                }
-                                <button type="submit" class="primary" formaction="@(o.PagePath)?handler=Confirm">@confirmLabel</button>
-                                <button type="submit" formaction="@(o.PagePath)?handler=Decline">Don&rsquo;t send</button>
-                            </form>
-                        }
-                        else if (o.People.Count > 0)
-                        {
-                            <form method="post" class="decide">
-                                <input type="hidden" name="eventId" value="@entry.Event.Id" />
-                                <label class="decide-as">Confirming as
-                                    <select name="@o.ActorField">
-                                        @foreach (var person in o.People)
-                                        {
-                                            if (person.Id == o.DefaultActorId)
-                                            {
-                                                <option value="@person.Id" selected>@NameWording.First(person.DisplayName)</option>
-                                            }
-                                            else
-                                            {
-                                                <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
-                                            }
-                                        }
-                                    </select>
-                                </label>
-                                <button type="submit" class="primary" formaction="@(o.PagePath)?handler=Confirm">@confirmLabel</button>
-                                <button type="submit" formaction="@(o.PagePath)?handler=Decline">Don&rsquo;t send</button>
-                            </form>
-                        }
-                        else
-                        {
-                            <p class="step-meta">Choose who you are under <strong>Viewing as</strong> to answer.</p>
-                        }
-                        <p class="step-meta">If nobody answers by @Time(entry.Event.CreatedAtUtc.AddHours(24)), it lapses and nothing is sent.</p>
+                        <p class="step-title"><span class="step-who">Muse Voice Transcribe</span> heard it@(engine.HeardEdited ? ", and the words were changed before sending" : ", and it was sent as heard")</p>
+                        <p class="step-meta">@engine.HeardModel &middot; Meta Model API@(engine.HeardMs is int heardMs ? $" · {(heardMs >= 1000 ? $"{heardMs / 1000.0:0.0} s" : $"{heardMs} ms")}" : "") &middot; the audio was not kept</p>
                     </div>
                 </li>
             }
-            else if (entry.RecordPending)
+            @if (engine.DraftCallId is not null)
             {
-                <li class="step step--person step--waiting">
-                    <span class="step-icon">@Icons.Get("clock")</span>
+                <li class="step step--model">
+                    <span class="step-icon">@Icons.Get("bulb")</span>
                     <div class="step-body">
-                        @if (multi)
-                        {
-                            <p class="step-for">@entry.Title</p>
-                        }
-                        <p class="step-title"><span class="step-who">Anyone in the household</span> can confirm it. No one's name is on it yet.</p>
-                        @if (!o.AllowDecision)
-                        {
-                            <p class="step-meta">Waiting for an answer on Home or the Timeline.</p>
-                        }
-                        else if (o.ActorId is int actor)
-                        {
-                            <form method="post" class="decide">
-                                <input type="hidden" name="eventId" value="@entry.Event.Id" />
-                                <input type="hidden" name="@o.ActorField" value="@actor" />
-                                @if (o.LensField is not null)
-                                {
-                                    <input type="hidden" name="@o.LensField" value="@actor" />
-                                }
-                                <button type="submit" class="primary" formaction="@(o.PagePath)?handler=@(o.HasCloseHandler ? "Close" : "Confirm")">Confirm</button>
-                                <button type="submit" formaction="@(o.PagePath)?handler=Decline">Not right</button>
-                            </form>
-                        }
-                        else
-                        {
-                            <p class="step-meta">Choose who you are under <strong>Viewing as</strong> to confirm it.</p>
-                        }
+                        <p class="step-title"><span class="step-who">Muse Wonder</span> drafted it from a review of the record@(engine.DraftEdited ? "; the words were changed before sending" : "")</p>
+                        <p class="step-meta">muse-wonder-1.0 &middot; Meta Model API@(engine.DraftCites.Count > 0 ? $" · from entries {string.Join(", ", engine.DraftCites.Select(c => "#" + c))}" : "")</p>
                     </div>
                 </li>
             }
-        }
-        @foreach (var group in item.Entries
-            .SelectMany(e => e.Outcome.Select(s => (Entry: e, Step: s)))
-            .GroupBy(x => (x.Step.Actor, x.Step.Who, x.Step.Text, x.Step.State, x.Step.Detail,
-                At: x.Step.AtUtc is DateTime at ? at.ToString("yyyyMMddHHmm") : ""))
-            .OrderBy(g => g.Min(x => x.Step.AtUtc ?? DateTime.MaxValue)))
-        {
-            var step = group.First().Step;
-            var titles = group.Select(x => x.Entry.Title).Distinct().ToList();
-            var covered = group.Select(x => x.Entry).Distinct().Count();
-            var icon = step.State switch
-            {
-                "stopped" => "stop",
-                "failed" => "alert",
-                "waiting" => "clock",
-                _ => step.Actor switch
-                {
-                    "person" => "person",
-                    "assistant" => "lock",
-                    "delivery" => step.Who == "Sealed relay" || step.Text.StartsWith("sealed") ? "lock" : "send",
-                    _ => "house"
-                }
-            };
-            <li class="step step--@step.Actor step--@step.State">
-                <span class="step-icon">@Icons.Get(icon)</span>
+            <li class="step step--@engineActor">
+                <span class="step-icon">@Icons.Get(engineIcon)</span>
                 <div class="step-body">
-                    @if (multi && covered < item.Entries.Count)
+                    <p class="step-title"><span class="step-who">@engineWho</span> @engineVerb</p>
+                    @if (engineMeta.Count > 0)
                     {
-                        <p class="step-for">@string.Join(" · ", titles)</p>
+                        <p class="step-meta">@string.Join(" · ", engineMeta)</p>
                     }
-                    <p class="step-title"><span class="step-who">@step.Who</span> @(multi && covered == item.Entries.Count && step.Text.StartsWith("said it") ? $"said it, so all {covered} entries stand on the record as said" : step.Text)</p>
-                    @if (step.Detail is not null || step.AtUtc is not null)
+                    @if (engine.ContextLine is not null && !engine.KeptPrivate)
                     {
-                        <p class="step-meta">@(step.AtUtc is DateTime at ? Time(at) : "")@(step.Detail is not null && step.AtUtc is not null ? " · " : "")@step.Detail</p>
+                        <p class="step-meta">@engine.ContextLine</p>
+                    }
+                    <div class="entries">
+                        @foreach (var entry in item.Entries)
+                        {
+                            <div class="entry">
+                                <div class="entry-head">
+                                    <span class="kind kind--@entry.KindKey">@entry.KindLabel</span>
+                                    <span class="entry-title">@entry.Title</span>
+                                </div>
+                                @if (multi)
+                                {
+                                    <p class="entry-words">&ldquo;@entry.Event.Body&rdquo;</p>
+                                }
+                                @if (entry.Fields.Count > 0)
+                                {
+                                    <dl class="fields">
+                                        @foreach (var field in entry.Fields)
+                                        {
+                                            <div class="field"><dt>@field.Label</dt><dd>@field.Value</dd></div>
+                                        }
+                                    </dl>
+                                }
+                                @if (entry.Action is { } action)
+                                {
+                                    <p class="proposal"><span class="proposal-tag">Proposed action</span> <span>@action.Summary</span></p>
+                                }
+                                @if (entry.Claim is { } claim)
+                                {
+                                    <p class="entry-line">@Icons.Get("check", 14) Claim on record: <strong>@claim.Text</strong> &middot; @claim.State</p>
+                                }
+                                @if (entry.SupplyLine is not null)
+                                {
+                                    <p class="entry-line">@Icons.Get("record", 14) @entry.SupplyLine</p>
+                                }
+                                @if (entry.Note is not null)
+                                {
+                                    <p class="entry-note">@entry.Note</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </li>
+
+            <li class="step step--house">
+                <span class="step-icon">@Icons.Get("shield")</span>
+                <div class="step-body">
+                    <p class="step-title"><span class="step-who">House rules</span> @(engine.KeptPrivate ? "set who can see it; nothing about it went to a model" : engine.HasReading ? "checked it and set who can see it" : "set who can see it")</p>
+                    @if (audiences.Count == 1)
+                    {
+                        <p class="step-meta">Who can see it: <strong>@audiences[0]</strong>@if (!o.Compact && item.Entries[0].AudienceBasis is { } basis) {<text> &middot; @basis</text>}</p>
+                    }
+                    else
+                    {
+                        @foreach (var entry in item.Entries)
+                        {
+                            <p class="step-meta">@entry.Title: <strong>@entry.AudienceLabel</strong></p>
+                        }
+                    }
+                    @if (engine.HasReading)
+                    {
+                        <p class="step-meta">Checks passed: words kept verbatim &middot; only people in this household &middot; health kept as health &middot; no advice in the reply</p>
+                    }
+                    @foreach (var entry in item.Entries)
+                    {
+                        foreach (var mark in entry.StatedMarks)
+                        {
+                            <p class="step-meta">The words named who should see it: &ldquo;@mark.Clause&rdquo;. The rules weighed that, the model did not decide it.</p>
+                        }
+                        if (entry.AskPending)
+                        {
+                            <p class="step-meta">A wider audience is waiting on one person's answer. Until then it stays this narrow.</p>
+                        }
+                    }
+                    @if (engine.Reply is not null)
+                    {
+                        <p class="step-reply">@Icons.Get("chat", 14) <span>Replied: &ldquo;@engine.Reply&rdquo;</span></p>
                     }
                 </div>
             </li>
-        }
-    </ol>
 
-    @if (o.ShowRaw && engine.OutputJson is not null)
+            @foreach (var entry in item.Entries)
+            {
+                if (entry.Waiting)
+                {
+                    var confirmLabel = entry.Action?.ConfirmLabel ?? "Confirm";
+                    <li class="step step--person step--waiting">
+                        <span class="step-icon">@Icons.Get("clock")</span>
+                        <div class="step-body">
+                            @if (multi)
+                            {
+                                <p class="step-for">@entry.Title</p>
+                            }
+                            <p class="step-title"><span class="step-who">A person decides.</span> @(entry.Action is null ? "Nothing happens until someone confirms it." : "Nothing is sent until then.")</p>
+                            @if (!o.AllowDecision)
+                            {
+                                <p class="step-meta">Waiting for an answer on Home, the Inbox or the Timeline.</p>
+                            }
+                            else if (!withForms)
+                            {
+                                <p class="step-meta">Answer it above.</p>
+                            }
+                            else if (o.ActorId is int actor)
+                            {
+                                <form method="post" class="decide">
+                                    <input type="hidden" name="eventId" value="@entry.Event.Id" />
+                                    <input type="hidden" name="@o.ActorField" value="@actor" />
+                                    @if (o.LensField is not null)
+                                    {
+                                        <input type="hidden" name="@o.LensField" value="@actor" />
+                                    }
+                                    <button type="submit" class="primary" formaction="@(o.PagePath)?handler=Confirm">@confirmLabel</button>
+                                    <button type="submit" formaction="@(o.PagePath)?handler=Decline">Don&rsquo;t send</button>
+                                </form>
+                            }
+                            else if (o.People.Count > 0)
+                            {
+                                <form method="post" class="decide">
+                                    <input type="hidden" name="eventId" value="@entry.Event.Id" />
+                                    <label class="decide-as">Confirming as
+                                        <select name="@o.ActorField">
+                                            @foreach (var person in o.People)
+                                            {
+                                                if (person.Id == o.DefaultActorId)
+                                                {
+                                                    <option value="@person.Id" selected>@NameWording.First(person.DisplayName)</option>
+                                                }
+                                                else
+                                                {
+                                                    <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
+                                                }
+                                            }
+                                        </select>
+                                    </label>
+                                    <button type="submit" class="primary" formaction="@(o.PagePath)?handler=Confirm">@confirmLabel</button>
+                                    <button type="submit" formaction="@(o.PagePath)?handler=Decline">Don&rsquo;t send</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <p class="step-meta">Choose who you are at the top of the page to answer.</p>
+                            }
+                            <p class="step-meta">If nobody answers by @Time(entry.Event.CreatedAtUtc.AddHours(24)), it lapses and nothing is sent.</p>
+                        </div>
+                    </li>
+                }
+                else if (entry.RecordPending)
+                {
+                    <li class="step step--person step--waiting">
+                        <span class="step-icon">@Icons.Get("clock")</span>
+                        <div class="step-body">
+                            @if (multi)
+                            {
+                                <p class="step-for">@entry.Title</p>
+                            }
+                            <p class="step-title"><span class="step-who">Anyone in the household</span> can confirm it. No one's name is on it yet.</p>
+                            @if (!o.AllowDecision)
+                            {
+                                <p class="step-meta">Waiting for an answer on Home, the Inbox or the Timeline.</p>
+                            }
+                            else if (!withForms)
+                            {
+                                <p class="step-meta">Answer it above.</p>
+                            }
+                            else if (o.ActorId is int actor)
+                            {
+                                <form method="post" class="decide">
+                                    <input type="hidden" name="eventId" value="@entry.Event.Id" />
+                                    <input type="hidden" name="@o.ActorField" value="@actor" />
+                                    @if (o.LensField is not null)
+                                    {
+                                        <input type="hidden" name="@o.LensField" value="@actor" />
+                                    }
+                                    <button type="submit" class="primary" formaction="@(o.PagePath)?handler=@(o.HasCloseHandler ? "Close" : "Confirm")">Confirm</button>
+                                    <button type="submit" formaction="@(o.PagePath)?handler=Decline">Not right</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <p class="step-meta">Choose who you are at the top of the page to confirm it.</p>
+                            }
+                        </div>
+                    </li>
+                }
+            }
+            @foreach (var group in item.Entries
+                .SelectMany(e => e.Outcome.Select(s => (Entry: e, Step: s)))
+                .GroupBy(x => (x.Step.Actor, x.Step.Who, x.Step.Text, x.Step.State, x.Step.Detail,
+                    At: x.Step.AtUtc is DateTime at ? at.ToString("yyyyMMddHHmm") : ""))
+                .OrderBy(g => g.Min(x => x.Step.AtUtc ?? DateTime.MaxValue)))
+            {
+                var step = group.First().Step;
+                var titles = group.Select(x => x.Entry.Title).Distinct().ToList();
+                var covered = group.Select(x => x.Entry).Distinct().Count();
+                var icon = step.State switch
+                {
+                    "stopped" => "stop",
+                    "failed" => "alert",
+                    "waiting" => "clock",
+                    _ => step.Actor switch
+                    {
+                        "person" => "person",
+                        "assistant" => "lock",
+                        "delivery" => step.Who == "Sealed relay" || step.Text.StartsWith("sealed") ? "lock" : "send",
+                        _ => "house"
+                    }
+                };
+                <li class="step step--@step.Actor step--@step.State">
+                    <span class="step-icon">@Icons.Get(icon)</span>
+                    <div class="step-body">
+                        @if (multi && covered < item.Entries.Count)
+                        {
+                            <p class="step-for">@string.Join(" · ", titles)</p>
+                        }
+                        <p class="step-title"><span class="step-who">@step.Who</span> @(multi && covered == item.Entries.Count && step.Text.StartsWith("said it") ? $"said it, so all {covered} entries stand on the record as said" : step.Text)</p>
+                        @if (step.Detail is not null || step.AtUtc is not null)
+                        {
+                            <p class="step-meta">@(step.AtUtc is DateTime at ? Time(at) : "")@(step.Detail is not null && step.AtUtc is not null ? " · " : "")@step.Detail</p>
+                        }
+                    </div>
+                </li>
+            }
+        </ol>
+        }
+
+        void Raw()
+        {
+        if (o.ShowRaw && engine.OutputJson is not null)
+        {
+            <details class="trace-raw">
+                <summary>@Icons.Get("code", 14) What @(engine.Kind == "live" ? "Muse Spark" : engine.Kind == "mock" ? "the stand-in" : "the rule") returned</summary>
+                <pre><code>@engine.OutputJson</code></pre>
+            </details>
+        }
+        }
+
+        async Task Decisions()
+        {
+            foreach (var entry in item.Entries.Where(e => (e.Waiting || e.RecordPending) && o.AllowDecision))
+            {
+                if (o.ActorId is int actor)
+                {
+                    <form method="post" class="decide">
+                        <input type="hidden" name="eventId" value="@entry.Event.Id" />
+                        <input type="hidden" name="@o.ActorField" value="@actor" />
+                        @if (o.LensField is not null)
+                        {
+                            <input type="hidden" name="@o.LensField" value="@actor" />
+                        }
+                        @if (entry.RecordPending)
+                        {
+                            <button type="submit" class="primary" formaction="@(o.PagePath)?handler=@(o.HasCloseHandler ? "Close" : "Confirm")">Confirm</button>
+                            <button type="submit" formaction="@(o.PagePath)?handler=Decline">Not right</button>
+                        }
+                        else
+                        {
+                            <button type="submit" class="primary" formaction="@(o.PagePath)?handler=Confirm">@(entry.Action?.ConfirmLabel ?? "Confirm")</button>
+                            <button type="submit" formaction="@(o.PagePath)?handler=Decline">Don&rsquo;t send</button>
+                        }
+                        @if (entry.Waiting)
+                        {
+                            <span class="decide-note">Lapses @Time(entry.Event.CreatedAtUtc.AddHours(24)) if nobody answers</span>
+                        }
+                    </form>
+                }
+                else
+                {
+                    <p class="row-meta">@Icons.Get("clock", 13) <span>Waiting for a yes. Choose who you are at the top of the page to answer.</span></p>
+                }
+            }
+        }
+    }
+    @if (o.Compact)
     {
-        <details class="trace-raw">
-            <summary>@Icons.Get("code", 14) What @(engine.Kind == "live" ? "Muse Spark" : engine.Kind == "mock" ? "the stand-in" : "the rule") returned</summary>
-            <pre><code>@engine.OutputJson</code></pre>
+        <ol class="receipt">
+            @foreach (var line in receipt)
+            {
+                <li class="receipt-line receipt--@line.Actor"><span class="receipt-icon">@Icons.Get(line.Icon, 13)</span><span>@line.Text</span></li>
+            }
+        </ol>
+        await Decisions();
+        <details class="trace-more">
+            <summary>See every step</summary>
+            @{ await Steps(false); Raw(); }
         </details>
+    }
+    else
+    {
+        await Steps(true);
+        Raw();
     }
 </article>

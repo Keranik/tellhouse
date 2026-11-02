@@ -6,43 +6,47 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HomeNode.Pages;
 
-// A member's own view: what has landed with this one person, and
-// nothing that landed with anyone else.
+// The Inbox: "Needs you". Everything waiting on one person, each with
+// one button: their own messages waiting for a yes, the questions the
+// house asked them, what was delivered to them, plan items waiting on
+// their answer, and the claims they have taken on. Read through
+// NeedsYouService, which only gathers what the existing services
+// already show; every answer posted here goes to the same service
+// calls the other pages use.
 //
-// DEMO DELIVERY PATH ONLY. On this one computer, this page stands
-// in for delivery so the demo's landings can run: Daniel's plan
-// reaching Daniel, a settled dinner reaching both partners, a
-// confirmed alert reaching the person it names, a re-timed entry
-// reaching the person it affects. The product's design delivers
-// through a person's own assistant, in their own channel; that
-// cross-channel delivery is not built here, and this page does not
-// pretend to be it.
+// DEMO DELIVERY PATH: in the product a person's deliveries reach them
+// through their own assistant; here the house layer stands in for
+// that, as the page says.
 public class MemberModel : PageModel
 {
     private readonly AppDbContext _db;
+    private readonly NeedsYouService _needs;
     private readonly MemberDeliveryService _deliveries;
+    private readonly ConfirmationService _confirmations;
+    private readonly AudienceDecisionService _audience;
+    private readonly PlanAssemblyService _plans;
 
-    public MemberModel(AppDbContext db, MemberDeliveryService deliveries)
+    public MemberModel(AppDbContext db, NeedsYouService needs, MemberDeliveryService deliveries,
+        ConfirmationService confirmations, AudienceDecisionService audience, PlanAssemblyService plans)
     {
         _db = db;
+        _needs = needs;
         _deliveries = deliveries;
+        _confirmations = confirmations;
+        _audience = audience;
+        _plans = plans;
     }
 
     public List<Person> People { get; private set; } = new();
     public Person? Member { get; private set; }
-    public List<MemberDeliveryItem> Received { get; private set; } = new();
-
-    // How a delivered message got here, by delivery id: the trace of
-    // the message behind it, when the member may see that message's
-    // entries under their stored audience. A delivery carries its own
-    // words to the person it names; it never widens what that person
-    // may read in the record, so a source the member may not see has
-    // no trace here.
+    public NeedsYou? Needs { get; private set; }
+    public Dictionary<int, int> WaitingByPerson { get; private set; } = new();
     public Dictionary<int, ActivityItem> Traces { get; private set; } = new();
-
-    // The household zone inbox times are shown in.
     public TimeZoneInfo HouseholdZone { get; private set; } =
         TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+
+    [TempData]
+    public string? InboxNote { get; set; }
 
     public async Task OnGetAsync(int? personId)
     {
@@ -52,48 +56,129 @@ public class MemberModel : PageModel
         {
             HouseholdZone = HouseholdTime.ZoneFor(household.TimeZoneId);
         }
-        // The inbox defaults to Daniel, who holds the seeded alert,
-        // so the page never opens on an empty inbox by accident.
-        var id = personId
-            ?? People.FirstOrDefault(
-                p => p.DisplayName.StartsWith("Daniel", StringComparison.Ordinal))?.Id
-            ?? People.FirstOrDefault()?.Id;
+        var id = CurrentPerson.Resolve(HttpContext, personId, People);
         Member = People.FirstOrDefault(p => p.Id == id);
-        if (Member is not null)
+        if (Member is null)
         {
-            Received = await _deliveries.ReceivedForAsync(Member.Id);
-            var deliveryIds = Received.Where(r => r.AlertDeliveryId is not null)
-                .Select(r => r.AlertDeliveryId!.Value).ToList();
-            var eventByDelivery = await _db.AlertDeliveries
-                .Where(d => deliveryIds.Contains(d.Id))
-                .ToDictionaryAsync(d => d.Id, d => d.EventId);
-            var feed = await new ActivityService(_db).BuildAsync(Member.Id, take: 300);
-            var traceByEvent = new Dictionary<int, ActivityItem>();
-            foreach (var item in feed.Items)
+            // The household view: no one's inbox, but who has
+            // something waiting, so the next step is one tap away.
+            foreach (var person in People)
             {
-                foreach (var entry in item.Entries)
-                {
-                    traceByEvent[entry.Event.Id] = item;
-                }
+                WaitingByPerson[person.Id] = await _needs.CountAsync(person.Id);
             }
-            foreach (var (deliveryId, eventId) in eventByDelivery)
+            return;
+        }
+
+        Needs = await _needs.ForAsync(Member.Id);
+        var deliveryIds = Needs.NewDeliveries.Concat(Needs.SeenDeliveries)
+            .Where(r => r.AlertDeliveryId is not null)
+            .Select(r => r.AlertDeliveryId!.Value).ToList();
+        var eventByDelivery = await _db.AlertDeliveries
+            .Where(d => deliveryIds.Contains(d.Id))
+            .ToDictionaryAsync(d => d.Id, d => d.EventId);
+        var feed = await new ActivityService(_db).BuildAsync(Member.Id, take: 300);
+        var traceByEvent = new Dictionary<int, ActivityItem>();
+        foreach (var item in feed.Items)
+        {
+            foreach (var entry in item.Entries)
             {
-                if (traceByEvent.TryGetValue(eventId, out var trace))
-                {
-                    Traces[deliveryId] = trace;
-                }
+                traceByEvent[entry.Event.Id] = item;
+            }
+        }
+        foreach (var (deliveryId, eventId) in eventByDelivery)
+        {
+            // A delivery shows how it got here only when the member may
+            // see the entry it came from: a delivery never widens what a
+            // person may read.
+            if (traceByEvent.TryGetValue(eventId, out var trace))
+            {
+                Traces[deliveryId] = trace;
             }
         }
     }
 
-    // The addressee's closing tap on one of their own deliveries.
-    // The person named here is the person whose view this is; the
-    // delivery service itself enforces that only the delivery's
-    // addressee can stamp it, so a tap posted from anyone else's
-    // view changes nothing.
     public async Task<IActionResult> OnPostAcknowledgeAsync(int deliveryId, int personId)
     {
         await _deliveries.AcknowledgeDeliveryAsync(deliveryId, personId);
+        InboxNote = "Marked as seen.";
+        return RedirectToPage(new { personId });
+    }
+
+    public async Task<IActionResult> OnPostConfirmAsync(int eventId, int personId)
+    {
+        try
+        {
+            await _confirmations.ConfirmAsync(eventId, personId, "tap");
+            InboxNote = "Confirmed. The house is carrying it out.";
+        }
+        catch (InvalidOperationException)
+        {
+            InboxNote = "Already answered.";
+        }
+        return RedirectToPage(new { personId });
+    }
+
+    public async Task<IActionResult> OnPostDeclineAsync(int eventId, int personId)
+    {
+        try
+        {
+            await _confirmations.DeclineAsync(eventId, personId, "tap");
+            InboxNote = "Not sent.";
+        }
+        catch (InvalidOperationException)
+        {
+            InboxNote = "Already answered.";
+        }
+        return RedirectToPage(new { personId });
+    }
+
+    public async Task<IActionResult> OnPostCloseAsync(int eventId, int personId)
+    {
+        try
+        {
+            await _confirmations.CloseRecordPendingAsync(eventId, personId, "tap");
+            InboxNote = "Confirmed.";
+        }
+        catch (InvalidOperationException)
+        {
+            InboxNote = "Already answered.";
+        }
+        return RedirectToPage(new { personId });
+    }
+
+    public async Task<IActionResult> OnPostAnswerAskAsync(int askId, int personId, string? choice)
+    {
+        if (choice is "Private" or "Household")
+        {
+            try
+            {
+                await _audience.AnswerAskAsync(askId, personId, choice, null, DateTime.UtcNow);
+                InboxNote = choice == "Household"
+                    ? "Saved. Everyone in the household can now see that entry."
+                    : "Saved. Only the people it names can see that entry.";
+            }
+            catch (InvalidOperationException)
+            {
+                InboxNote = "Already answered.";
+            }
+        }
+        return RedirectToPage(new { personId });
+    }
+
+    public async Task<IActionResult> OnPostAnswerPlanAsync(int elementId, int personId, string disposal)
+    {
+        if (disposal is "Agreed" or "Declined")
+        {
+            try
+            {
+                await _plans.RecordDisposalAsync(elementId, personId, Enum.Parse<PlanDisposal>(disposal));
+                InboxNote = "Answer saved.";
+            }
+            catch (InvalidOperationException)
+            {
+                InboxNote = "Already answered.";
+            }
+        }
         return RedirectToPage(new { personId });
     }
 }

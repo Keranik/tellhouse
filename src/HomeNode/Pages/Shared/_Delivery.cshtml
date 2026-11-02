@@ -1,0 +1,98 @@
+@model HomeNode.Services.DeliveryView
+@using HomeNode.Data
+@using HomeNode.Services
+@*
+    One thing the house passed on to a person: the words, who it came
+    from, how it got here (said, read, confirmed, delivered, seen),
+    and a Mark as seen button while it is new.
+*@
+@{
+    var item = Model.Item;
+    var trace = Model.Trace;
+    var isMessage = (item.Source == "Alert" || item.Source == "Message") && item.AuthorName is not null;
+    var fromFirst = NameWording.First(item.AuthorName);
+    var unseen = item.AlertDeliveryId is not null && item.ClosedAtUtc is null;
+}
+<article class="inbox-item@(unseen ? " inbox-item--unseen" : "")">
+    <header class="inbox-head">
+        @if (isMessage)
+        {
+            <span class="avatar avatar--@PersonStyle.Slot(Model.People.FirstOrDefault(p => p.DisplayName == item.AuthorName)?.Id)" aria-hidden="true">@PersonStyle.Initial(fromFirst)</span>
+            <div class="trace-head-text">
+                <span class="trace-who">From @fromFirst</span>
+                <span class="trace-sub">@(item.Source == "Alert" ? "Passed on by the house" : "A message, passed on") &middot; @HouseholdTime.TimeOrDate(item.AtUtc, Model.Zone)</span>
+            </div>
+        }
+        else
+        {
+            <span class="avatar avatar--0" aria-hidden="true">@Icons.Get("house", 14)</span>
+            <div class="trace-head-text">
+                <span class="trace-who">@item.Source</span>
+                <span class="trace-sub">@HouseholdTime.TimeOrDate(item.AtUtc, Model.Zone)</span>
+            </div>
+        }
+        @if (item.AlertDeliveryId is not null)
+        {
+            <span class="status status--@(unseen ? "sent" : "recorded")">@(item.ClosedAtUtc is DateTime seenAt ? $"Seen {HouseholdTime.TimeOrDate(seenAt, Model.Zone)}" : "New")</span>
+        }
+    </header>
+    @if (Model.PictureCallId is int pictureId)
+    {
+        <figure class="picture-card">
+            <img src="/models/picture/@pictureId" alt="A picture card for this message, drawn by Muse Image" loading="lazy" width="320" height="320" />
+            <figcaption>@Icons.Get("image", 13) Picture card drawn by Muse Image, so it can be read without reading</figcaption>
+        </figure>
+    }
+    <p class="inbox-words">&ldquo;@item.Text&rdquo;</p>
+    @if (!string.IsNullOrEmpty(item.Note))
+    {
+        <p class="claim-meta">@item.Note</p>
+    }
+    @if (item.Provenance is not null)
+    {
+        <p class="claim-meta">@item.Provenance</p>
+    }
+    @if (trace is not null)
+    {
+        var entry = trace.Entries.FirstOrDefault();
+        var engineName = trace.Engine.Kind switch
+        {
+            "live" => "Muse Spark",
+            "mock" => "The local stand-in",
+            "rule" => "The turn rule",
+            "private" => "The house's own rules (no model)",
+            _ => "The record"
+        };
+        <ol class="chain">
+            <li class="chain--person">
+                <span class="chain-icon">@Icons.Get(trace.Engine.HeardModel is not null ? "mic" : "person", 12)</span>
+                <span>@trace.SpeakerName said it <span class="chain-when">&middot; @trace.ChannelLabel &middot; @HouseholdTime.TimeOrDate(trace.AtUtc, Model.Zone)</span></span>
+            </li>
+            <li class="chain--@(trace.Engine.KeptPrivate ? "private" : trace.Engine.Kind is "live" or "mock" ? "model" : "house")">
+                <span class="chain-icon">@Icons.Get(trace.Engine.KeptPrivate ? "lock" : trace.Engine.Kind is "live" or "mock" ? "spark" : trace.Engine.Kind == "seed" ? "seed" : "shield", 12)</span>
+                <span>@(trace.Engine.Kind == "seed"
+                    ? (entry?.Action is { } seededAct ? $"Seeded with the action: {seededAct.Summary}" : "Seeded entry")
+                    : engineName + (entry?.Action is { } act ? $" proposed: {act.Summary}" : " recorded it"))</span>
+            </li>
+            @foreach (var step in trace.Entries.SelectMany(e => e.Outcome))
+            {
+                <li class="chain--@(step.Actor == "delivery" ? "delivery" : step.Actor is "person" or "assistant" ? "person" : "house")">
+                    <span class="chain-icon">@Icons.Get(step.Actor == "delivery" ? "send" : step.Actor is "person" or "assistant" ? "person" : "house", 12)</span>
+                    <span>@step.Who @step.Text@if (step.AtUtc is DateTime at) {<span class="chain-when"> &middot; @HouseholdTime.TimeOrDate(at, Model.Zone)</span>}</span>
+                </li>
+            }
+            <li class="chain--house">
+                <span class="chain-icon">@Icons.Get("code", 12)</span>
+                <span><a href="@(Model.TimelineHref)#@trace.Key">See every step on the Timeline</a></span>
+            </li>
+        </ol>
+    }
+    @if (item.AlertDeliveryId is int deliveryId && unseen)
+    {
+        <form method="post" class="decide">
+            <input type="hidden" name="deliveryId" value="@deliveryId" />
+            <input type="hidden" name="personId" value="@Model.Member.Id" />
+            <button type="submit" class="primary" formaction="/Member?handler=Acknowledge">Mark as seen</button>
+        </form>
+    }
+</article>

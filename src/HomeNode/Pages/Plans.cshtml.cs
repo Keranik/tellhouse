@@ -45,6 +45,7 @@ public class PlansModel : PageModel
 
     public async Task OnGetAsync()
     {
+        ViewerId = CurrentPerson.Resolve(HttpContext, ViewerId, await _db.Persons.ToListAsync());
         Plans = await _db.Plans
             .Include(p => p.Elements).ThenInclude(e => e.Agreements).ThenInclude(a => a.Person)
             .Include(p => p.RunnerPerson)

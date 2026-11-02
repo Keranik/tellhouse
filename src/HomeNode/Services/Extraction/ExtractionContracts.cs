@@ -99,6 +99,13 @@ public class ExtractionInput
     public DateTime? RecordedAtUtc { get; set; }
     public ExtractionPersonRef? Speaker { get; set; }
     public ExtractionContext Context { get; set; } = new();
+
+    // The person's Private switch on Home: keep these words from every
+    // model (see PrivacyRule and RoutedExtractionClient). A routing
+    // instruction for the house, never part of what a reader is
+    // shown, so it is left out of the serialized input.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool Private { get; set; }
 }
 
 // One stated-audience mark proposed by the model (audience decision clause

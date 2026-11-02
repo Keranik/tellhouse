@@ -43,15 +43,6 @@ public sealed class TraceOptions
     public TimeZoneInfo Zone { get; init; } = HouseholdTime.ZoneFor(null);
 }
 
-// The person lens shown above person-scoped lists: "Viewing as".
-public sealed record LensView(
-    string PagePath,
-    string ParamName,
-    int? Selected,
-    IReadOnlyList<Person> People,
-    bool AllowHousehold,
-    string Label = "Viewing as");
-
 public static class PersonStyle
 {
     // A stable color slot for a person's initial badge.
@@ -60,3 +51,13 @@ public static class PersonStyle
     public static string Initial(string? name) =>
         string.IsNullOrWhiteSpace(name) ? "·" : name.Trim()[..1].ToUpperInvariant();
 }
+
+// The person switcher in the shell: the household and its people, the
+// person the current page shows, and the address to come back to.
+public sealed record PersonSwitcherView(IReadOnlyList<HomeNode.Data.Person> People, int? Current, string ReturnTo);
+
+// One delivery card in the Inbox: what was passed on, how it got here
+// (only when the member may see the entry it came from), and the
+// picture card Muse Image drew for it, if any.
+public sealed record DeliveryView(HomeNode.Services.MemberDeliveryItem Item, ActivityItem? Trace, HomeNode.Data.Person Member,
+    IReadOnlyList<HomeNode.Data.Person> People, TimeZoneInfo Zone, string TimelineHref, int? PictureCallId = null);

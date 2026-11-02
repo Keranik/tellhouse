@@ -28,6 +28,11 @@ public static class Icons
             "arrow" => "<path d=\"M5 12h14M13 6l6 6-6 6\"/>",
             "chat" => "<path d=\"M4 5h16v11H9l-5 4z\"/>",
             "code" => "<path d=\"M8 7l-5 5 5 5M16 7l5 5-5 5\"/>",
+            "mic" => "<rect x=\"9\" y=\"3\" width=\"6\" height=\"11\" rx=\"3\"/><path d=\"M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21\"/>",
+            "bulb" => "<path d=\"M9 18h6M10 21h4\"/><path d=\"M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z\"/>",
+            "eye" => "<path d=\"M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
+            "image" => "<rect x=\"3.5\" y=\"4.5\" width=\"17\" height=\"15\" rx=\"2\"/><circle cx=\"9\" cy=\"10\" r=\"1.8\"/><path d=\"M20.5 16l-5-5-8 8.5\"/>",
+            "camera" => "<path d=\"M4 8h3l2-3h6l2 3h3v11H4z\"/><circle cx=\"12\" cy=\"13\" r=\"3.5\"/>",
             _ => "<circle cx=\"12\" cy=\"12\" r=\"3\"/>"
         };
         return new HtmlString(

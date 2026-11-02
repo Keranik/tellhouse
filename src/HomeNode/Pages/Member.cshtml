@@ -4,114 +4,162 @@
 @using HomeNode.Services
 @{
     ViewData["Title"] = "Inbox";
+    // The person this page shows, for the shell's person switcher.
+    ViewData["AsPersonId"] = Model.Member?.Id;
     var memberFirst = NameWording.First(Model.Member?.DisplayName);
-    var lensView = new LensView("/Member", "personId", Model.Member?.Id, Model.People, false, "Inbox of");
-    var timelineHref = Model.Member is null ? "/Timeline" : $"/Timeline?ActorId={Model.Member.Id}";
-    var unseen = Model.Received.Count(r => r.AlertDeliveryId is not null && r.ClosedAtUtc is null);
+    var needs = Model.Needs;
+    var timelineHref = "/Timeline";
+    TraceView Card(ActivityItem item) => new(item, new TraceOptions
+    {
+        PagePath = "/Member",
+        ActorField = "personId",
+        ActorId = Model.Member?.Id,
+        HasCloseHandler = true,
+        Compact = true,
+        Zone = Model.HouseholdZone
+    });
 }
 
 <div class="page-head">
-    <span class="eyebrow">@Icons.Get("inbox", 13) Delivered to one person</span>
-    @if (Model.Member is not null)
+    <span class="eyebrow">@Icons.Get("inbox", 13) Needs you</span>
+    @if (Model.Member is null)
     {
-        <h1>@memberFirst's inbox</h1>
-        <p class="lede">What the house delivered to @memberFirst, after a person confirmed it. Only @memberFirst sees these. Each one shows how it got here.</p>
+        <h1>Inbox</h1>
+        <p class="lede">Each person's inbox holds what is waiting on them: a yes the house is asking for, a question about who should see something, and what the house has passed on. Choose who you are to open theirs.</p>
     }
     else
     {
-        <h1>Inbox</h1>
+        <h1>@memberFirst's inbox</h1>
+        <p class="lede">What is waiting on @memberFirst, and what the house has passed on to @memberFirst. Nothing the house proposes happens without a yes.</p>
     }
 </div>
 
-<partial name="_Lens" model="lensView" />
-
-@if (Model.Member is not null)
+@if (!string.IsNullOrEmpty(Model.InboxNote))
 {
-    <p class="note-panel">In the full product, these reach @memberFirst through @memberFirst's own assistant. In this demo, you see them here.</p>
-
-    @if (Model.Received.Count == 0)
-    {
-        <div class="empty" style="margin-top:1rem"><p>Nothing has been delivered to this person's inbox yet.</p></div>
-    }
-    else
-    {
-        <p class="muted small" style="margin-top:1rem">@Model.Received.Count delivered &middot; @unseen not marked as seen</p>
-        <div class="inbox-list">
-            @foreach (var item in Model.Received.OrderByDescending(r => r.AtUtc))
-            {
-                var isMessage = (item.Source == "Alert" || item.Source == "Message") && item.AuthorName is not null;
-                var fromFirst = NameWording.First(item.AuthorName);
-                Model.Traces.TryGetValue(item.AlertDeliveryId ?? 0, out var trace);
-                <article class="inbox-item@(item.AlertDeliveryId is not null && item.ClosedAtUtc is null ? " inbox-item--unseen" : "")">
-                    <header class="inbox-head">
-                        @if (isMessage)
-                        {
-                            <span class="avatar avatar--@PersonStyle.Slot(Model.People.FirstOrDefault(p => p.DisplayName == item.AuthorName)?.Id)" aria-hidden="true">@PersonStyle.Initial(fromFirst)</span>
-                            <div class="trace-head-text">
-                                <span class="trace-who">From @fromFirst</span>
-                                <span class="trace-sub">@(item.Source == "Alert" ? "Passed on by the house" : "A message, passed on") &middot; @HouseholdTime.TimeOrDate(item.AtUtc, Model.HouseholdZone)</span>
-                            </div>
-                        }
-                        else
-                        {
-                            <span class="avatar avatar--0" aria-hidden="true">@Icons.Get("house", 14)</span>
-                            <div class="trace-head-text">
-                                <span class="trace-who">@item.Source</span>
-                                <span class="trace-sub">@HouseholdTime.TimeOrDate(item.AtUtc, Model.HouseholdZone)</span>
-                            </div>
-                        }
-                        @if (item.AlertDeliveryId is not null)
-                        {
-                            <span class="status status--@(item.ClosedAtUtc is null ? "sent" : "recorded")">@(item.ClosedAtUtc is DateTime seenAt ? $"Seen {HouseholdTime.TimeOrDate(seenAt, Model.HouseholdZone)}" : "Delivered")</span>
-                        }
-                    </header>
-                    <p class="inbox-words">&ldquo;@item.Text&rdquo;</p>
-                    @if (!string.IsNullOrEmpty(item.Note))
-                    {
-                        <p class="claim-meta">@item.Note</p>
-                    }
-                    @if (item.Provenance is not null)
-                    {
-                        <p class="claim-meta">@item.Provenance</p>
-                    }
-                    @if (trace is not null)
-                    {
-                        var entry = trace.Entries.FirstOrDefault();
-                        <ol class="chain">
-                            <li class="chain--person">
-                                <span class="chain-icon">@Icons.Get("person", 12)</span>
-                                <span>@trace.SpeakerName said it <span class="chain-when">&middot; @trace.ChannelLabel &middot; @HouseholdTime.TimeOrDate(trace.AtUtc, Model.HouseholdZone)</span></span>
-                            </li>
-                            <li class="chain--@(trace.Engine.Kind is "live" or "mock" ? "model" : "house")">
-                                <span class="chain-icon">@Icons.Get(trace.Engine.Kind is "live" or "mock" ? "spark" : trace.Engine.Kind == "seed" ? "seed" : "shield", 12)</span>
-                                <span>@(trace.Engine.Kind == "seed"
-                                    ? (entry?.Action is { } seededAct ? $"Seeded with the action: {seededAct.Summary}" : "Seeded entry")
-                                    : (trace.Engine.Kind switch { "live" => "Muse Spark", "mock" => "The local stand-in", "rule" => "The turn rule", _ => "The record" })
-                                        + (entry?.Action is { } act ? $" proposed: {act.Summary}" : " recorded it"))</span>
-                            </li>
-                            @foreach (var step in trace.Entries.SelectMany(e => e.Outcome))
-                            {
-                                <li class="chain--@(step.Actor == "delivery" ? "delivery" : step.Actor is "person" or "assistant" ? "person" : "house")">
-                                    <span class="chain-icon">@Icons.Get(step.Actor == "delivery" ? "send" : step.Actor is "person" or "assistant" ? "person" : "house", 12)</span>
-                                    <span>@step.Who @step.Text@if (step.AtUtc is DateTime at) {<span class="chain-when"> &middot; @HouseholdTime.TimeOrDate(at, Model.HouseholdZone)</span>}</span>
-                                </li>
-                            }
-                            <li class="chain--house">
-                                <span class="chain-icon">@Icons.Get("code", 12)</span>
-                                <span><a href="@(timelineHref)#@trace.Key">See the whole trace on the timeline</a></span>
-                            </li>
-                        </ol>
-                    }
-                    @if (item.AlertDeliveryId is int deliveryId && item.ClosedAtUtc is null)
-                    {
-                        <form method="post" asp-page-handler="Acknowledge">
-                            <input type="hidden" name="deliveryId" value="@deliveryId" />
-                            <input type="hidden" name="personId" value="@Model.Member.Id" />
-                            <button type="submit">Mark as seen</button>
-                        </form>
-                    }
-                </article>
-            }
-        </div>
-    }
+    <p class="note-panel note-panel--ok" role="status">@Model.InboxNote</p>
 }
+
+@if (Model.Member is null)
+{
+    <div class="who-grid">
+        @foreach (var person in Model.People)
+        {
+            var first = NameWording.First(person.DisplayName);
+            var count = Model.WaitingByPerson.GetValueOrDefault(person.Id);
+            <a class="who-card" href="@CurrentPerson.SwitchHref(person.Id, "/Member")">
+                <span class="avatar avatar--@PersonStyle.Slot(person.Id)" aria-hidden="true">@PersonStyle.Initial(first)</span>
+                <span class="who-card-name">@first</span>
+                <span class="who-card-count@(count > 0 ? " who-card-count--some" : "")">@(count == 0 ? "Nothing waiting" : count == 1 ? "1 thing waiting" : $"{count} things waiting")</span>
+            </a>
+        }
+    </div>
+    return;
+}
+
+<section class="inbox-section" aria-labelledby="yours">
+    <div class="section-head">
+        <h2 id="yours">Yours to answer</h2>
+        <span class="muted small">@(needs!.YoursCount == 0 ? "Nothing waiting" : needs.YoursCount == 1 ? "1 thing" : $"{needs.YoursCount} things")</span>
+    </div>
+
+    @if (needs.YoursCount == 0)
+    {
+        <div class="empty"><p>Nothing is waiting on @memberFirst right now. When @memberFirst sends the house something that needs a yes, or the house passes something on, it shows up here.</p></div>
+    }
+
+    @foreach (var item in needs.YourProposals)
+    {
+        <partial name="_Trace" model="Card(item)" />
+    }
+
+    @foreach (var ask in needs.Asks)
+    {
+        <article class="inbox-item inbox-item--ask">
+            <header class="inbox-head">
+                <span class="avatar avatar--0" aria-hidden="true">@Icons.Get("shield", 14)</span>
+                <div class="trace-head-text">
+                    <span class="trace-who">The house is asking</span>
+                    <span class="trace-sub">Who should see an entry about @memberFirst?</span>
+                </div>
+                <span class="status status--waiting">Needs your answer</span>
+            </header>
+            <p class="claim-meta">Until @memberFirst chooses, only the people the entry names can see it.</p>
+            <form method="post" class="decide">
+                <input type="hidden" name="askId" value="@ask.Id" />
+                <input type="hidden" name="personId" value="@Model.Member.Id" />
+                <button type="submit" name="choice" value="Private" class="primary" formaction="/Member?handler=AnswerAsk">Only the people it names</button>
+                <button type="submit" name="choice" value="Household" formaction="/Member?handler=AnswerAsk">Everyone in the household</button>
+            </form>
+        </article>
+    }
+
+    @foreach (var question in needs.PlanQuestions)
+    {
+        <article class="inbox-item inbox-item--plan">
+            <header class="inbox-head">
+                <span class="avatar avatar--0" aria-hidden="true">@Icons.Get("record", 14)</span>
+                <div class="trace-head-text">
+                    <span class="trace-who">@question.Plan.Label</span>
+                    <span class="trace-sub">A plan item waiting on @memberFirst's answer</span>
+                </div>
+                <span class="status status--waiting">Your answer</span>
+            </header>
+            <p class="inbox-words">@question.Element.BodyText</p>
+            <form method="post" class="decide">
+                <input type="hidden" name="elementId" value="@question.Element.Id" />
+                <input type="hidden" name="personId" value="@Model.Member.Id" />
+                <button type="submit" name="disposal" value="Agreed" class="primary" formaction="/Member?handler=AnswerPlan">Agree</button>
+                <button type="submit" name="disposal" value="Declined" formaction="/Member?handler=AnswerPlan">Not this time</button>
+                <a class="decide-note" href="/Plans">Suggest a change on Plans</a>
+            </form>
+        </article>
+    }
+
+    @foreach (var item in needs.NewDeliveries.OrderByDescending(r => r.AtUtc))
+    {
+        <partial name="_Delivery" model="new DeliveryView(item, Model.Traces.GetValueOrDefault(item.AlertDeliveryId ?? 0), Model.Member, Model.People, Model.HouseholdZone, timelineHref)" />
+    }
+</section>
+
+@if (needs.OtherProposals.Count > 0)
+{
+    <section class="inbox-section" aria-labelledby="others">
+        <div class="section-head">
+            <h2 id="others">Also waiting for a yes</h2>
+            <span class="muted small">Anyone in the household who can see these may answer</span>
+        </div>
+        @foreach (var item in needs.OtherProposals)
+        {
+            <partial name="_Trace" model="Card(item)" />
+        }
+    </section>
+}
+
+@if (needs.OpenClaims.Count > 0)
+{
+    <section class="inbox-section" aria-labelledby="claims">
+        <div class="section-head">
+            <h2 id="claims">What @memberFirst has taken on</h2>
+            <a class="muted small" href="/Promises">Close a claim on Claims</a>
+        </div>
+        <ul class="claim-list">
+            @foreach (var claim in needs.OpenClaims)
+            {
+                <li class="claim-row">@Icons.Get("check", 14) <span>@claim.CommitmentText</span>@if (claim.DueText is not null) {<span class="muted small"> &middot; @claim.DueText</span>}</li>
+            }
+        </ul>
+    </section>
+}
+
+@if (needs.SeenDeliveries.Count > 0)
+{
+    <details class="inbox-section fold">
+        <summary><h2>Seen and earlier</h2> <span class="muted small">@needs.SeenDeliveries.Count</span></summary>
+        @foreach (var item in needs.SeenDeliveries.OrderByDescending(r => r.AtUtc))
+        {
+            <partial name="_Delivery" model="new DeliveryView(item, Model.Traces.GetValueOrDefault(item.AlertDeliveryId ?? 0), Model.Member, Model.People, Model.HouseholdZone, timelineHref)" />
+        }
+    </details>
+}
+
+<p class="note-panel" style="margin-top:1.25rem">In the full product, what the house passes on reaches @memberFirst through @memberFirst's own assistant. In this demo, you see it here.</p>

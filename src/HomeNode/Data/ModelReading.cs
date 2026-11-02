@@ -89,4 +89,8 @@ public static class ModelReadingEngine
     public const string Live = "live";
     public const string Mock = "mock";
     public const string Rule = "rule";
+    // Read by the house's own deterministic reader because the message
+    // was private (the Private switch, or health-shaped words): no
+    // model saw it. See PrivacyRule.
+    public const string Private = "private";
 }

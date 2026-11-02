@@ -149,6 +149,29 @@ public class FrontDoorModel : PageModel
     [BindProperty(SupportsGet = true)]
     public int? ViewerId { get; set; }
 
+    // A message to start from: a Muse Wonder draft (?draft=<review
+    // call>&f=<finding>) or a line the house's own rules suggested
+    // (?say=...). Either only fills the message box; nothing is sent
+    // until the person presses Send.
+    [BindProperty(SupportsGet = true)]
+    public int? Draft { get; set; }
+    [BindProperty(SupportsGet = true, Name = "f")]
+    public int? DraftIndex { get; set; }
+    [BindProperty(SupportsGet = true)]
+    public string? Say { get; set; }
+    public string? StartText { get; private set; }
+    public bool StartIsWonderDraft { get; private set; }
+
+    // Voice is offered only on a Live instance with a key.
+    public bool VoiceAvailable { get; private set; }
+
+    // The two lines under the message box: what is waiting on this
+    // person, and the house right now.
+    public int NeedsCount { get; private set; }
+    public int OpenClaimCount { get; private set; }
+    public List<string> LowSupplies { get; private set; } = new();
+    public int OpenPlanItems { get; private set; }
+
     // The newest words in the shared record, newest first: what the house
     // has confirmed, and what is still waiting on a person.
     public List<Event> RecentEvents { get; private set; } = new();
@@ -202,10 +225,15 @@ public class FrontDoorModel : PageModel
 
     public async Task OnGetAsync()
     {
+        // The switcher's choice when the link named no one (see
+        // CurrentPerson); a named reader in the link still wins.
+        ViewerId = CurrentPerson.Resolve(HttpContext, ViewerId, await _db.Persons.ToListAsync());
         await LoadAsync();
     }
 
-    public async Task<IActionResult> OnPostTellAsync(int? speakerId, string? telling)
+    public async Task<IActionResult> OnPostTellAsync(int? speakerId, string? telling,
+        bool keepPrivate = false, int? heardCallId = null, bool heardEdited = false,
+        int? draftCallId = null, int? draftIndex = null, bool draftEdited = false)
     {
         var household = await _db.Households.FirstOrDefaultAsync();
         if (household is null || string.IsNullOrWhiteSpace(telling))
@@ -218,11 +246,19 @@ public class FrontDoorModel : PageModel
             : null;
         var context = await _contextBuilder.BuildAsync(household.Id);
         var tz = TimeZoneInfo.FindSystemTimeZoneById(household.TimeZoneId ?? "America/Chicago");
+        // A clip Muse Voice Transcribe heard for this message a moment
+        // ago, not yet used: the message then came in by voice.
+        var heardCall = heardCallId is int heardId
+            ? await _db.ModelCalls.FirstOrDefaultAsync(c => c.Id == heardId
+                && c.Purpose == ModelCallPurpose.Hear && c.ReadingId == null
+                && c.AtUtc > DateTime.UtcNow.AddMinutes(-15))
+            : null;
         var input = new ExtractionInput
         {
             UtteranceId = $"u-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..26],
             Transcript = telling.Trim(),
-            SourceType = "tap",
+            SourceType = heardCall is null ? "tap" : "voice",
+            Private = keepPrivate,
             OccurredAtLocal = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz),
             Speaker = speaker is null
                 ? null
@@ -270,6 +306,27 @@ public class FrontDoorModel : PageModel
             return RedirectToPage(new { viewerId = speaker?.Id });
         }
         TempData["HouseReply"] = result.HouseReply;
+        if (result.Reading is { } linkedReading)
+        {
+            // The other models' part in this message, linked to its
+            // reading so the trace can show it: the clip it was heard
+            // from, and the Muse Wonder finding it was drafted from.
+            if (heardCall is not null)
+            {
+                heardCall.ReadingId = linkedReading.Id;
+                heardCall.OutputJson = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+                {
+                    ["audioDurationMs"] = ReadDuration(heardCall.OutputJson),
+                    ["edited"] = heardEdited
+                });
+                await _db.SaveChangesAsync();
+            }
+            if (draftCallId is int draftId && draftIndex is int index
+                && linkedReading.Outcome == ModelReadingOutcome.Entries)
+            {
+                await HomeNode.Services.Models.ReviewService.MarkDraftSentAsync(_db, draftId, index, linkedReading.Id, draftEdited);
+            }
+        }
         if (result.Reading is { } reading)
         {
             if (reading.Outcome == ModelReadingOutcome.Entries)
@@ -647,13 +704,163 @@ public class FrontDoorModel : PageModel
         // the page, traced in full, so the model's work is the first
         // thing a visitor sees.
         Featured = JustNow is null && JustRead is null
-            ? feed.Items.FirstOrDefault(i => i.Engine.HasReading)
+            ? feed.Items.FirstOrDefault(i => i.Engine.ModelRead)
             : null;
         Activity = feed.Items
             .Where(i => i.Key != JustNow?.Key && i.Key != Featured?.Key)
             .Take(4)
             .ToList();
         AnyReadings = feed.Items.Any(i => i.Engine.HasReading);
+
+        var services = HttpContext?.RequestServices;
+        if (services?.GetService(typeof(HomeNode.Services.Models.MetaApi)) is HomeNode.Services.Models.MetaApi api)
+        {
+            VoiceAvailable = api.Callable;
+        }
+        if (ViewerId is int needsViewer && services?.GetService(typeof(NeedsYouService)) is NeedsYouService needs)
+        {
+            NeedsCount = await needs.CountAsync(needsViewer);
+        }
+        var today = DateOnly.FromDateTime(HouseholdTime.ToLocal(DateTime.UtcNow, HouseholdZone));
+        LowSupplies = (await _db.SupplyItems.ToListAsync())
+            .Where(i => i.GetOrderByDate(today) <= today)
+            .Select(i => i.Name).ToList();
+        var openPromises = await _db.Promises.Where(pr => pr.State == PromiseState.Made).ToListAsync();
+        var sourceIds = openPromises.Select(pr => pr.SourceEventId).ToList();
+        var sources = await _db.Events.Where(e => sourceIds.Contains(e.Id)).ToListAsync();
+        OpenClaimCount = openPromises.Count(pr =>
+        {
+            var source = sources.FirstOrDefault(e => e.Id == pr.SourceEventId);
+            return ViewerId is int claimViewer
+                ? BriefService.PromiseVisibleTo(pr, source, claimViewer)
+                : BriefService.PromiseVisibleWithNoReader(pr, source);
+        });
+        OpenPlanItems = await _db.PlanElements.CountAsync(e => e.State == PlanElementState.Open
+            && e.Plan != null && e.Plan.State != PlanState.Completed && e.Plan.State != PlanState.Dropped
+            && e.Plan.State != PlanState.Superseded);
+
+        // The message box's starting words, if the person came here to
+        // send a draft. A Muse Wonder draft is offered only to the
+        // person the review was made for.
+        if (Draft is int draftId && DraftIndex is int draftIndex)
+        {
+            var call = await _db.ModelCalls.FirstOrDefaultAsync(c => c.Id == draftId
+                && c.Purpose == ModelCallPurpose.Review && c.PersonId == ViewerId);
+            var finding = call is null ? null : HomeNode.Services.Models.ReviewService.Read(call)?.Findings
+                .ElementAtOrDefault(draftIndex);
+            if (finding?.DraftMessage is string draftText)
+            {
+                var to = People.FirstOrDefault(p => p.Id == finding.DraftTo);
+                var toFirst = NameWording.First(to?.DisplayName);
+                StartText = to is null
+                    || draftText.StartsWith("Tell " + toFirst, StringComparison.OrdinalIgnoreCase)
+                    || draftText.StartsWith("Ask " + toFirst, StringComparison.OrdinalIgnoreCase)
+                    ? draftText
+                    : $"Tell {toFirst}: {draftText}";
+                StartIsWonderDraft = true;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(Say))
+        {
+            StartText = Say.Trim().Length > 400 ? Say.Trim()[..400] : Say.Trim();
+        }
+    }
+
+    private static int? ReadDuration(string? json)
+    {
+        if (json is null)
+        {
+            return null;
+        }
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            return doc.RootElement.TryGetProperty("audioDurationMs", out var d) && d.TryGetInt32(out var ms) ? ms : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    // Hearing: the browser's push-to-talk clip goes to Muse Voice
+    // Transcribe and the words come back for the person to read,
+    // change and send. Nothing reaches the record here. The audio is
+    // checked first (WavCheck) and never stored; the call is kept as
+    // timing and the clip's length only.
+    public async Task<IActionResult> OnPostTranscribeAsync(IFormFile? audio, int? speakerId)
+    {
+        var services = HttpContext?.RequestServices;
+        var api = services?.GetService(typeof(HomeNode.Services.Models.MetaApi)) as HomeNode.Services.Models.MetaApi;
+        var voice = services?.GetService(typeof(HomeNode.Services.Models.IVoiceClient)) as HomeNode.Services.Models.IVoiceClient;
+        if (api is null || voice is null || !api.Callable)
+        {
+            return new JsonResult(new { ok = false, note = "Voice needs the live Meta Model API, which this instance is not using." });
+        }
+        var household = await _db.Households.FirstOrDefaultAsync();
+        if (household is null || audio is null || audio.Length == 0)
+        {
+            return new JsonResult(new { ok = false, note = "Nothing was recorded." });
+        }
+        if (audio.Length > HomeNode.Services.Models.WavCheck.MaxBytes)
+        {
+            return new JsonResult(new { ok = false, note = "That recording was longer than a minute." });
+        }
+        byte[] wav;
+        using (var buffer = new MemoryStream())
+        {
+            await audio.CopyToAsync(buffer);
+            wav = buffer.ToArray();
+        }
+        if (HomeNode.Services.Models.WavCheck.Problem(wav) is string problem)
+        {
+            return new JsonResult(new { ok = false, note = problem });
+        }
+        var people = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
+        var supplies = await _db.SupplyItems.Select(s => s.Name).ToListAsync();
+        var keywords = people.Select(p => NameWording.First(p.DisplayName))
+            .Concat(supplies).Distinct().Take(40).ToList();
+        var call = new ModelCall
+        {
+            HouseholdId = household.Id,
+            Purpose = ModelCallPurpose.Hear,
+            Model = api.Models.VoiceModel,
+            Engine = "live",
+            PersonId = speakerId,
+            AtUtc = DateTime.UtcNow
+        };
+        try
+        {
+            var heard = await voice.TranscribeAsync(wav, keywords, HttpContext?.RequestAborted ?? default);
+            call.ElapsedMs = heard.ElapsedMs;
+            call.Outcome = heard.Transcript.Length == 0 ? ModelCallOutcome.Empty : ModelCallOutcome.Done;
+            call.OutputJson = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["audioDurationMs"] = heard.AudioDurationMs
+            });
+            _db.ModelCalls.Add(call);
+            await _db.SaveChangesAsync();
+            return new JsonResult(new
+            {
+                ok = heard.Transcript.Length > 0,
+                transcript = heard.Transcript,
+                callId = call.Id,
+                ms = heard.ElapsedMs,
+                // The house's own rule, run on the words before any
+                // reader sees them: health-shaped words switch Private
+                // on, so no model reads the message.
+                sensitive = HomeNode.Services.Extraction.PrivacyRule.WordsArePrivate(heard.Transcript),
+                note = heard.Transcript.Length == 0 ? "Muse Voice Transcribe heard no words." : null
+            });
+        }
+        catch (Exception ex) when (HttpContext?.RequestAborted.IsCancellationRequested != true)
+        {
+            _logger.LogWarning(ex, "Muse Voice Transcribe failed");
+            call.Outcome = ModelCallOutcome.Failed;
+            _db.ModelCalls.Add(call);
+            await _db.SaveChangesAsync();
+            return new JsonResult(new { ok = false, note = "Muse Voice Transcribe did not answer. Nothing was sent. Type it instead, or try again." });
+        }
     }
 
     // A failed reading in plain words. The exception's own text goes

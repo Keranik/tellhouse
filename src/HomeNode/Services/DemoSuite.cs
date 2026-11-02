@@ -2078,6 +2078,140 @@ public static class DemoSuite
         Check("C: the confirm answer for a reminder says when it was set for",
             doorC.HouseReply == "Reminder set for Friday.");
 
+        // ---------- The privacy line: a private message reaches no model ----------
+        // Health-shaped words, or the person's Private switch, send a
+        // message to the house's own deterministic reader; the model
+        // reader is never called for it, and there is no fallback.
+        Check("Privacy: the house's rule finds health-shaped words and leaves ordinary ones",
+            PrivacyRule.WordsArePrivate("My knee hurts when I stand up")
+            && PrivacyRule.WordsArePrivate("We're out of heart pills")
+            && PrivacyRule.WordsArePrivate("Dr. Patel moved the appointment")
+            && PrivacyRule.WordsArePrivate("Don't tell Lisa about the gift")
+            && !PrivacyRule.WordsArePrivate("Ask Daniel to pick up milk on his way home")
+            && !PrivacyRule.WordsArePrivate("We're out of wipes")
+            && !PrivacyRule.WordsArePrivate("I'll get Mia at 3"));
+        var neverModel = new ThrowingExtractionClient();
+        var routedPrivate = new RoutedExtractionClient(neverModel, new MockExtractionClient());
+        var kneeInput = Input("My knee hurts when I stand up", 1, "16:05");
+        var kneeOutput = await routedPrivate.ExtractAsync(kneeInput);
+        Check("Privacy: a health-shaped message is read by the house's own rules and never reaches a model client",
+            neverModel.Calls == 0 && routedPrivate.Name == ModelReadingEngine.Private && kneeOutput.Events.Count > 0);
+        var markedInput = Input("Ask Daniel to pick up bread", 1, "16:06");
+        markedInput.Private = true;
+        await routedPrivate.ExtractAsync(markedInput);
+        Check("Privacy: a message marked Private never reaches a model client",
+            neverModel.Calls == 0 && routedPrivate.Name == ModelReadingEngine.Private && routedPrivate.LastCall is null);
+        var countingModel = new CountingExtractionClient(new MockExtractionClient());
+        var routedOrdinary = new RoutedExtractionClient(countingModel, new ThrowingExtractionClient());
+        await routedOrdinary.ExtractAsync(Input("Ask Daniel to pick up milk on his way home", 1, "16:07"));
+        Check("Privacy: an ordinary message goes to the model reader, not the private one",
+            countingModel.Calls == 1 && routedOrdinary.Name == "mock");
+        var failingHouse = new RoutedExtractionClient(countingModel, new ThrowingExtractionClient());
+        var failSafe = false;
+        try
+        {
+            await failingHouse.ExtractAsync(Input("My ankle is swollen", 1, "16:08"));
+        }
+        catch (InvalidOperationException)
+        {
+            failSafe = true;
+        }
+        Check("Privacy: when the house's own reader fails, a private message fails with it and never falls back to a model",
+            failSafe && countingModel.Calls == 1);
+        var privatePipeline = new ExtractionService(db, new RoutedExtractionClient(neverModel, new MockExtractionClient()), confirmations, audience);
+        var privateResult = await privatePipeline.ProcessAsync(Input("My knee hurts when I stand up", 1, "16:09"));
+        Check("Privacy: through the whole pipeline a private message is written down, its reading says no model read it, and no model was called",
+            neverModel.Calls == 0
+            && privateResult.WrittenEvents.Count > 0
+            && privateResult.Reading?.Engine == ModelReadingEngine.Private
+            && privateResult.Reading.Model is null
+            && privateResult.Reading.ContextSummary?.Contains("PrivateByRule") == true);
+
+        // ---------- Muse Wonder's review: what it is shown, what survives ----------
+        var reviewApi = new HomeNode.Services.Models.MetaApi(
+            Microsoft.Extensions.Options.Options.Create(new ExtractionOptions()),
+            Microsoft.Extensions.Options.Options.Create(new HomeNode.Services.Models.ModelOptions()));
+        var reviews = new HomeNode.Services.Models.ReviewService(db, reviewApi);
+        // The suite's household lives on its demo day; the review's
+        // "now" is pinned to that evening.
+        var reviewSlice = (await reviews.SliceForAsync(1, new DateTime(2026, 10, 28, 3, 0, 0, DateTimeKind.Utc)))!;
+        var shown = HomeNode.Services.Models.ReviewService.BuildRequestSlice(reviewSlice, 1);
+        var shownIds = (shown["entries"] as System.Text.Json.Nodes.JsonArray ?? new())
+            .Select(n => (int)n!["id"]!).ToHashSet();
+        var shownSupplies = (shown["supplies"] as System.Text.Json.Nodes.JsonArray ?? new())
+            .Select(n => (string)n!["name"]!).ToList();
+        var healthIds = reviewSlice.Events.Where(e => e.Type == EventType.HealthMention).Select(e => e.Id).ToList();
+        var privateIds = privateResult.WrittenEvents.Select(e => e.Id).ToList();
+        Check("Review: Muse Wonder is never shown a health entry, a privately read entry, or a medicine",
+            healthIds.Count > 0
+            && !healthIds.Any(shownIds.Contains)
+            && !privateIds.Any(shownIds.Contains)
+            && !shownSupplies.Any(n => n.Contains("pill", StringComparison.OrdinalIgnoreCase))
+            && shownSupplies.Any(n => n.Equals("wipes", StringComparison.OrdinalIgnoreCase)));
+        var anyShown = shownIds.First();
+        var raw = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            summary = "Two things to look at.",
+            findings = new object[]
+            {
+                new { kind = "conflict", headline = "Two people said they would do the same thing.", detail = "Both entries are open.",
+                      entry_ids = new[] { anyShown }, supply_ids = Array.Empty<int>(), person_ids = new[] { 2, 3 },
+                      draft = new { to_person_id = 3, message = "Can we sort out who is doing it?" } },
+                new { kind = "slipping", headline = "Something nobody said.", detail = "Cites an entry it was never shown.",
+                      entry_ids = new[] { 999999 }, supply_ids = Array.Empty<int>(), person_ids = new[] { 2 }, draft = (object?)null },
+                new { kind = "slipping", headline = "Her knee hurts more each day.", detail = "A health guess.",
+                      entry_ids = new[] { anyShown }, supply_ids = Array.Empty<int>(), person_ids = new[] { 1 }, draft = (object?)null },
+                new { kind = "unanswered", headline = "A note to yourself.", detail = "Drafted to the viewer.",
+                      entry_ids = new[] { anyShown }, supply_ids = Array.Empty<int>(), person_ids = new[] { 1 },
+                      draft = new { to_person_id = 1, message = "Remember this." } }
+            }
+        });
+        var validated = HomeNode.Services.Models.ReviewService.Validate(raw, reviewSlice, shown, 1);
+        Check("Review: a finding survives only when it cites what Muse Wonder was shown, guesses at no one's health, and drafts to someone else",
+            validated.Findings.Count == 1 && validated.Dropped == 3
+            && validated.Findings[0].DraftTo == 3 && validated.Findings[0].EntryIds.SequenceEqual(new[] { anyShown }));
+        Check("Review: an answer that is not in the agreed shape changes nothing",
+            HomeNode.Services.Models.ReviewService.Validate("not json at all", reviewSlice, shown, 1) is { Findings.Count: 0, Problem: not null });
+        var houseFindings = HomeNode.Services.Models.ReviewService.HouseFindings(reviewSlice, 1);
+        Check("Review: the house's own rules (no model) still watch a medicine running low",
+            houseFindings.Any(f => f.Kind == "running_low" && f.Headline.Contains("Heart pills")));
+
+        // ---------- Hearing: the clip is checked before it goes anywhere ----------
+        byte[] Wav(short channels, int rate, short bits, int seconds)
+        {
+            var dataBytes = rate * channels * (bits / 8) * seconds;
+            var bytes = new byte[44 + dataBytes];
+            System.Text.Encoding.ASCII.GetBytes("RIFF").CopyTo(bytes, 0);
+            BitConverter.GetBytes(36 + dataBytes).CopyTo(bytes, 4);
+            System.Text.Encoding.ASCII.GetBytes("WAVEfmt ").CopyTo(bytes, 8);
+            BitConverter.GetBytes(16).CopyTo(bytes, 16);
+            BitConverter.GetBytes((short)1).CopyTo(bytes, 20);
+            BitConverter.GetBytes(channels).CopyTo(bytes, 22);
+            BitConverter.GetBytes(rate).CopyTo(bytes, 24);
+            BitConverter.GetBytes(rate * channels * bits / 8).CopyTo(bytes, 28);
+            BitConverter.GetBytes((short)(channels * bits / 8)).CopyTo(bytes, 32);
+            BitConverter.GetBytes(bits).CopyTo(bytes, 34);
+            System.Text.Encoding.ASCII.GetBytes("data").CopyTo(bytes, 36);
+            BitConverter.GetBytes(dataBytes).CopyTo(bytes, 40);
+            return bytes;
+        }
+        Check("Hearing: only a short 16-bit mono WAV at 16 or 24 kHz is sent to Muse Voice Transcribe",
+            HomeNode.Services.Models.WavCheck.Problem(Wav(1, 16000, 16, 2)) is null
+            && HomeNode.Services.Models.WavCheck.Problem(Wav(1, 24000, 16, 2)) is null
+            && HomeNode.Services.Models.WavCheck.Problem(Wav(2, 16000, 16, 2)) is not null
+            && HomeNode.Services.Models.WavCheck.Problem(Wav(1, 44100, 16, 1)) is not null
+            && HomeNode.Services.Models.WavCheck.Problem(Wav(1, 16000, 16, 61)) is not null
+            && HomeNode.Services.Models.WavCheck.Problem(System.Text.Encoding.ASCII.GetBytes(new string('x', 100))) is not null);
+
+        // ---------- The person switcher only ever returns to this site ----------
+        Check("Switcher: going back after choosing a person stays on this site and drops the person keys",
+            CurrentPerson.SafeReturn("//elsewhere.example/x") == "/"
+            && CurrentPerson.SafeReturn("https://elsewhere.example/") == "/"
+            && CurrentPerson.SafeReturn("/\\elsewhere.example") == "/"
+            && CurrentPerson.SafeReturn("/Timeline?actorId=2&show=waiting") == "/Timeline?show=waiting"
+            && CurrentPerson.SafeReturn("/Member?personId=3") == "/Member"
+            && CurrentPerson.Resolve(null, null, await db.Persons.ToListAsync()) is null);
+
         Console.WriteLine();
         Console.WriteLine($"Demo suite: {_passed} passed, {_failed} failed.");
         foreach (var failure in _failures)
@@ -2105,6 +2239,36 @@ public static class DemoSuite
     // an unknown event type carrying words that were never said.
     // It stands in for a live output the validator refuses, so the
     // front door refusal path can be exercised without a network.
+    // A model reader that must never be reached: it counts any call
+    // and throws, so a check can prove a private message went nowhere
+    // near it.
+    private sealed class ThrowingExtractionClient : IExtractionClient
+    {
+        public int Calls { get; private set; }
+        public string Name => "never";
+
+        public Task<ExtractionOutput> ExtractAsync(ExtractionInput input, CancellationToken ct = default)
+        {
+            Calls++;
+            throw new InvalidOperationException("This reader must not be called.");
+        }
+    }
+
+    // A model reader that counts its calls and answers like the stand-in.
+    private sealed class CountingExtractionClient : IExtractionClient
+    {
+        private readonly IExtractionClient _inner;
+        public CountingExtractionClient(IExtractionClient inner) => _inner = inner;
+        public int Calls { get; private set; }
+        public string Name => _inner.Name;
+
+        public Task<ExtractionOutput> ExtractAsync(ExtractionInput input, CancellationToken ct = default)
+        {
+            Calls++;
+            return _inner.ExtractAsync(input, ct);
+        }
+    }
+
     private sealed class InvalidExtractionClient : IExtractionClient
     {
         public string Name => "InvalidStub";

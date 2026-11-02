@@ -6,7 +6,8 @@
     ViewData["Title"] = "Briefing";
     var first = HomeNode.Data.NameWording.First(Model.Viewer?.DisplayName);
     var lookupAnswer = Model.LookupAnswer;
-    var lensView = new LensView("/Brief", "PersonId", Model.Viewer?.Id, Model.People, false, "Briefing for");
+    // The person this page shows, for the shell's person switcher.
+    ViewData["AsPersonId"] = Model.Viewer?.Id;
     var claims = Model.Lines.Where(l => l.Section == "Claims still open").ToList();
     var toOrder = Model.Lines.Where(l => l.Section == "To order").ToList();
     var tasks = Model.Lines.Where(l => l.Section == "Your tasks").ToList();
@@ -16,17 +17,18 @@
         "live" => "read by Muse Spark",
         "mock" => "read by the stand-in",
         "rule" => "shaped by the turn rule",
+        "private" => "kept private, no model",
         "seed" => "seeded",
         _ => "recorded"
     };
 }
 
 <div class="page-head">
-    <span class="eyebrow">@Icons.Get("record", 13) One person's view</span>
+    <span class="eyebrow">@Icons.Get("shield", 13) The house now</span>
     @if (Model.Viewer is not null)
     {
         <h1>@first's briefing</h1>
-        <p class="lede">What matters to @first right now: open claims, things to order, tasks, what waits on an answer, and the latest entries @first may see. Built from the record, filtered by the audience stored on every entry.</p>
+        <p class="lede">The house as @first may see it right now: what needs attention, who has taken what on, what is running low, and what is planned. Built from the record, through the audience stored on every entry.</p>
     }
     else
     {
@@ -35,13 +37,135 @@
     }
 </div>
 
-<partial name="_Lens" model="lensView" />
 
+
+@if (Model.Viewer is not null)
+{
+    string KindLabel(string kind) => kind switch
+    {
+        "conflict" => "Two claims",
+        "slipping" => "Slipping",
+        "running_low" => "Running low",
+        "unanswered" => "No answer yet",
+        "plan_gap" => "Plan",
+        _ => "Note"
+    };
+    <section class="attention" aria-labelledby="attention">
+        <div class="section-head">
+            <h2 id="attention">What needs attention</h2>
+            <p>Two readers look over the record for @first. Neither one acts: a finding is only a suggestion, and a draft is only words in the message box until @first sends it and says yes.</p>
+        </div>
+        <div class="attention-grid">
+            <div class="attention-col attention-col--house">
+                <h3>@Icons.Get("shield", 15) The house&rsquo;s own rules <span class="muted small">no model, private things included</span></h3>
+                @if (Model.HouseFindings.Count == 0)
+                {
+                    <p class="muted small">Nothing the rules check for needs attention right now.</p>
+                }
+                @foreach (var f in Model.HouseFindings)
+                {
+                    <article class="finding finding--@f.Kind">
+                        <span class="kind kind--@(f.Kind == "running_low" ? "supply" : f.Kind == "conflict" ? "claim" : "request")">@KindLabel(f.Kind)</span>
+                        <p class="finding-head">@f.Headline</p>
+                        <p class="finding-detail">@f.Detail</p>
+                        @if (f.DraftMessage is not null)
+                        {
+                            <a class="finding-use" href="/?say=@Uri.EscapeDataString(f.DraftMessage)">Use this: &ldquo;@f.DraftMessage&rdquo; &rarr;</a>
+                        }
+                    </article>
+                }
+            </div>
+            <div class="attention-col attention-col--wonder">
+                <h3>@Icons.Get("bulb", 15) Muse Wonder&rsquo;s review <span class="muted small">Meta&rsquo;s reasoning model, shared record only</span></h3>
+                @if (!Model.WonderAvailable)
+                {
+                    <p class="muted small">On a Live instance, Muse Wonder (muse-wonder-1.0, through the Meta Model API) looks over the shared record here and explains what it notices, citing the entries it used. This instance has no model key, so only the house&rsquo;s own rules are shown.</p>
+                }
+                else
+                {
+                    var wonderCall = Model.WonderCall;
+                    var wonder = Model.Wonder;
+                    var fresh = wonderCall is not null && wonderCall.Outcome != ModelCallOutcome.Failed
+                        && DateTime.UtcNow - wonderCall.AtUtc < TimeSpan.FromMinutes(Model.WonderMinutes);
+                    @if (wonderCall is not null)
+                    {
+                        var secs = wonderCall.ElapsedMs / 1000.0;
+                        <p class="step-meta">@wonderCall.Model &middot; Meta Model API &middot; @secs.ToString("0.0") s &middot; reviewed @HouseholdTime.TimeOrDate(wonderCall.AtUtc, Model.HouseholdZone)@(wonder?.Dropped > 0 ? $" · {wonder.Dropped} finding{(wonder.Dropped == 1 ? "" : "s")} dropped by the house's checks" : "")</p>
+                    }
+                    @if (wonder?.Problem is not null)
+                    {
+                        <p class="note">@wonder.Problem Nothing changed.</p>
+                    }
+                    else if (wonder is not null)
+                    {
+                        @if (wonder.Summary is not null)
+                        {
+                            <p class="finding-summary">&ldquo;@wonder.Summary&rdquo;</p>
+                        }
+                        @if (wonder.Findings.Count == 0)
+                        {
+                            <p class="muted small">Muse Wonder found nothing that needs attention.</p>
+                        }
+                        @for (var i = 0; i < wonder.Findings.Count; i++)
+                        {
+                            var f = wonder.Findings[i];
+                            <article class="finding finding--@f.Kind finding--wonder">
+                                <span class="kind kind--@(f.Kind == "running_low" ? "supply" : f.Kind == "conflict" ? "claim" : "request")">@KindLabel(f.Kind)</span>
+                                <p class="finding-head">@f.Headline</p>
+                                <p class="finding-detail">@f.Detail</p>
+                                @{
+                                    var cites = f.EntryIds.Where(id => Model.Cited.ContainsKey(id)).ToList();
+                                }
+                                @if (cites.Count > 0 || f.SupplyIds.Count > 0)
+                                {
+                                    <ul class="finding-cites">
+                                        @foreach (var id in cites)
+                                        {
+                                            var cited = Model.Cited[id];
+                                            <li>#@id &middot; &ldquo;@cited.Words&rdquo;@(cited.Who.Length > 0 ? $" ({cited.Who})" : "")</li>
+                                        }
+                                        @foreach (var sid in f.SupplyIds.Where(Model.SupplyNames.ContainsKey))
+                                        {
+                                            <li>Supply &middot; @Model.SupplyNames[sid]</li>
+                                        }
+                                    </ul>
+                                }
+                                @if (f.DraftMessage is not null)
+                                {
+                                    @if (f.SentReadingId is not null)
+                                    {
+                                        <p class="finding-sent">@Icons.Get("check", 13) Sent as a message@(f.SentEdited ? ", in changed words" : "")</p>
+                                    }
+                                    else
+                                    {
+                                        <a class="finding-use" href="/?draft=@wonderCall!.Id&amp;f=@i">Use this draft: &ldquo;@f.DraftMessage&rdquo; &rarr;</a>
+                                    }
+                                }
+                            </article>
+                        }
+                    }
+                    <form method="post" asp-page-handler="Review" data-busy data-busy-label="Muse Wonder is reviewing… (this can take a little while)">
+                        <input type="hidden" name="personId" value="@Model.Viewer.Id" />
+                        @if (fresh)
+                        {
+                            <p class="muted small">Muse Wonder reviewed this a moment ago. You can ask again in a few minutes.</p>
+                        }
+                        else
+                        {
+                            <button type="submit" class="primary">@Icons.Get("bulb", 15) @(wonderCall is null ? "Ask Muse Wonder what needs attention" : "Ask Muse Wonder again")</button>
+                        }
+                    </form>
+                }
+                <p class="muted small attention-never">Never shown to Muse Wonder: anything private or about health, and medicines on the supply list. Those stay with the house&rsquo;s own rules.</p>
+            </div>
+        </div>
+    </section>
+}
 @if (Model.Viewer is not null)
 {
     <div class="brief-grid">
         <section class="brief-card">
-            <h2>@Icons.Get("check", 16) Open claims <span class="count">@claims.Count</span></h2>
+            <h2>@Icons.Get("check", 16) Who&rsquo;s on what <span class="count">@claims.Count</span><a class="card-more" href="/Promises">All claims &rarr;</a></h2>
             @if (claims.Count == 0)
             {
                 <p class="muted small">No open claims @first can see.</p>
@@ -56,6 +180,8 @@
                 </ul>
             }
         </section>
+        @if (!Model.HouseFindings.Any(f => f.Kind == "running_low"))
+        {
         <section class="brief-card">
             <h2>@Icons.Get("record", 16) To order <span class="count">@toOrder.Count</span></h2>
             @if (toOrder.Count == 0)
@@ -72,6 +198,7 @@
                 </ul>
             }
         </section>
+        }
         <section class="brief-card">
             <h2>@Icons.Get("clock", 16) Waiting on an answer <span class="count">@Model.Waiting.Sum(i => i.Entries.Count(e => e.Waiting || e.RecordPending))</span></h2>
             @if (Model.Waiting.Count == 0)
@@ -87,7 +214,7 @@
                         {
                             <li class="brief-row">
                                 <span class="avatar avatar--@PersonStyle.Slot(item.SpeakerId) avatar--sm" aria-hidden="true">@PersonStyle.Initial(item.SpeakerName)</span>
-                                <span class="brief-text">@(entry.Action?.Summary ?? entry.Title)<span class="brief-who">@item.SpeakerName &middot; @HouseholdTime.TimeOrDate(item.AtUtc, Model.HouseholdZone) &middot; <a href="@(timelineHref)#@item.Key">answer on the timeline</a></span></span>
+                                <span class="brief-text">@(entry.Action?.Summary ?? entry.Title)<span class="brief-who">@item.SpeakerName &middot; @HouseholdTime.TimeOrDate(item.AtUtc, Model.HouseholdZone) &middot; <a href="/Member">answer in the Inbox</a></span></span>
                             </li>
                         }
                     }
@@ -124,6 +251,24 @@
                 <p class="note" style="margin-top:0.75rem">@lookupAnswer</p>
             }
             <p class="muted small" style="margin-top:0.5rem">Answered from the record only, and only from entries @first may see.</p>
+        </section>
+
+        <section class="brief-card">
+            <h2>@Icons.Get("record", 16) Plans <span class="count">@Model.OpenPlans.Count</span><a class="card-more" href="/Plans">Open Plans &rarr;</a></h2>
+            @if (Model.OpenPlans.Count == 0)
+            {
+                <p class="muted small">Nothing is being arranged right now. Plans start from a message like &ldquo;What are we having for dinner tonight?&rdquo;</p>
+            }
+            else
+            {
+                <ul class="brief-list">
+                    @foreach (var plan in Model.OpenPlans)
+                    {
+                        var open = plan.Elements.Count(e => e.State == PlanElementState.Open);
+                        <li>@plan.Label@(plan.AnchorAtLocal is DateTime at ? $" · {at:h:mm tt}" : "") &middot; @(open == 0 ? "everything agreed" : open == 1 ? "1 item waiting" : $"{open} items waiting")</li>
+                    }
+                </ul>
+            }
         </section>
 
         <section class="brief-card brief-card--wide">

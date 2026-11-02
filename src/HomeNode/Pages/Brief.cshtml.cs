@@ -40,9 +40,21 @@ public class BriefModel : PageModel
     public List<ActivityItem> Waiting { get; private set; } = new();
     public TimeZoneInfo HouseholdZone { get; private set; } = HouseholdTime.ZoneFor(null);
 
+    // "What needs attention": the house's own checks (no model, always)
+    // and Muse Wonder's review of the shared record, when asked for.
+    public List<HomeNode.Services.Models.ReviewFinding> HouseFindings { get; private set; } = new();
+    public ModelCall? WonderCall { get; private set; }
+    public HomeNode.Services.Models.WonderResult? Wonder { get; private set; }
+    public bool WonderAvailable { get; private set; }
+    public int WonderMinutes { get; private set; } = 10;
+    public Dictionary<int, (string Words, string Who)> Cited { get; private set; } = new();
+    public Dictionary<int, string> SupplyNames { get; private set; } = new();
+    public List<Plan> OpenPlans { get; private set; } = new();
+
     public async Task<IActionResult> OnGetAsync()
     {
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
+        PersonId = CurrentPerson.Resolve(HttpContext, PersonId, People);
         // A briefing belongs to one named person. With no reader
         // named, the page defaults to Daniel, the household's
         // route person, so it never opens empty; naming anyone
@@ -86,7 +98,53 @@ public class BriefModel : PageModel
         var feed = await new ActivityService(_db).BuildAsync(viewerId, take: 60);
         Waiting = feed.Items.Where(i => i.NeedsDecision).Take(5).ToList();
         Recent = feed.Items.Take(8).ToList();
+        OpenPlans = await _db.Plans.Include(p => p.Elements)
+            .Where(p => p.State != PlanState.Completed && p.State != PlanState.Dropped && p.State != PlanState.Superseded)
+            .OrderByDescending(p => p.Id).Take(3).ToListAsync();
+
+        // The review needs the request's services; a page model built
+        // outside a request (the suites) has none, and shows no review.
+        if (HttpContext?.RequestServices.GetService(typeof(HomeNode.Services.Models.ReviewService))
+            is HomeNode.Services.Models.ReviewService reviews)
+        {
+            WonderAvailable = reviews.WonderAvailable;
+            if (HttpContext.RequestServices.GetService(typeof(HomeNode.Services.Models.MetaApi)) is HomeNode.Services.Models.MetaApi api)
+            {
+                WonderMinutes = api.Models.ReviewMinutesBetween;
+            }
+            var slice = await reviews.SliceForAsync(viewerId);
+            if (slice is not null)
+            {
+                HouseFindings = HomeNode.Services.Models.ReviewService.HouseFindings(slice, viewerId);
+                foreach (var ev in slice.Events)
+                {
+                    var who = People.FirstOrDefault(p => p.Id == ev.AuthorPersonId);
+                    Cited[ev.Id] = (ev.Body, NameWording.First(who?.DisplayName));
+                }
+                SupplyNames = slice.Supplies.ToDictionary(x => x.Id, x => x.Name);
+            }
+            WonderCall = await reviews.LatestWonderAsync(viewerId);
+            Wonder = WonderCall is null ? null : HomeNode.Services.Models.ReviewService.Read(WonderCall);
+        }
         return Page();
+    }
+
+    // Ask Muse Wonder to look over the shared record as this person.
+    // A review from the last few minutes is shown again rather than
+    // asked again. Nothing in a review is acted on by the house.
+    public async Task<IActionResult> OnPostReviewAsync(int personId)
+    {
+        if (HttpContext?.RequestServices.GetService(typeof(HomeNode.Services.Models.ReviewService))
+            is HomeNode.Services.Models.ReviewService reviews && reviews.WonderAvailable
+            && await _db.Persons.AnyAsync(p => p.Id == personId))
+        {
+            var slice = await reviews.SliceForAsync(personId);
+            if (slice is not null)
+            {
+                await reviews.AskWonderAsync(slice, personId, HttpContext.RequestAborted);
+            }
+        }
+        return RedirectToPage(new { PersonId = personId });
     }
 
     public async Task<IActionResult> OnPostLookupAsync(int askerPersonId, int subjectPersonId)

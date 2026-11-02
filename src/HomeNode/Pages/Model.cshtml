@@ -3,9 +3,10 @@
 @using HomeNode.Data
 @using HomeNode.Services
 @{
-    ViewData["Title"] = "Model";
+    ViewData["Title"] = "The models";
     var stats = Model.Stats;
-    var lensView = new LensView("/Model", "viewerId", Model.ViewerId, Model.People, true);
+    // The person this page shows, for the shell's person switcher.
+    ViewData["AsPersonId"] = Model.ViewerId;
     var recentOptions = new TraceOptions
     {
         PagePath = "/Timeline",
@@ -35,17 +36,59 @@
     };
 }
 
+@{
+    var liveSpark = stats.Engines.FirstOrDefault(e => e.Engine == ModelReadingEngine.Live);
+    var mockSpark = stats.Engines.FirstOrDefault(e => e.Engine == ModelReadingEngine.Mock);
+    Model.Calls.TryGetValue(ModelCallPurpose.Hear, out var hearStat);
+    Model.Calls.TryGetValue(ModelCallPurpose.Review, out var reviewStat);
+    string CallLine(HomeNode.Pages.ModelPageModel.CallStat? c, string noun) => c is null
+        ? $"No {noun}s yet on this instance."
+        : $"{c.Count} {noun}{(c.Count == 1 ? "" : "s")} · middle one {Ms(c.MedianMs)}{(c.Failed > 0 ? $" · {c.Failed} did not answer" : "")}";
+    var modelsCallable = Model.Live && Model.KeyPresent;
+}
 <div class="page-head">
-    <span class="eyebrow">@Icons.Get("spark", 13) Under the hood</span>
-    <h1>How Tellhouse uses @(Model.Live ? "Muse Spark" : "its model")</h1>
-    @if (Model.Live)
-    {
-        <p class="lede">Tellhouse does not chat. Every message here is read once by Meta's Muse Spark into a typed record that the house's own code then checks, fences, and acts on only after a person says yes. This page shows the setup this instance runs, the path every message takes, and what the model has done here so far.</p>
-    }
-    else
-    {
-        <p class="lede">Tellhouse does not chat. In the live configuration every message is read once by Meta's Muse Spark into a typed record that the house's own code then checks, fences, and acts on only after a person says yes. This instance runs the local stand-in, which speaks the same contract without calling a model. The path, the checks, and the counts below are the same either way.</p>
-    }
+    <span class="eyebrow">@Icons.Get("spark", 13) Behind the scenes</span>
+    <h1>The models in this house</h1>
+    <p class="lede">Tellhouse does not chat. Each of Meta&rsquo;s models has one job at one step of the household&rsquo;s loop, through the Meta Model API. Private things, anything about health or medicine or marked Private, are kept away from every model and written down by the house&rsquo;s own rules. The model proposes; the house&rsquo;s code and a person decide.</p>
+</div>
+
+<div class="model-rows">
+    <article class="model-row model-row--model">
+        <span class="model-step">Hear</span>
+        <div class="model-main">
+            <h2>@Icons.Get("mic", 16) Muse Voice Transcribe <code>@Model.Models.VoiceModel</code></h2>
+            <p>Tap the mic on Home and speak. The clip goes to Meta&rsquo;s transcription in push-to-talk mode, with the household&rsquo;s own names and supplies as keywords, and the words come back into the message box to check before sending. The audio is never stored.</p>
+            <p class="model-never">@Icons.Get("lock", 13) Off while Private is on.</p>
+        </div>
+        <p class="model-count">@(modelsCallable ? CallLine(hearStat, "clip") : "Available on a Live instance.")</p>
+    </article>
+    <article class="model-row model-row--model">
+        <span class="model-step">Read</span>
+        <div class="model-main">
+            <h2>@Icons.Get("spark", 16) Muse Spark <code>@Model.ModelId</code></h2>
+            <p>Reads each message once into typed entries (who, what, when, which supply) and at most one proposed action, under a strict JSON schema. The house&rsquo;s code checks every field before anything is written.</p>
+            <p class="model-never">@Icons.Get("lock", 13) Never given a private or health-shaped message.</p>
+        </div>
+        <p class="model-count">@(liveSpark is not null ? $"{liveSpark.Count} reading{(liveSpark.Count == 1 ? "" : "s")} · middle one {Ms(liveSpark.MedianMs)}" : mockSpark is not null ? $"{mockSpark.Count} read by the local stand-in (no model call)" : "No readings yet.")</p>
+    </article>
+    <article class="model-row model-row--private">
+        <span class="model-step">Keep private</span>
+        <div class="model-main">
+            <h2>@Icons.Get("lock", 16) No model</h2>
+            <p>A message about a body, a medicine, a doctor or how someone feels inside, or anything marked Private, is read by the house&rsquo;s own deterministic rules on this server. There is no fallback to a model: if those rules fail, nothing is saved and nothing is sent anywhere.</p>
+            <p class="model-never">@Icons.Get("shield", 13) The rule errs toward private: a near miss costs only the model&rsquo;s reading.</p>
+        </div>
+        <p class="model-count">@(Model.PrivateReadings == 1 ? "1 message kept private" : $"{Model.PrivateReadings} messages kept private")</p>
+    </article>
+    <article class="model-row model-row--model">
+        <span class="model-step">Review</span>
+        <div class="model-main">
+            <h2>@Icons.Get("bulb", 16) Muse Wonder <code>@Model.Models.ReviewModel</code></h2>
+            <p>On Briefing, a person can ask Meta&rsquo;s reasoning model to look over the shared record they may see: two people claiming the same pickup, a claim that is slipping, a supply that runs out before an order could arrive. Every finding must cite the entries it relies on, or the house drops it; a draft only fills the message box.</p>
+            <p class="model-never">@Icons.Get("lock", 13) Never shown anything private, health-shaped, or a medicine.</p>
+        </div>
+        <p class="model-count">@(modelsCallable ? CallLine(reviewStat, "review") + (Model.ReviewFindingsKept + Model.ReviewFindingsDropped > 0 ? $" · {Model.ReviewFindingsKept} findings kept, {Model.ReviewFindingsDropped} dropped by the house's checks" : "") : "Available on a Live instance.")</p>
+    </article>
 </div>
 
 <div class="panel">
@@ -75,8 +118,12 @@
         <dd>temperature 0 &middot; reasoning effort low &middot; up to 4,096 completion tokens</dd>
         <dt>Context per message</dt>
         <dd>The household's people, tracked supplies, schedules, alert levels, glossary, and the recent entries the speaker is allowed to see, fenced by code before the model receives anything</dd>
-        <dt>Reserved</dt>
-        <dd><code>@Model.ClarificationModelId</code> (Muse Wonder) is named for a clarification role; this build never calls it</dd>
+        <dt>Review</dt>
+        <dd><code>@Model.Models.ReviewModel</code> (Muse Wonder), when a person asks on Briefing: strict JSON findings, reasoning effort @Model.Models.ReviewEffort, at most one review per person every @Model.Models.ReviewMinutesBetween minutes</dd>
+        <dt>Hearing</dt>
+        <dd><code>@Model.Models.VoiceModel</code> (Muse Voice Transcribe) at <code>api.meta.ai/v1@(Model.Models.VoicePath)</code>: 16 kHz mono WAV, push to talk, up to a minute</dd>
+        <dt>Private messages</dt>
+        <dd>Read by the house&rsquo;s own rules on this server; no model is called for them</dd>
     </dl>
 </div>
 
@@ -140,7 +187,6 @@
     <h2>What the model has done here</h2>
     <p>Counted from the readings on file. Messages that wrote nothing (questions, requests to clarify) are counted without their words, because they leave nothing on the record.</p>
 </div>
-<partial name="_Lens" model="lensView" />
 <div class="stats">
     <div class="stat stat--model"><span class="stat-value">@stats.Total</span><span class="stat-label">messages read</span></div>
     <div class="stat"><span class="stat-value">@withEntries</span><span class="stat-label">became record entries</span></div>

@@ -32,15 +32,28 @@ builder.Services.AddScoped<AudienceDecisionService>();
 // local extractor (development, tests, the demo suite; no credit
 // spent), "Live" calls the Meta Model API. Default is Mock.
 builder.Services.Configure<ExtractionOptions>(builder.Configuration.GetSection("Extraction"));
+// Every path reads through the router: a private message (the Private
+// switch, or health-shaped words) goes to the house's own
+// deterministic reader and never to a model; see PrivacyRule.
 builder.Services.AddScoped<IExtractionClient>(sp =>
 {
     var options = sp.GetRequiredService<IOptions<ExtractionOptions>>().Value;
-    return options.Mode.Equals("Live", StringComparison.OrdinalIgnoreCase)
+    IExtractionClient model = options.Mode.Equals("Live", StringComparison.OrdinalIgnoreCase)
         ? ActivatorUtilities.CreateInstance<MetaExtractionClient>(sp)
         : new MockExtractionClient();
+    return new RoutedExtractionClient(model, new MockExtractionClient());
 });
 builder.Services.AddScoped<ExtractionContextBuilder>();
 builder.Services.AddScoped<ExtractionService>();
+// The house's other Meta models (Services/Models): hearing (Muse Voice
+// Transcribe), reviewing (Muse Wonder), seeing (SAM 3.1) and drawing
+// (Muse Image), all through the Meta Model API with the same key, and
+// only on a Live instance. Model ids and paths live under "Models".
+builder.Services.Configure<HomeNode.Services.Models.ModelOptions>(builder.Configuration.GetSection("Models"));
+builder.Services.AddSingleton<HomeNode.Services.Models.MetaApi>();
+builder.Services.AddScoped<HomeNode.Services.Models.IVoiceClient, HomeNode.Services.Models.MetaVoiceClient>();
+builder.Services.AddScoped<HomeNode.Services.Models.ReviewService>();
+builder.Services.AddScoped<NeedsYouService>();
 builder.Services.AddScoped<PlanAssemblyService>();
 builder.Services.AddScoped<RunnerTaskService>();
 builder.Services.AddScoped<MemberDeliveryService>();
@@ -209,6 +222,33 @@ using (var scope = app.Services.CreateScope())
             """;
         createReadings.ExecuteNonQuery();
     }
+    // The model calls table (Data/ModelCall.cs): the models' work that
+    // is not a message reading (hearing, reviewing, seeing, drawing).
+    // Same reasoning as the readings table: created when absent, in
+    // the shape EnsureCreated gives a new file, no foreign keys.
+    using (var createCalls = conn.CreateCommand())
+    {
+        createCalls.CommandText = """
+            CREATE TABLE IF NOT EXISTS "ModelCalls" (
+                "Id" INTEGER NOT NULL CONSTRAINT "PK_ModelCalls" PRIMARY KEY AUTOINCREMENT,
+                "HouseholdId" INTEGER NOT NULL,
+                "Purpose" TEXT NOT NULL,
+                "Model" TEXT NOT NULL,
+                "Engine" TEXT NOT NULL,
+                "Outcome" TEXT NOT NULL,
+                "ElapsedMs" INTEGER NOT NULL,
+                "PersonId" INTEGER NULL,
+                "ReadingId" INTEGER NULL,
+                "DeliveryId" INTEGER NULL,
+                "EventId" INTEGER NULL,
+                "OutputJson" TEXT NULL,
+                "Image" BLOB NULL,
+                "ImageType" TEXT NULL,
+                "AtUtc" TEXT NOT NULL
+            )
+            """;
+        createCalls.ExecuteNonQuery();
+    }
     conn.Close();
     DbSeeder.Seed(db);
 }
@@ -228,6 +268,18 @@ app.UseAuthorization();
 app.MapStaticAssets();
 app.MapRazorPages()
    .WithStaticAssets();
+
+// The person switcher (Services/CurrentPerson.cs): choose whose eyes
+// the demo shows the house through, then go back to the page you were
+// on. A person id from the household, or none for the household view.
+// It sets a preference cookie only; it grants nothing, and every page
+// still fences what it shows to the person chosen.
+app.MapGet("/as/{personId:int?}", async (int? personId, string? @return, HttpContext http, AppDbContext db) =>
+{
+    var valid = personId is int id && await db.Persons.AnyAsync(p => p.Id == id);
+    CurrentPerson.Set(http, valid ? personId : null);
+    return Results.LocalRedirect(CurrentPerson.SafeReturn(@return));
+});
 
 // The HTTP door adapter the stand-ins speak (the stand-ins'
 // frozen surface: /door/knock, /door/card, /door/confirm,

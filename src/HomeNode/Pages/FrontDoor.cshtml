@@ -26,14 +26,43 @@
     var pendingDefaultHolderId = Model.PendingDefaultHolderId;
     var viewer = Model.People.FirstOrDefault(p => p.Id == Model.ViewerId);
     var viewerFirst = NameWording.First(viewer?.DisplayName);
-    string[] examples =
+    // Lines to try, chosen for whoever is speaking. Each one is read
+    // correctly by the local stand-in too, so the demo works off Live;
+    // the health-shaped ones show the private path (no model reads them).
+    var speakerFirst = NameWording.First(Model.People.FirstOrDefault(p => p.Id == defaultSpeaker)?.DisplayName);
+    string[] examples = speakerFirst switch
     {
-        "Ask Daniel to pick up milk on his way home",
-        "I'll get Mia at 3",
-        "We're out of wipes",
-        "Remind me on Friday to call the pharmacy"
+        "Margaret" => new[]
+        {
+            "Ask Daniel to pick up milk on his way home",
+            "My knee hurts when I stand up",
+            "Daniel's turn to take the bins out, the truck comes at six.",
+            "Remind me on Friday to call the pharmacy"
+        },
+        "Daniel" => new[]
+        {
+            "I'll get Mia at 3",
+            "We're out of wipes",
+            "What are we having for dinner tonight?",
+            "Where is Lisa?"
+        },
+        "Lisa" => new[]
+        {
+            "Ask Daniel to bring the ladder in from the garage",
+            "I'll get Mia at 3",
+            "We're out of wipes",
+            "What are we having for dinner tonight?"
+        },
+        _ => new[]
+        {
+            "Ask Daniel to pick up milk on his way home",
+            "I'll get Mia at 3",
+            "We're out of wipes",
+            "My knee hurts when I stand up"
+        }
     };
-    var lensView = new LensView("/", "viewerId", Model.ViewerId, Model.People, true);
+    // The person this page shows, for the shell's person switcher.
+    ViewData["AsPersonId"] = Model.ViewerId;
     var justNowView = Model.JustNow is null ? null : new TraceView(Model.JustNow, new TraceOptions
     {
         PagePath = "/",
@@ -54,17 +83,6 @@
         DefaultActorId = Model.Featured.SpeakerId,
         Zone = Model.HouseholdZone
     });
-    var timelineHref = Model.ViewerId is int timelineViewer ? $"/Timeline?ActorId={timelineViewer}" : "/Timeline";
-    var waitingHref = Model.ViewerId is int waitingViewer ? $"/Timeline?show=waiting&ActorId={waitingViewer}" : "/Timeline?show=waiting";
-    var lens = new TraceOptions
-    {
-        PagePath = "/",
-        ActorField = "actorPersonId",
-        ActorId = Model.ViewerId,
-        LensField = "viewerId",
-        Zone = Model.HouseholdZone,
-        Compact = true
-    };
 }
 
 <section class="home-hero">
@@ -77,38 +95,60 @@
         <a class="engine-badge engine-badge--mock" asp-page="/Model"><span class="dot" aria-hidden="true"></span>Read by the local stand-in &middot; no model calls</a>
     }
     <h1>Tell the house</h1>
-    <p class="lede">Say what is happening, in plain words. @(live ? "Meta's Muse Spark" : "The model") turns it into a structured record: who it is about, what needs doing, when, and who should hear about it. The house's own rules decide who can see it, and nothing is sent until a person says yes.</p>
+    <p class="lede">Say what is happening, in your own words. @(live ? "Meta's Muse Spark" : "The model") reads it into the household's record, the house's own rules decide who may see it, and nothing is passed on until someone says yes. Built so that Margaret can say what she needs herself.</p>
 </section>
 
 <div class="composer">
-    <form method="post" asp-page-handler="Tell" data-busy data-busy-label="@(live ? "Muse Spark is reading…" : "Reading…")">
-        <div class="composer-top">
-            <label>
-                Sending as
-                <select name="speakerId">
-                    @foreach (var person in Model.People)
-                    {
-                        if (defaultSpeaker == person.Id)
-                        {
-                            <option value="@person.Id" selected>@NameWording.First(person.DisplayName)</option>
-                        }
-                        else
-                        {
-                            <option value="@person.Id">@NameWording.First(person.DisplayName)</option>
-                        }
-                    }
-                    <option value="">No name given</option>
-                </select>
-            </label>
-            @if (Model.Household is not null)
-            {
-                <span class="muted small">Ellis household &middot; @Model.People.Count people</span>
-            }
-        </div>
+    <form method="post" asp-page-handler="Tell" data-busy data-busy-label="@(live ? "Muse Spark is reading…" : "Reading…")" data-private-label="Reading privately…" data-composer-form>
+        <fieldset class="speaker-pick">
+            <legend>Who&rsquo;s speaking?</legend>
+            <div class="speaker-faces">
+                @foreach (var person in Model.People)
+                {
+                    var first = NameWording.First(person.DisplayName);
+                    <label class="speaker-face">
+                        <input type="radio" name="speakerId" value="@person.Id" checked="@(defaultSpeaker == person.Id)" />
+                        <span class="avatar avatar--@PersonStyle.Slot(person.Id)" aria-hidden="true">@PersonStyle.Initial(first)</span>
+                        <span class="speaker-name">@first</span>
+                    </label>
+                }
+                <label class="speaker-face speaker-face--none">
+                    <input type="radio" name="speakerId" value="" checked="@(defaultSpeaker is null)" />
+                    <span class="avatar avatar--0" aria-hidden="true">?</span>
+                    <span class="speaker-name">No name</span>
+                </label>
+            </div>
+        </fieldset>
+        @if (Model.StartText is not null)
+        {
+            <p class="start-note">@Icons.Get(Model.StartIsWonderDraft ? "bulb" : "shield", 14) @(Model.StartIsWonderDraft ? "Drafted by Muse Wonder from its review. Change anything you like; nothing is sent until you press Send and then say yes." : "Suggested by the house's own rules. Change anything you like before you send it.")</p>
+        }
         <label>
             <span class="visually-hidden">Message to the house</span>
-            <textarea name="telling" rows="2" data-composer placeholder="Try &ldquo;Ask Daniel to pick up milk on his way home&rdquo;"></textarea>
+            <textarea name="telling" rows="2" data-composer placeholder="Try &ldquo;Ask Daniel to pick up milk on his way home&rdquo;">@Model.StartText</textarea>
         </label>
+        <input type="hidden" name="heardCallId" value="" data-heard-call />
+        <input type="hidden" name="heardEdited" value="false" data-heard-edited />
+        @if (Model.StartIsWonderDraft)
+        {
+            <input type="hidden" name="draftCallId" value="@Model.Draft" />
+            <input type="hidden" name="draftIndex" value="@Model.DraftIndex" />
+            <input type="hidden" name="draftEdited" value="false" data-draft-edited data-draft-text="@Model.StartText" />
+        }
+        <div class="composer-tools">
+            @if (Model.VoiceAvailable)
+            {
+                <button type="button" class="mic" data-mic aria-pressed="false" title="Tap to talk, tap again to stop. Muse Voice Transcribe on the Meta Model API turns it into words you can check before sending.">
+                    @Icons.Get("mic", 16) <span data-mic-label>Tap to talk</span>
+                </button>
+            }
+            <label class="private-switch" title="No model reads a private message. The house's own rules write it down, in your words.">
+                <input type="checkbox" name="keepPrivate" value="true" data-private />
+                <span class="switch-track" aria-hidden="true"></span>
+                @Icons.Get("lock", 14) <span>Private</span>
+            </label>
+            <span class="tool-note" data-tool-note>@(Model.VoiceAvailable ? "Speak or type." : "")</span>
+        </div>
         <div class="composer-foot">
             <div class="examples" aria-label="Examples to try">
                 <span class="examples-label">Try</span>
@@ -121,7 +161,7 @@
         </div>
     </form>
 </div>
-<p class="composer-note">@(live ? "Muse Spark" : "The model") proposes. The house's rules decide who can see it. A person confirms before anything is sent.</p>
+<p class="composer-note">@(live ? "Muse Spark" : "The model") reads it unless it is private: anything about health or medicine, or anything you mark Private, is read by the house&rsquo;s own rules and no model. A person says yes before anything is passed on.</p>
 
 @if (Model.JustNow is not null)
 {
@@ -272,130 +312,45 @@ else if (houseReply is not null)
     }
 }
 
-<ol class="flow" aria-label="How a message moves through the house">
-    <li class="flow--person">
-        <span class="flow-icon">@Icons.Get("person")</span>
-        <strong>1. Someone says it</strong>
-        <span class="flow-text">On this page, or through their own assistant over the sealed relay.</span>
-    </li>
-    <li class="flow--model">
-        <span class="flow-icon">@Icons.Get("spark")</span>
-        <strong>2. @(live ? "Muse Spark" : "The model") reads it</strong>
-        <span class="flow-text">Into typed entries: who, what, when, and any action to propose.</span>
-    </li>
-    <li class="flow--house">
-        <span class="flow-icon">@Icons.Get("shield")</span>
-        <strong>3. House rules check it</strong>
-        <span class="flow-text">Verbatim words, real people only, and who is allowed to see it.</span>
-    </li>
-    <li class="flow--wait">
-        <span class="flow-icon">@Icons.Get("clock")</span>
-        <strong>4. A person decides</strong>
-        <span class="flow-text">A proposal waits for a yes. Silence is never a yes.</span>
-    </li>
-    <li class="flow--delivery">
-        <span class="flow-icon">@Icons.Get("send")</span>
-        <strong>5. It reaches the person</strong>
-        <span class="flow-text">In their inbox, or sealed to their own assistant.</span>
-    </li>
-</ol>
-
-<div class="section-head">
-    <h2>The household right now</h2>
-    <p>Choose whose view to see. The household view shows shared entries only; a person's view shows what that person may see, and lets you answer as them.</p>
+@{
+    var needsHref = "/Member";
+    var houseBits = new List<string>();
+    if (Model.OpenClaimCount > 0) { houseBits.Add(Model.OpenClaimCount == 1 ? "1 claim open" : $"{Model.OpenClaimCount} claims open"); }
+    if (Model.LowSupplies.Count > 0) { houseBits.Add($"running low: {string.Join(", ", Model.LowSupplies)}"); }
+    if (Model.OpenPlanItems > 0) { houseBits.Add(Model.OpenPlanItems == 1 ? "1 plan item waiting" : $"{Model.OpenPlanItems} plan items waiting"); }
+}
+<div class="next-steps">
+    <a class="next-card next-card--needs" href="@needsHref">
+        <span class="next-icon">@Icons.Get("inbox")</span>
+        <span class="next-body">
+            <strong>Needs you</strong>
+            <span>@(viewer is null ? "Choose who you are at the top to see what is waiting on them." : Model.NeedsCount == 0 ? $"Nothing is waiting on {viewerFirst}." : Model.NeedsCount == 1 ? $"1 thing is waiting on {viewerFirst}." : $"{Model.NeedsCount} things are waiting on {viewerFirst}.")</span>
+        </span>
+        <span class="next-arrow">@Icons.Get("arrow")</span>
+    </a>
+    <a class="next-card next-card--house" href="/Brief">
+        <span class="next-icon">@Icons.Get("shield")</span>
+        <span class="next-body">
+            <strong>The house now</strong>
+            <span>@(houseBits.Count == 0 ? "Who is on what, what is running low, and what Muse Wonder notices." : string.Join(" · ", houseBits))</span>
+        </span>
+        <span class="next-arrow">@Icons.Get("arrow")</span>
+    </a>
+    <a class="next-card next-card--record" href="/Timeline">
+        <span class="next-icon">@Icons.Get("record")</span>
+        <span class="next-body">
+            <strong>The record</strong>
+            <span>Every message, what read it, and where it went.</span>
+        </span>
+        <span class="next-arrow">@Icons.Get("arrow")</span>
+    </a>
 </div>
-<partial name="_Lens" model="lensView" />
-
-@if (Model.PendingAsks.Count > 0)
-{
-    <div class="section-head"><h2>Needs your answer</h2></div>
-    <div class="waiting-list">
-        @foreach (var ask in Model.PendingAsks)
-        {
-            <div class="waiting-row">
-                <div class="waiting-text">
-                    <strong>Who should see this entry?</strong>
-                    <span>Until you choose, only the people it names can see it.</span>
-                </div>
-                <form method="post">
-                    <input type="hidden" name="askId" value="@ask.Id" />
-                    <input type="hidden" name="actorPersonId" value="@Model.ViewerId" />
-                    <label class="decide-as">
-                        <span class="visually-hidden">Who should see this entry</span>
-                        <select name="choice">
-                            <option value="Private">Only the people it names</option>
-                            <option value="Household">Everyone in the household</option>
-                        </select>
-                    </label>
-                    <button type="submit" formaction="?handler=AnswerAsk" class="primary">Save choice</button>
-                </form>
-            </div>
-        }
-    </div>
-}
-
-@if (Model.Waiting.Count > 0)
-{
-    <div class="section-head">
-        <h2>Waiting on a person</h2>
-        <a class="more" href="@waitingHref">All waiting &rarr;</a>
-        <p>The model proposed these. Nothing happens until someone answers.</p>
-    </div>
-    <div class="waiting-list">
-        @foreach (var item in Model.Waiting)
-        {
-            foreach (var entry in item.Entries.Where(e => e.Waiting || e.RecordPending))
-            {
-                <div class="waiting-row">
-                    <span class="avatar avatar--@PersonStyle.Slot(item.SpeakerId)" aria-hidden="true">@PersonStyle.Initial(item.SpeakerName)</span>
-                    <div class="waiting-text">
-                        <strong>@(entry.Action?.Summary ?? entry.Title)</strong>
-                        <span>@item.SpeakerName &middot; @HouseholdTime.TimeOrDate(item.AtUtc, Model.HouseholdZone) &middot; <a href="@(timelineHref)#@item.Key">see the trace</a></span>
-                    </div>
-                    @if (Model.ViewerId is int actor)
-                    {
-                        <form method="post">
-                            <input type="hidden" name="eventId" value="@entry.Event.Id" />
-                            <input type="hidden" name="actorPersonId" value="@actor" />
-                            <input type="hidden" name="viewerId" value="@actor" />
-                            <button type="submit" class="primary" formaction="?handler=Confirm">@(entry.Action?.ConfirmLabel ?? "Confirm")</button>
-                            <button type="submit" formaction="?handler=Decline">@(entry.Action is null ? "Not right" : "Don’t send")</button>
-                        </form>
-                    }
-                </div>
-            }
-        }
-    </div>
-    @if (Model.ViewerId is null)
-    {
-        <p class="muted small">Choose who you are under <strong>Viewing as</strong> to answer.</p>
-    }
-}
-
-<div class="section-head">
-    <h2>Latest activity</h2>
-    <a class="more" href="@timelineHref">The full timeline &rarr;</a>
-    <p>Each message, what @engineName made of it, and what happened next.@(viewer is null ? " The household view shows shared entries only." : $" Shown as {viewerFirst} may see it.")</p>
-</div>
-@if (Model.Activity.Count == 0)
-{
-    <div class="empty"><p>Nothing here yet. Messages you send show up here, step by step.</p></div>
-}
-else
-{
-    <div class="trace-list">
-        @foreach (var item in Model.Activity)
-        {
-            <partial name="_Trace" model="new TraceView(item, lens)" />
-        }
-    </div>
-}
 
 @if (Model.StandIns.Count > 0)
 {
     <div class="section-head">
-        <h2>Messages from an assistant</h2>
-        <p>Members can talk to the house through their own AI assistant. A note travels sealed through the relay and is read by the same pipeline as this page.</p>
+        <h2>From a member&rsquo;s own assistant</h2>
+        <p>Members can reach the house through their own AI assistant. A note travels sealed through the relay, which cannot read it, and the house reads it the same way it reads this page.</p>
     </div>
     @if (testSendNote is not null)
     {

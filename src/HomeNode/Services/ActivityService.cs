@@ -152,6 +152,7 @@ public class ActivityService
         ModelReadingEngine.Live => "Muse Spark",
         ModelReadingEngine.Mock => "Local stand-in",
         ModelReadingEngine.Rule => "Turn rule",
+        ModelReadingEngine.Private => "No model (private)",
         _ => engine
     };
 
@@ -236,8 +237,20 @@ public class ActivityService
             .Where(a => a.EventId != null && ids.Contains(a.EventId.Value))
             .ToListAsync();
 
+        // The other models' work on these messages: the voice clip a
+        // message was heard from, and the Muse Wonder finding it was
+        // drafted from.
+        var readingIds = readings.Select(r => r.Id).ToList();
+        var heard = await _db.ModelCalls
+            .Where(c => c.Purpose == ModelCallPurpose.Hear && c.ReadingId != null && readingIds.Contains(c.ReadingId.Value))
+            .ToListAsync();
+        var reviews = await _db.ModelCalls
+            .Where(c => c.Purpose == ModelCallPurpose.Review && c.OutputJson != null && c.OutputJson.Contains("\"SentReadingId\":"))
+            .OrderByDescending(c => c.Id).Take(200)
+            .ToListAsync();
+
         return new TraceContext(people, zone, readings, events, actions, audits, deliveries,
-            outbox, promises, adjustments);
+            outbox, promises, adjustments, heard, reviews);
     }
 
     internal static List<int> ParseIds(string? json)
@@ -277,14 +290,28 @@ public class ActivityService
         private readonly ILookup<int, OutboxRow> _outbox;
         private readonly List<Promise> _promises;
         private readonly ILookup<int, SupplyAdjustment> _adjustments;
+        private readonly Dictionary<int, ModelCall> _heardByReading;
+        private readonly Dictionary<int, (int CallId, Services.Models.ReviewFinding Finding)> _draftByReading = new();
 
         public TimeZoneInfo Zone { get; }
 
         public TraceContext(List<Person> people, TimeZoneInfo zone, List<ModelReading> readings,
             List<Event> events, List<EventAction> actions, List<EventAudit> audits,
             List<AlertDelivery> deliveries, List<OutboxRow> outbox, List<Promise> promises,
-            List<SupplyAdjustment> adjustments)
+            List<SupplyAdjustment> adjustments, List<ModelCall> heard, List<ModelCall> reviews)
         {
+            _heardByReading = heard.GroupBy(c => c.ReadingId!.Value).ToDictionary(g => g.Key, g => g.First());
+            foreach (var call in reviews)
+            {
+                var result = Services.Models.ReviewService.Read(call);
+                foreach (var finding in result?.Findings ?? new())
+                {
+                    if (finding.SentReadingId is int sent && !_draftByReading.ContainsKey(sent))
+                    {
+                        _draftByReading[sent] = (call.Id, finding);
+                    }
+                }
+            }
             _people = people;
             _byId = people.ToDictionary(p => p.Id);
             Zone = zone;
@@ -356,10 +383,12 @@ public class ActivityService
                 "federated" => origin is not null
                     ? $"{origin}, sealed relay"
                     : speakerName.Length > 0 ? $"{speakerName}'s assistant, sealed relay" : "an assistant, sealed relay",
-                "voice" => "Voice",
+                "voice" => "Home, by voice",
                 _ => reading.Channel
             };
             var marks = StatedMarksByIndex(reading.OutputJson);
+            _heardByReading.TryGetValue(reading.Id, out var heardCall);
+            var drafted = _draftByReading.TryGetValue(reading.Id, out var draft) ? draft : default;
             var traced = entries.Select((e, i) => Describe(e, marks.GetValueOrDefault(i), seeded: false)).ToList();
             var item = new ActivityItem
             {
@@ -374,6 +403,7 @@ public class ActivityService
                 Engine = new TraceEngine
                 {
                     Kind = reading.Engine is ModelReadingEngine.Live or ModelReadingEngine.Mock or ModelReadingEngine.Rule
+                        or ModelReadingEngine.Private
                         ? reading.Engine
                         : "other",
                     Label = EngineLabel(reading.Engine),
@@ -383,13 +413,36 @@ public class ActivityService
                     CompletionTokens = reading.CompletionTokens,
                     ContextLine = ContextLine(reading.ContextSummary, speakerName),
                     OutputJson = Pretty(reading.OutputJson),
-                    Reply = reading.Reply
+                    Reply = reading.Reply,
+                    PrivateBy = PrivateKind(reading.ContextSummary),
+                    HeardModel = heardCall?.Model,
+                    HeardMs = heardCall?.ElapsedMs,
+                    HeardEdited = heardCall is not null && HeardEdited(heardCall.OutputJson),
+                    DraftCallId = drafted.Finding is null ? null : drafted.CallId,
+                    DraftCites = drafted.Finding?.EntryIds ?? new(),
+                    DraftEdited = drafted.Finding?.SentEdited ?? false
                 },
                 Entries = traced
             };
             SetStatus(item);
             return item;
         }
+
+        // Why a private message was kept from the models, from the
+        // reading's counted summary: "switch" or "rule", never words.
+        private static string? PrivateKind(string? summary)
+        {
+            if (string.IsNullOrWhiteSpace(summary))
+            {
+                return null;
+            }
+            return summary.Contains("\"PrivateBySwitch\"") ? Extraction.PrivacyRule.BySwitch
+                : summary.Contains("\"PrivateByRule\"") ? Extraction.PrivacyRule.ByRule
+                : null;
+        }
+
+        private static bool HeardEdited(string? json) =>
+            json is not null && json.Contains("\"edited\":true", StringComparison.Ordinal);
 
         private ActivityItem FromEntry(Event ev)
         {
@@ -1068,9 +1121,28 @@ public sealed class TraceEngine
     public string? OutputJson { get; init; }
     public string? Reply { get; init; }
 
+    // Kept private (the house's own reader, no model): why.
+    public string? PrivateBy { get; init; }
+
+    // Heard by voice before it was read: Muse Voice Transcribe, how
+    // long it took, and whether the person changed the words first.
+    public string? HeardModel { get; init; }
+    public int? HeardMs { get; init; }
+    public bool HeardEdited { get; init; }
+
+    // Drafted by Muse Wonder from a review finding: the review, the
+    // entries the finding cited, and whether the person changed it.
+    public int? DraftCallId { get; init; }
+    public List<int> DraftCites { get; init; } = new();
+    public bool DraftEdited { get; init; }
+
     public bool CalledModel => Kind == ModelReadingEngine.Live;
     public bool HasReading => Kind is ModelReadingEngine.Live or ModelReadingEngine.Mock
-        or ModelReadingEngine.Rule or "other";
+        or ModelReadingEngine.Rule or ModelReadingEngine.Private or "other";
+    // A model (or its local stand-in) read it: not the turn rule, not
+    // the house's private reader.
+    public bool ModelRead => Kind is ModelReadingEngine.Live or ModelReadingEngine.Mock or "other";
+    public bool KeptPrivate => Kind == ModelReadingEngine.Private;
 }
 
 public sealed class TraceEntry

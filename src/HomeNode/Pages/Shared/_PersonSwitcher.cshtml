@@ -1,0 +1,29 @@
+@model HomeNode.Services.PersonSwitcherView
+@using HomeNode.Data
+@using HomeNode.Services
+@*
+    The person switcher: whose eyes the demo shows the house through.
+    One choice for every page, kept in a cookie by /as/{id}. Plain
+    links, so choosing is a navigation, never a form. The household
+    view shows only what is shared with everyone.
+*@
+<nav class="who-bar" aria-label="Whose view of the house you see">
+    <span class="who-label">You are</span>
+    <div class="who-chips">
+        @{
+            var householdCurrent = Model.Current is null;
+        }
+        <a class="who-chip@(householdCurrent ? " active" : "")" href="@CurrentPerson.SwitchHref(null, Model.ReturnTo)" aria-current="@(householdCurrent ? "true" : null)" title="The household view: only what is shared with everyone">
+            <span class="avatar avatar--0 avatar--sm" aria-hidden="true">@Icons.Get("house", 12)</span><span class="who-name">Household</span>
+        </a>
+        @foreach (var person in Model.People)
+        {
+            var current = Model.Current == person.Id;
+            var first = NameWording.First(person.DisplayName);
+            <a class="who-chip@(current ? " active" : "")" href="@CurrentPerson.SwitchHref(person.Id, Model.ReturnTo)" aria-current="@(current ? "true" : null)" title="See the house as @first">
+                <span class="avatar avatar--@PersonStyle.Slot(person.Id) avatar--sm" aria-hidden="true">@PersonStyle.Initial(first)</span><span class="who-name">@first</span>
+            </a>
+        }
+    </div>
+    <span class="who-note">Demo: look through anyone's eyes. In a real house, each person sees only their own.</span>
+</nav>

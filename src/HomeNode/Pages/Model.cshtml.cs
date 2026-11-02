@@ -22,12 +22,25 @@ public class ModelPageModel : PageModel
 {
     private readonly AppDbContext _db;
     private readonly ExtractionOptions _options;
+    private readonly HomeNode.Services.Models.ModelOptions _models;
 
-    public ModelPageModel(AppDbContext db, IOptions<ExtractionOptions> options)
+    public ModelPageModel(AppDbContext db, IOptions<ExtractionOptions> options,
+        IOptions<HomeNode.Services.Models.ModelOptions> models)
     {
         _db = db;
         _options = options.Value;
+        _models = models.Value;
     }
+
+    public HomeNode.Services.Models.ModelOptions Models => _models;
+
+    // The other models' work, counted from ModelCalls: per purpose,
+    // how many calls, how long the middle one took, and how they ended.
+    public sealed record CallStat(string Purpose, int Count, int Done, int Empty, int Failed, int MedianMs);
+    public Dictionary<string, CallStat> Calls { get; private set; } = new();
+    public int PrivateReadings { get; private set; }
+    public int ReviewFindingsKept { get; private set; }
+    public int ReviewFindingsDropped { get; private set; }
 
     [BindProperty(SupportsGet = true)]
     public int? ViewerId { get; set; }
@@ -49,6 +62,27 @@ public class ModelPageModel : PageModel
         var household = await _db.Households.FirstOrDefaultAsync();
         HouseholdZone = HouseholdTime.ZoneFor(household?.TimeZoneId);
         People = await _db.Persons.OrderBy(p => p.Id).ToListAsync();
+        ViewerId = CurrentPerson.Resolve(HttpContext, ViewerId, People);
         Stats = await new ActivityService(_db).StatsAsync(ViewerId);
+        PrivateReadings = await _db.ModelReadings.CountAsync(r => r.Engine == ModelReadingEngine.Private);
+        var calls = await _db.ModelCalls
+            .Where(c => c.Engine == "live")
+            .Select(c => new { c.Purpose, c.Outcome, c.ElapsedMs, c.OutputJson })
+            .ToListAsync();
+        foreach (var group in calls.GroupBy(c => c.Purpose))
+        {
+            var times = group.Where(c => c.Outcome != ModelCallOutcome.Failed).Select(c => c.ElapsedMs).OrderBy(t => t).ToList();
+            Calls[group.Key] = new CallStat(group.Key, group.Count(),
+                group.Count(c => c.Outcome == ModelCallOutcome.Done),
+                group.Count(c => c.Outcome == ModelCallOutcome.Empty),
+                group.Count(c => c.Outcome == ModelCallOutcome.Failed),
+                times.Count == 0 ? 0 : times[times.Count / 2]);
+        }
+        foreach (var review in calls.Where(c => c.Purpose == ModelCallPurpose.Review && c.OutputJson != null))
+        {
+            var result = HomeNode.Services.Models.ReviewService.Read(new ModelCall { OutputJson = review.OutputJson });
+            ReviewFindingsKept += result?.Findings.Count ?? 0;
+            ReviewFindingsDropped += result?.Dropped ?? 0;
+        }
     }
 }

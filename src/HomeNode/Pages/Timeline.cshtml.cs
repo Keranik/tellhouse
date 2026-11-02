@@ -60,6 +60,7 @@ public class TimelineModel : PageModel
 
     public async Task OnGetAsync()
     {
+        ActorId = CurrentPerson.Resolve(HttpContext, ActorId, await _db.Persons.ToListAsync());
         await LoadAsync();
     }
 

@@ -252,7 +252,9 @@ public class ExtractionService
                 ? JsonSerializer.Serialize(written!.Select(e => e.Id).ToList())
                 : null,
             EventCount = withContent ? written!.Count : 0,
-            ContextSummary = withContent ? SummarizeContext(input.Context) : null,
+            ContextSummary = withContent
+                ? SummarizeContext(input.Context, engine == ModelReadingEngine.Private ? PrivacyRule.Decide(input) : null)
+                : null,
             ReadAtUtc = input.RecordedAtUtc ?? input.OccurredAtLocal.UtcDateTime
         };
         _db.ModelReadings.Add(reading);
@@ -262,13 +264,13 @@ public class ExtractionService
 
     // What the engine was given, as counts only: the slice's content
     // never leaves the pipeline through the reading row.
-    private static string? SummarizeContext(ExtractionContext? context)
+    private static string? SummarizeContext(ExtractionContext? context, string? privateBy = null)
     {
         if (context is null)
         {
             return null;
         }
-        return JsonSerializer.Serialize(new Dictionary<string, int>
+        var counts = new Dictionary<string, int>
         {
             ["People"] = context.Persons.Count,
             ["Supplies"] = context.SupplyItems.Count,
@@ -277,7 +279,19 @@ public class ExtractionService
             ["Glossary"] = context.Glossary.Count,
             ["RecentEntries"] = context.RecentEvents.Count,
             ["OpenPrompt"] = context.OpenPrompt is null ? 0 : 1
-        });
+        };
+        // Why a private message was kept from the models: the
+        // person's switch or the house's health-word rule. The kind
+        // only, never the words that tripped it.
+        if (privateBy == PrivacyRule.BySwitch)
+        {
+            counts["PrivateBySwitch"] = 1;
+        }
+        else if (privateBy == PrivacyRule.ByRule)
+        {
+            counts["PrivateByRule"] = 1;
+        }
+        return JsonSerializer.Serialize(counts);
     }
 
     // The engine's output as compact JSON, exactly as returned. A
