@@ -23,12 +23,12 @@ An agent proposes, a human confirms, and there is a written record of both.
 The first load may take a minute while the services wake.
 
 1. Open Home and send a short message, such as “Ask Daniel to pick up the milk.”
-2. Confirm what Tellhouse proposes, then look for the entry in Recent and Timeline. (A plain statement, such as “We're out of milk,” is simply written down; there is nothing to confirm.)
-3. Open Inbox and Connections to see how a message reaches one person and how a member's assistant joins the household.
+2. Watch what happens to it, step by step: what Muse Spark read in your words, the record entry it made, who the house's rules let see it, and the action waiting for a person. Confirm it, then follow it on Timeline. (A plain statement, such as “We're out of milk,” is simply written down; there is nothing to confirm.)
+3. Open Inbox and Connections to see how a message reaches one person and how a member's assistant joins the household, and Model to see how the house uses Muse Spark and what it has read so far.
 
-![Tellhouse Home in the demo: the dark app shell with the household rail on the left, the "Tell the house" message box with its coral Send button, and the start of the Recent list.](docs/images/tellhouse-home-desktop.png)
+![Tellhouse Home in the demo: the household rail on the left, the "Tell the house" message box with example messages, and below it the most recent message traced step by step: the entry the model made, who the house's rules let see it, and the decision waiting on a person.](docs/images/tellhouse-home-desktop.png)
 
-*Screenshot: Tellhouse Home, served from the build in this repository. The rail lists the house's surfaces, the message box is where a person tells the house something in their own words, and Recent shows what the record already holds.*
+*Screenshot: Tellhouse Home, served from the build in this repository, here reading with the local stand-in (no API key; on the live deployment the same trace names Muse Spark, the model id, and the time the reading took, with token counts when the API reports them). Every message is shown as a trace: the words, what the model made of them, what the house's rules decided, and what a person decided.*
 
 ## This demo
 
@@ -45,12 +45,13 @@ The deployed demo uses separate services for the home node, the sealed relay, an
 The house layer's surfaces are:
 
 - **Home:** send a message to the house and ask it questions.
-- **Timeline:** the shared record, newest first.
+- **Timeline:** every message, newest first, traced from the words that came in to where they went.
 - **Briefing:** what matters to one person, filtered by who is asking.
 - **Plans:** what the household is arranging, who agreed, and what is still open.
 - **Claims:** what people have taken on, in their own words.
 - **Inbox:** what the house has delivered to one person.
 - **Connections:** who is connected to the house, and through which assistant.
+- **Model:** how the house uses Muse Spark: the path every message takes, the exact instructions and output schema, and live counts of what it has read.
 
 ## Run it locally
 
