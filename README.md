@@ -22,9 +22,10 @@ An agent proposes, a human confirms, and there is a written record of both.
 
 The first load may take a minute while the services wake.
 
-1. Open Home and send a short message, such as “Ask Daniel to pick up the milk.”
-2. Watch what happens to it, step by step: what Muse Spark read in your words, the record entry it made, who the house's rules let see it, and the action waiting for a person. Confirm it, then follow it on Timeline. (A plain statement, such as “We're out of milk,” is simply written down; there is nothing to confirm.)
-3. Open Inbox and Connections to see how a message reaches one person and how a member's assistant joins the household, and Model to see how the house uses Muse Spark and what it has read so far.
+1. Choose who you are at the top of the page (Margaret is the person the house is built around), then on Home type or say a short message, such as “Ask Daniel to pick up the milk on his way home.” The mic uses Muse Voice Transcribe.
+2. Watch what happens to it, step by step: what Muse Spark read in your words, the record entry it made, who the house's rules let see it, and the action waiting for a yes. Say yes, then switch to Daniel: it is in his Inbox. (A plain statement, such as “We're out of milk,” is simply written down; there is nothing to confirm.)
+3. Send something about health, such as “My knee hurts when I stand up.” The house keeps it private: no model reads it, and the trace says so.
+4. Open Briefing and ask Muse Wonder what needs attention, then open The models to see every model's job, what each one never sees, and what they have done so far.
 
 ![Tellhouse Home in the demo: the household rail on the left, the "Tell the house" message box with example messages, and below it the most recent message traced step by step: the entry the model made, who the house's rules let see it, and the decision waiting on a person.](docs/images/tellhouse-home-desktop.png)
 
@@ -44,14 +45,24 @@ The deployed demo uses separate services for the home node, the sealed relay, an
 
 The house layer's surfaces are:
 
-- **Home:** send a message to the house and ask it questions.
-- **Timeline:** every message, newest first, traced from the words that came in to where they went.
-- **Briefing:** what matters to one person, filtered by who is asking.
-- **Plans:** what the household is arranging, who agreed, and what is still open.
-- **Claims:** what people have taken on, in their own words.
-- **Inbox:** what the house has delivered to one person.
-- **Connections:** who is connected to the house, and through which assistant.
-- **Model:** how the house uses Muse Spark: the path every message takes, the exact instructions and output schema, and live counts of what it has read.
+The pages follow one loop, seen through one person's eyes at a time (the person switcher at the top):
+
+- **Home:** say it. Type or speak a message to the house, mark it Private if it should go to no model, and watch what happens to it, step by step.
+- **Inbox:** needs you. What is waiting on this person: a yes the house is asking for, a question about who should see something, plan items, and what the house has passed on.
+- **Briefing:** the house now. What needs attention (the house's own rules, and Muse Wonder's review), who has taken what on, what is running low, and what is planned. Plans and Claims open from here.
+- **Timeline:** the record. Every message, newest first, from the words that came in to where they went.
+- **The models:** each Meta model's job in the house, what it never sees, the exact instructions and output schema, and live counts.
+- **Assistants:** who is connected to the house through their own assistant, and how one joins.
+
+## Meta's models in Tellhouse
+
+Each model has one job at one step of the loop, all through the Meta Model API with the same key:
+
+- **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) hears a spoken message on Home, with the household's names and supplies as keywords; the words come back to be checked before sending, and the audio is not kept.
+- **Muse Spark** (`muse-spark-1.3`) reads every message into typed record entries and at most one proposed action, under a strict JSON schema.
+- **Muse Wonder** (`muse-wonder-1.0`) reviews the shared record a person may see, when they ask on Briefing, and reports conflicts, slipping claims and supplies that will run out, citing the entries it relied on; the house drops any finding that cites something it was not shown.
+
+Private things are kept away from every model: a message about health or medicine, or one marked Private, is written down by the house's own deterministic rules on the server, and if those rules cannot write it down nothing is sent anywhere. Muse Wonder is never shown a private entry, a health entry, or a medicine. `tools/model-smoke.py` calls each model once with your key and reports whether it answered in the expected shape.
 
 ## Run it locally
 
