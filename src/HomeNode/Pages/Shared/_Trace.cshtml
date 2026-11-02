@@ -459,7 +459,7 @@
         if (o.ShowRaw && engine.OutputJson is not null)
         {
             <details class="trace-raw">
-                <summary>@Icons.Get("code", 14) What @(engine.Kind == "live" ? "Muse Spark" : engine.Kind == "mock" ? "the stand-in" : "the rule") returned</summary>
+                <summary>@Icons.Get("code", 14) What @(engine.Kind == "live" ? "Muse Spark" : engine.Kind == "mock" ? "the stand-in" : engine.Kind == "private" ? "the house's own rules" : "the rule") returned</summary>
                 <pre><code>@engine.OutputJson</code></pre>
             </details>
         }

@@ -79,12 +79,15 @@ public static class PrivacyRule
 
     // The decision for one input: null when the message may be read
     // by a model; otherwise why it may not.
+    // The words come first: a health-shaped message is private by the
+    // house's rule even when the switch was also on (Home turns the
+    // switch on by itself when it sees such words as they are typed).
     public static string? Decide(ExtractionInput input)
     {
-        if (input.Private)
+        if (WordsArePrivate(input.Transcript))
         {
-            return BySwitch;
+            return ByRule;
         }
-        return WordsArePrivate(input.Transcript) ? ByRule : null;
+        return input.Private ? BySwitch : null;
     }
 }
