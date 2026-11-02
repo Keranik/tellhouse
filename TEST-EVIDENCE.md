@@ -655,3 +655,58 @@ node does, and that build is frozen again at this
 fixed state. The README's provenance sentence, at the
 author's direction, credits a real household rather
 than naming one.
+
+## Eleventh public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Eleventh public commit: suites
+
+All passing at this commit's final verification
+(November 1, 2026; no suite counts moved, because this
+commit changes words and page structure only):
+
+- Home node demo suite: 211
+- Home node suite: 161
+- Single-process build demo suite: 139
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Eleventh public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: the fixes the live-site
+re-check listed. The demo label now stands once on
+every page, as one bar carrying the label and the
+sentence together, in place of the chip and the banner
+that used to run at the same time. The home headline
+ends without a period. The viewer pickers on the
+record pages offer the household view in plain words.
+A briefing line for an entry with no named author
+reads "Someone in the household", and the pending
+phrase is the one phrase everywhere, spelled the same
+way. A pending entry can be declined where it stands:
+the Timeline and the home page offer Don't send beside
+Confirm, including for entries waiting on the record
+itself. The audience defaults list names only the
+people who have chosen a default, and says once, about
+the settings, when some have not chosen yet. The rail
+prints the household name once, under the wordmark.
