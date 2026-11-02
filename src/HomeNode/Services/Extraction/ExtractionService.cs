@@ -19,6 +19,17 @@ public class ExtractionResult
     // What the house says back: the confirmation prompt when an action
     // is proposed, otherwise the spoken response. Null means silence.
     public string? HouseReply { get; set; }
+
+    // The reading of this message, as recorded for the pages (see
+    // ModelReading): which engine read it, how long it took, and what
+    // it became.
+    public ModelReading? Reading { get; set; }
+
+    // The engine's structured output exactly as it came back, before
+    // the house set its own fields (authorship). Always available to
+    // the caller for the moment of the reply; kept on the reading row
+    // only when the message produced record entries.
+    public string? ReturnedJson { get; set; }
 }
 
 // Turns one telling into record entries: extraction behind the
@@ -46,6 +57,10 @@ public class ExtractionService
         _audience = audience;
     }
 
+    // The name of the engine behind the seam ("live" or "mock"), for a
+    // surface that has to say which engine failed to answer.
+    public string EngineName => _client.Name;
+
     public async Task<ExtractionResult> ProcessAsync(ExtractionInput input, CancellationToken ct = default)
     {
         // Audience fence: the recent-events slice is filtered
@@ -68,9 +83,18 @@ public class ExtractionService
         // Stated-turn pre-pass: the deterministic
         // shape runs before the client on every mode, live included,
         // so a stated turn can never land as a plain note. See
-        // StatedTurnPrePass.
-        var output = StatedTurnPrePass.TryExtract(input)
+        // StatedTurnPrePass. The reading clock and the engine name
+        // are taken here so the message's reading says truthfully
+        // which engine produced the output: the pre-pass, when it
+        // answered, means no client was called at all.
+        var readStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+        var prePassOutput = StatedTurnPrePass.TryExtract(input);
+        var output = prePassOutput
             ?? await _client.ExtractAsync(input, ct);
+        var readElapsed = System.Diagnostics.Stopwatch.GetElapsedTime(readStarted);
+        var engine = prePassOutput is not null ? ModelReadingEngine.Rule : _client.Name;
+        var callInfo = prePassOutput is null ? _client.LastCall : null;
+        var returnedJson = SerializeOutput(output);
 
         // Authorship is set in code, never taken from a client's
         // output: in Live mode the model
@@ -95,13 +119,24 @@ public class ExtractionService
         }
 
         var validation = ExtractionValidator.Validate(input, output);
-        var result = new ExtractionResult { Output = output, Validation = validation };
+        var result = new ExtractionResult { Output = output, Validation = validation, ReturnedJson = returnedJson };
 
         if (!validation.IsValid || output.ClarificationNeeded || output.Events.Count == 0)
         {
             // Clarify, lookup, silence, or an invalid output: nothing is
-            // written. The reply is the only trace.
+            // written. The reply is the only trace. The reading row
+            // for such a message is counted telemetry only: no words,
+            // no output, no reply, no speaker (see ModelReading).
             result.HouseReply = output.SpokenResponse;
+            var outcome = !validation.IsValid
+                ? ModelReadingOutcome.Refused
+                : output.ClarificationNeeded
+                    ? ModelReadingOutcome.Clarify
+                    : output.SpokenResponse is null
+                        ? ModelReadingOutcome.Silent
+                        : ModelReadingOutcome.Answered;
+            result.Reading = await RecordReadingAsync(
+                input, engine, callInfo, readElapsed, outcome, written: null, returnedJson: null, reply: null);
             return result;
         }
 
@@ -182,7 +217,82 @@ public class ExtractionService
                 result.HouseReply = $"Saved as {maker.FirstName}'s claim. It's on Claims.";
             }
         }
+        result.Reading = await RecordReadingAsync(
+            input, engine, callInfo, readElapsed, ModelReadingOutcome.Entries,
+            result.WrittenEvents, returnedJson, result.HouseReply);
         return result;
+    }
+
+    // The message's reading row (see ModelReading for what is kept
+    // and why). Written on success only: a reading whose engine threw
+    // never reaches this point, so a failed call saves nothing here,
+    // and a caller that keeps the failed message queued for another
+    // pass finds the store exactly as the attempt left it.
+    private async Task<ModelReading> RecordReadingAsync(
+        ExtractionInput input, string engine, ExtractionCallInfo? callInfo, TimeSpan elapsed,
+        string outcome, List<Event>? written, string? returnedJson, string? reply)
+    {
+        var withContent = outcome == ModelReadingOutcome.Entries && written is { Count: > 0 };
+        var reading = new ModelReading
+        {
+            HouseholdId = input.Context?.HouseholdId ?? 0,
+            UtteranceId = input.UtteranceId,
+            Channel = input.SourceType,
+            Engine = engine,
+            Model = callInfo?.Model,
+            ElapsedMs = (int)Math.Min(int.MaxValue, Math.Max(0, Math.Round(elapsed.TotalMilliseconds))),
+            PromptTokens = callInfo?.PromptTokens,
+            CompletionTokens = callInfo?.CompletionTokens,
+            Outcome = outcome,
+            SpeakerPersonId = withContent ? input.Speaker?.PersonId : null,
+            Words = withContent ? input.Transcript : null,
+            OutputJson = withContent ? returnedJson : null,
+            Reply = withContent ? reply : null,
+            EventIds = withContent
+                ? JsonSerializer.Serialize(written!.Select(e => e.Id).ToList())
+                : null,
+            EventCount = withContent ? written!.Count : 0,
+            ContextSummary = withContent ? SummarizeContext(input.Context) : null,
+            ReadAtUtc = input.RecordedAtUtc ?? input.OccurredAtLocal.UtcDateTime
+        };
+        _db.ModelReadings.Add(reading);
+        await _db.SaveChangesAsync();
+        return reading;
+    }
+
+    // What the engine was given, as counts only: the slice's content
+    // never leaves the pipeline through the reading row.
+    private static string? SummarizeContext(ExtractionContext? context)
+    {
+        if (context is null)
+        {
+            return null;
+        }
+        return JsonSerializer.Serialize(new Dictionary<string, int>
+        {
+            ["People"] = context.Persons.Count,
+            ["Supplies"] = context.SupplyItems.Count,
+            ["Schedules"] = context.Schedules.Count,
+            ["AlertLevels"] = context.AlertLevels.Count,
+            ["Glossary"] = context.Glossary.Count,
+            ["RecentEntries"] = context.RecentEvents.Count,
+            ["OpenPrompt"] = context.OpenPrompt is null ? 0 : 1
+        });
+    }
+
+    // The engine's output as compact JSON, exactly as returned. A
+    // value that will not serialize is shown as absent rather than
+    // failing the reading it belongs to.
+    private static string? SerializeOutput(ExtractionOutput output)
+    {
+        try
+        {
+            return JsonSerializer.Serialize(output, ExtractionJson.Options);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or JsonException)
+        {
+            return null;
+        }
     }
 
     // The fence itself: keep only the slice events visible to the

@@ -39,6 +39,7 @@ public class AppDbContext : DbContext
     public DbSet<PersonAudienceDefault> PersonAudienceDefaults => Set<PersonAudienceDefault>();
     public DbSet<AudienceDefaultRequest> AudienceDefaultRequests => Set<AudienceDefaultRequest>();
     public DbSet<AudienceAsk> AudienceAsks => Set<AudienceAsk>();
+    public DbSet<ModelReading> ModelReadings => Set<ModelReading>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

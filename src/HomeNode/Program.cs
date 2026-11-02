@@ -176,6 +176,39 @@ using (var scope = app.Services.CreateScope())
         "ALTER TABLE \"SealedOutbox\" ADD COLUMN \"SentAtUtc\" TEXT NULL");
     AddColumnIfAbsent("JoinRequests", "ConnectionId",
         "ALTER TABLE \"JoinRequests\" ADD COLUMN \"ConnectionId\" TEXT NULL");
+    // The model readings table (Data/ModelReading.cs) arrived
+    // after the baked demo snapshot was sealed too: a restored
+    // record has every other table and not this one. It is created
+    // when absent, in exactly the shape EnsureCreated gives a new
+    // file, and it carries no foreign keys, so nothing else in a
+    // restored record changes. Messages read before it existed
+    // simply have no reading row; the pages say so plainly.
+    using (var createReadings = conn.CreateCommand())
+    {
+        createReadings.CommandText = """
+            CREATE TABLE IF NOT EXISTS "ModelReadings" (
+                "Id" INTEGER NOT NULL CONSTRAINT "PK_ModelReadings" PRIMARY KEY AUTOINCREMENT,
+                "HouseholdId" INTEGER NOT NULL,
+                "UtteranceId" TEXT NOT NULL,
+                "Channel" TEXT NOT NULL,
+                "Engine" TEXT NOT NULL,
+                "Model" TEXT NULL,
+                "ElapsedMs" INTEGER NOT NULL,
+                "PromptTokens" INTEGER NULL,
+                "CompletionTokens" INTEGER NULL,
+                "Outcome" TEXT NOT NULL,
+                "SpeakerPersonId" INTEGER NULL,
+                "Words" TEXT NULL,
+                "OutputJson" TEXT NULL,
+                "Reply" TEXT NULL,
+                "EventIds" TEXT NULL,
+                "EventCount" INTEGER NOT NULL,
+                "ContextSummary" TEXT NULL,
+                "ReadAtUtc" TEXT NOT NULL
+            )
+            """;
+        createReadings.ExecuteNonQuery();
+    }
     conn.Close();
     DbSeeder.Seed(db);
 }

@@ -42,8 +42,13 @@ public class MetaExtractionClient : IExtractionClient
 
     public string Name => "live";
 
+    // The served model and token counts of the most recent call, read
+    // from the API's own response, for the message's reading record.
+    public ExtractionCallInfo? LastCall { get; private set; }
+
     public async Task<ExtractionOutput> ExtractAsync(ExtractionInput input, CancellationToken ct = default)
     {
+        LastCall = null;
         var bearer = ResolveBearer()
             ?? throw new InvalidOperationException(
                 "No Meta Model API credential is available: MODEL_API_KEY is not set.");
@@ -103,8 +108,47 @@ public class MetaExtractionClient : IExtractionClient
             .GetString()
             ?? throw new InvalidOperationException("The model returned no content.");
         _logger.LogInformation("Live extraction completed for {UtteranceId} on {Model}", input.UtteranceId, _options.Model);
-        return ExtractionJson.FromJson<ExtractionOutput>(content);
+        var parsed = ExtractionJson.FromJson<ExtractionOutput>(content);
+        LastCall = ReadCallInfo(doc.RootElement, _options.Model);
+        return parsed;
     }
+
+    // The response's own account of the call: the model that served
+    // it and its token usage, in the OpenAI-compatible "usage" shape
+    // (prompt_tokens and completion_tokens, or input_tokens and
+    // output_tokens). Read defensively: a missing or unexpected field
+    // reads as unknown and never fails the reading it describes.
+    private static ExtractionCallInfo ReadCallInfo(JsonElement root, string configuredModel)
+    {
+        string? model = configuredModel;
+        int? promptTokens = null;
+        int? completionTokens = null;
+        try
+        {
+            if (root.TryGetProperty("model", out var served)
+                && served.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(served.GetString()))
+            {
+                model = served.GetString();
+            }
+            if (root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object)
+            {
+                promptTokens = ReadInt(usage, "prompt_tokens") ?? ReadInt(usage, "input_tokens");
+                completionTokens = ReadInt(usage, "completion_tokens") ?? ReadInt(usage, "output_tokens");
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        return new ExtractionCallInfo(model, promptTokens, completionTokens);
+    }
+
+    private static int? ReadInt(JsonElement obj, string name) =>
+        obj.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.Number
+        && value.TryGetInt32(out var n)
+            ? n
+            : null;
 
     private static string? ResolveBearer()
     {

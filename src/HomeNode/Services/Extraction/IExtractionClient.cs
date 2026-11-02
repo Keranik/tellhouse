@@ -12,4 +12,13 @@ public interface IExtractionClient
 {
     string Name { get; }
     Task<ExtractionOutput> ExtractAsync(ExtractionInput input, CancellationToken ct = default);
+
+    // What the most recent call reported about itself: the model
+    // that served it and the tokens it used, when the client knows.
+    // The pipeline keeps it on the message's reading so the pages
+    // can show the model's work. Clients that call no model (the
+    // local stand-in, the suites' stubs) report nothing.
+    ExtractionCallInfo? LastCall => null;
 }
+
+public sealed record ExtractionCallInfo(string? Model, int? PromptTokens, int? CompletionTokens);
