@@ -3,7 +3,7 @@
 @using HomeNode.Data
 @using HomeNode.Services
 @{
-    ViewData["Title"] = "Connections";
+    ViewData["Title"] = "Assistants";
     var note = Model.Note;
     var newInviteCode = Model.NewInviteCode;
     var newInviteFor = Model.NewInviteFor;
@@ -11,7 +11,7 @@
 
 <div class="page-head">
     <span class="eyebrow">@Icons.Get("lock", 13) Members' own assistants</span>
-    <h1>Connections</h1>
+    <h1>Assistants</h1>
     <p class="lede">A member can talk to the house through their own AI assistant. Its messages travel sealed through the relay, which cannot read them, and are read by the same model pipeline as Home. No assistant joins until the person who invited it approves.</p>
 </div>
 
