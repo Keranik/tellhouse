@@ -828,3 +828,61 @@ The reading record keeps a message's words and output
 only when the message produced record entries; a
 question or a refused reading keeps counted numbers
 only. No licence file is included with the code.
+
+## Fourteenth public commit: build
+
+Every project in the tree builds clean from scratch (a
+fresh export of the exact tree, in both Release and
+Debug), 0 warnings and 0 errors (.NET 10), measured at
+this commit's final verification.
+
+## Fourteenth public commit: suites
+
+All passing at this commit's final verification
+(November 2, 2026; the home node demo suite grows by
+the new checks the loop build adds, and no existing
+check was changed or removed):
+
+- Home node demo suite: 237
+- Home node suite: 161
+- Single-process build demo suite: 139
+- Protocol checks: 36
+- Sealed relay tests: 49
+- Lisa stand-in self-test: 49
+- Daniel stand-in self-test: 49
+- Backup and restore self-test: 43
+- Stand-in protocol checks: 38 of 38
+- Stand-in session recovery checks: 10 of 10
+- Door page checks: 15 of 15
+
+## Fourteenth public commit: end-to-end exercises
+
+Verified on this exact tree at its final verification:
+
+- Four-process clean-boot journey: 15 of 15 checks, in
+  two consecutive runs on this exact tree.
+- Fresh deployment journey: 22 of 22 checks, in two
+  consecutive runs on this exact tree.
+- Live door ceremony: 30 of 30 checks.
+- Live leg: 30 of 30 checks.
+- Canary batch: 19 of 19 checks, in both of its shapes.
+
+What this commit carries: the household loop, one
+person at a time. The shell gains a person switcher
+(a cookie on this demo; explicit links still win), and
+the pages follow one person's loop: Home to say it,
+the Inbox for what needs them, Briefing for the house
+now, Timeline for the record. A message whose words
+are health-shaped, or that the person marks Private,
+is read by the house's own rules and never by a model;
+there is no fallback to a model for it. On a Live
+instance the other Meta models each take one step:
+Muse Voice Transcribe hears a spoken message on Home,
+Muse Spark reads it, Muse Wonder reviews the shared
+record on Briefing when a person asks, SAM 3.1 counts
+the tracked supplies in a photo of the shelf on
+Briefing, and Muse Image draws a picture card for a
+message passed on to a child. Off Live, hearing,
+seeing and drawing are unavailable, and the review
+runs on the house's own rules, labelled as such. No
+licence file is included with the code.
