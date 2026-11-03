@@ -4,10 +4,8 @@ whether it answered in the shape the house expects.
 
 Standard library only. The key is read from MODEL_API_KEY and never printed.
 
-    MODEL_API_KEY=... python3 tools/model-smoke.py                 # Muse Spark and Muse Wonder
-    MODEL_API_KEY=... python3 tools/model-smoke.py --voice clip.wav
-    MODEL_API_KEY=... python3 tools/model-smoke.py --sam shelf.jpg --prompt "package of wet wipes"
-    MODEL_API_KEY=... python3 tools/model-smoke.py --image
+    Run it with the variable MODEL_API_KEY set in the environment,
+    in whatever syntax your shell uses for that.
 
 The WAV must be mono 16-bit at 16 or 24 kHz (what Home's mic records).
 Each line ends PASS or FAIL with the HTTP status, the time it took, and a
