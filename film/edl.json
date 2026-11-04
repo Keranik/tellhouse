@@ -33,7 +33,7 @@
         { "clip": "08d-models-page.mp4", "at": 1.8, "duration": 4.4, "anchor": "start", "max_speed": 2.0, "describe": "The models page: each model’s one job." },
         { "clip": "08a-wonder.mp4", "at": 6.3, "duration": 3.9, "anchor": "end", "max_speed": 2.0, "describe": "Briefing: the double-booked soccer run, and Muse Wonder’s review with the entries it relied on." },
         { "clip": "08b-shelf.mp4", "at": 10.3, "duration": 2.4, "anchor": "end", "max_speed": 2.0, "describe": "SAM 3.1 outlines and counts the pantry shelf." },
-        { "clip": "08c-picture-card.mp4", "at": 12.8, "duration": 4.6, "anchor": "end", "max_speed": 2.0, "describe": "Timmy’s big-button view, then Muse Image’s picture card for him: dinner at 6:30." }
+        { "clip": "08c-picture-card.mp4", "at": 12.8, "duration": 4.6, "anchor": "end", "max_speed": 2.0, "describe": "Daniel’s Inbox: Muse Image’s picture card for Lisa’s milk request, to take in at a glance." }
       ] },
     { "section": "09", "type": "scene", "scene": "09-relay", "duration": 10, "min": 9 },
     { "section": "10", "type": "scene", "scene": "10-close", "duration": 9, "min": 8 }

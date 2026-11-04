@@ -48,7 +48,7 @@ const SHOTS = [
   { id: '07b-claims', what: 'As Daniel: say "I\'ll get Mia at 3", then open Claims and scroll.', run: shotClaims },
   { id: '08a-wonder', zoom: 'pip', what: "As Daniel on Briefing: ask Muse Wonder what needs attention; hold on its findings.", run: shotWonder },
   { id: '08b-shelf', zoom: 'pip', what: 'As Lisa on Briefing: check the pantry shelf photo (SHELF_PHOTO) with SAM 3.1; hold on the outlines.', run: shotShelf },
-  { id: '08c-picture-card', zoom: 'pip', what: 'As Margaret: "Ask Timmy to come down for dinner at 6:30", yes; then Timmy\'s big-button view and his picture card.', run: shotPictureCard },
+  { id: '08c-picture-card', zoom: 'pip', what: 'As Daniel: his Inbox, where Muse Image has drawn a picture card for Lisa\'s milk request (run 05 first).', run: shotPictureCard },
   { id: '08d-models-page', zoom: 'pip', what: 'The models page, scrolled slowly.', run: shotModels },
 ];
 
@@ -331,20 +331,9 @@ async function shotShelf(page, rec) {
 }
 
 async function shotPictureCard(page, rec) {
-  await as(page, 'Margaret', '/');
-  await rec.start();
-  await pause(page, 900);
-  await sendAndWaitForReply(page, 'Ask Timmy to come down for dinner at 6:30');
-  await pause(page, 2300);
-  await confirm(page);
-  await pause(page, 1600);
-  // Timmy's own Home: the big-button kids' view.
-  await as(page, 'Timmy', '/');
-  const card = page.locator('[data-tap-card]').first();
-  if (await card.count()) { await pause(page, 600); await pointAt(page, card); }
-  await pause(page, 2400);
-  rec.pause();
-  await page.goto(`${BASE}/Member`, { waitUntil: 'networkidle', timeout: 180000 });
+  // Lisa's milk request from shot 05 was passed on to Daniel; Muse Image
+  // draws its picture card in the background. Nobody under 18 is involved.
+  await as(page, 'Daniel', '/Member');
   for (let i = 0; i < 12 && (await page.locator('.picture-card img').count()) === 0; i++) {
     await page.waitForTimeout(5000);
     await page.reload({ waitUntil: 'networkidle' });
@@ -354,9 +343,9 @@ async function shotPictureCard(page, rec) {
     await img.scrollIntoViewIfNeeded();
     await page.waitForFunction((el) => el.complete && el.naturalWidth > 0, await img.elementHandle(), { timeout: 30000 }).catch(() => {});
   } else {
-    console.log('   (no picture card appeared within a minute)');
+    console.log('   (no picture card appeared within a minute; run shot 05 first, on a live instance)');
   }
-  await rec.resume();
+  await rec.start();
   await pause(page, 1400);
   if (await img.count()) await pointAt(page, img);
   await pause(page, 4000);

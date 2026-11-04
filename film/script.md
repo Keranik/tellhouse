@@ -66,12 +66,12 @@ house asks "Do you want me to tell Daniel this…?" — Yes. Cut to Daniel's inb
 
 ## 08 — Five models, one job each · 2:16–2:40
 **Picture:** five tiles light up in turn — Hear · Read · Review · See · Draw — over real app moments:
-the double-booked evening on Briefing, SAM 3.1 outlining the pantry shelf, a picture card in Timmy's
-big-button view.
+the double-booked evening on Briefing, SAM 3.1 outlining the pantry shelf, Muse Image's picture card
+for Lisa's milk request in Daniel's inbox.
 
 > Five Meta models, one job each. / Muse Voice Transcribe hears. Muse Spark reads.
 > Muse Wonder reviews the record for what needs attention, / like an evening that's double-booked.
-> SAM 3.1 counts the pantry shelf. / Muse Image draws "dinner at six-thirty" for the kids.
+> SAM 3.1 counts the pantry shelf. / Muse Image draws a picture card, / so a message can be taken in at a glance.
 > Each one proposes. / The house, and a person, decide.
 
 ## 09 — Their own assistants · 2:40–2:50

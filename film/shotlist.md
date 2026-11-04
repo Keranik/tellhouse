@@ -25,7 +25,7 @@ this for you (see README.md). Otherwise, record by hand:
 | `07b-claims.mp4` | Daniel | Type **I'll get Mia at 3**. Send. Hold on the reply. Open **Claims**; scroll slowly to "home by three". Hold. | Section 07, last 5 s |
 | `08a-wonder.mp4` | Daniel | Open **Briefing** (the house's own rules already show the double-booked soccer run). Click **Ask Muse Wonder what needs attention**. (Stop recording while it thinks if you like.) Hold 4 s on its findings and the entries it cites. | Section 08, picture-in-picture, last 4 s |
 | `08b-shelf.mp4` | Lisa | Briefing → **What's on the shelf**. Choose your pantry-shelf photo (coffee, paper towels, dishwasher tablets, dish soap), click **Check it with SAM 3.1**. Hold 4 s on the outlines and counts. | Section 08, PiP, last 2.5 s |
-| `08c-picture-card.mp4` | Margaret, then Timmy | As Margaret, send **Ask Timmy to come down for dinner at 6:30**, click **Yes**. Switch to Timmy: hold 3 s on his big-button Home. Then Inbox; wait for the picture card (up to a minute; reload). Hold 4 s on it. | Section 08, PiP, last 4.5 s |
+| `08c-picture-card.mp4` | Daniel | After shot 05: open Daniel's **Inbox** and wait (reload every few seconds, up to a minute) for the picture card Muse Image draws for Lisa's milk request; hold 5 s on it. |
 | `08d-models-page.mp4` | anyone | Open **How it works** (the models page). Scroll slowly from the top through the five model rows. | Section 08, PiP, 4.5 s |
 
 Tip: do the shots in this order; 05b needs 05's message, and 08c's card takes a
