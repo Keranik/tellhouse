@@ -64,7 +64,17 @@ npx playwright install chromium
 BASE_URL=https://tellhouse.onrender.com SHELF_PHOTO=/path/to/shelf.jpg npm run capture
 ```
 
-Clips land in `film/footage/`. `node record.mjs --list` shows the shots;
+On Windows PowerShell, set the variables first:
+
+```powershell
+cd film/capture
+npm install
+npx playwright install chromium
+$env:BASE_URL = "https://tellhouse.onrender.com"; $env:SHELF_PHOTO = "C:\path\to\shelf.jpg"; npm run capture
+```
+
+Clips land in `film/footage/` (or in `FOOTAGE_DIR`, for a trial run whose
+clips must not reach the cut). `node record.mjs --list` shows the shots;
 `--only 05,08a` records some of them; `--headed` lets you watch. The shelf shot
 needs `SHELF_PHOTO` (a photo of wipes, gauze and toilet paper on a shelf) and is
 skipped without it. Long model waits are cut out with a jump cut. A shot that
@@ -88,4 +98,4 @@ it gives into `film/footage/`.
   Sections 03 and 10 show their words on screen, so they carry no captions.
 
 Rendering all scenes takes several minutes (every frame is a full screenshot);
-after that, re-building the cut takes about a minute.
+after that, re-building the cut takes two to three minutes.

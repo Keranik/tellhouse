@@ -25,7 +25,9 @@ import url from 'node:url';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(url.fileURLToPath(import.meta.url));
-const FOOTAGE = path.resolve(here, '..', 'footage');
+// FOOTAGE_DIR sends a trial run's clips somewhere else (for example a
+// run against a local stand-in node, which must never reach the cut).
+const FOOTAGE = process.env.FOOTAGE_DIR ? path.resolve(process.env.FOOTAGE_DIR) : path.resolve(here, '..', 'footage');
 const BASE = (process.env.BASE_URL || '').replace(/\/+$/, '');
 const PEOPLE = { Margaret: 1, Daniel: 2, Lisa: 3, Timmy: 4, Mia: 5, June: 6 };
 const argv = process.argv.slice(2);
