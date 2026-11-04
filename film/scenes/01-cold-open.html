@@ -1,0 +1,113 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>01 cold open</title>
+<link rel="stylesheet" href="lib/stage.css"><script src="lib/stage.js"></script>
+<style>
+  #sky { position: absolute; inset: 0; background: linear-gradient(180deg, #060a13 0%, #0c1526 55%, #17233a 100%); }
+  #dawn { position: absolute; left: -200px; right: -200px; bottom: -520px; height: 900px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(120, 92, 140, 0.55), rgba(70, 60, 110, 0.18) 55%, transparent 75%); }
+  #time { left: 120px; top: 96px; font-weight: 300; font-size: 72px; letter-spacing: 0.02em; color: #d9dce6; }
+  #time small { display: block; font-size: 24px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: #8e97ab; margin-top: 10px; }
+  #door { left: 270px; top: 250px; }
+  .phone { left: 1180px; top: 96px; width: 380px; height: 760px; border-radius: 54px; }
+  .phone .screen { inset: 14px; border-radius: 42px; background: #141416; }
+  .status { position: absolute; top: 20px; left: 34px; font-size: 17px; font-weight: 600; color: #cfcfd4; }
+  .head { position: absolute; top: 74px; left: 26px; right: 26px; display: flex; align-items: center; gap: 14px; padding-bottom: 18px; border-bottom: 1px solid #26262a; }
+  .head img { width: 40px; height: 40px; }
+  .head b { display: block; font-size: 22px; font-weight: 600; color: var(--ink); }
+  .head span { display: block; font-size: 16px; color: var(--muted); margin-top: 2px; }
+  #msgs { position: absolute; left: 22px; right: 22px; top: 160px; bottom: 120px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; gap: 10px; }
+  #who { font-size: 15px; color: var(--muted); margin-right: 6px; }
+  #bubble { max-width: 262px; background: var(--coral-fill); color: #fff; font-size: 21px; line-height: 1.36; padding: 16px 19px; border-radius: 22px 22px 6px 22px; transform-origin: 100% 100%; }
+  #ack { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; color: var(--house); margin-right: 4px; }
+  #composer { position: absolute; left: 18px; right: 18px; bottom: 26px; display: flex; align-items: flex-end; gap: 10px; }
+  #field { flex: 1; min-height: 56px; border-radius: 28px; background: #232327; border: 1px solid #34343a; padding: 15px 18px; font-size: 19px; line-height: 1.32; color: var(--ink); }
+  #field.hint { color: #75757c; }
+  #send { width: 56px; height: 56px; border-radius: 50%; background: #34343a; display: grid; place-items: center; flex: none; }
+</style></head>
+<body><div id="stage">
+  <div id="sky"></div><div id="dawn"></div>
+  <svg id="stars" class="abs" width="1920" height="600" style="left:0;top:0"></svg>
+  <div id="time" class="abs">5:40 AM<small>Tuesday</small></div>
+
+  <svg id="door" class="abs" width="620" height="660" viewBox="0 0 620 660" style="overflow:visible">
+    <defs>
+      <radialGradient id="porch" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#f4c771" stop-opacity="0.75"/><stop offset="1" stop-color="#f4c771" stop-opacity="0"/></radialGradient>
+      <linearGradient id="spill" x1="0" x2="1"><stop offset="0" stop-color="#ffd58a" stop-opacity="0.95"/><stop offset="1" stop-color="#ffb35c" stop-opacity="0.2"/></linearGradient>
+    </defs>
+    <circle id="porchGlow" cx="505" cy="96" r="150" fill="url(#porch)"/>
+    <line x1="470" y1="96" x2="490" y2="96" stroke="#c9ccd6" stroke-width="3" opacity="0.7"/><path d="M492 74 h26 l-4 8 h-18 z" fill="#c9ccd6" opacity="0.8"/><rect x="494" y="82" width="22" height="30" rx="5" fill="#ffe2a8" opacity="0.9"/><rect x="497" y="112" width="16" height="4" rx="2" fill="#c9ccd6" opacity="0.8"/>
+    <rect x="70" y="40" width="340" height="590" fill="none" stroke="#c9ccd6" stroke-width="4" opacity="0.75"/>
+    <rect id="gap" x="378" y="44" width="28" height="582" fill="url(#spill)"/>
+    <g id="leaf">
+      <rect x="84" y="54" width="312" height="562" fill="#0d1422" stroke="#c9ccd6" stroke-width="3" opacity="0.95"/>
+      <rect x="126" y="96" width="228" height="150" rx="6" fill="none" stroke="#c9ccd6" stroke-width="2.5" opacity="0.6"/>
+      <rect x="126" y="290" width="228" height="280" rx="6" fill="none" stroke="#c9ccd6" stroke-width="2.5" opacity="0.6"/>
+      <circle cx="356" cy="350" r="9" fill="#c9ccd6" opacity="0.85"/>
+    </g>
+    <line x1="0" y1="632" x2="620" y2="632" stroke="#c9ccd6" stroke-width="3" opacity="0.5"/>
+    <line x1="30" y1="652" x2="590" y2="652" stroke="#c9ccd6" stroke-width="2" opacity="0.25"/>
+  </svg>
+
+  <div class="phone" id="phone"><div class="screen">
+    <div class="notch"></div>
+    <div class="status">5:40</div>
+    <div class="head"><img src="img/favicon.svg" alt=""><div><b>Tellhouse</b><span>The Ellis house</span></div></div>
+    <div id="msgs"><div id="who">Daniel · 5:40 AM</div><div id="bubble"></div><div id="ack">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"/></svg>Written down.</div></div>
+    <div id="composer"><div id="field"></div><div id="send">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></div></div>
+  </div></div>
+</div>
+<script>
+  const LINE = 'Morning. Depot by nine, hardware store after, home by three.';
+  const TYPE_AT = 3.6, CPS = 13, SEND_AT = T.typingDone(LINE, TYPE_AT, CPS) + 0.6;
+  // Deterministic stars.
+  const stars = document.getElementById('stars'); let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const starEls = [];
+  for (let i = 0; i < 70; i++) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', (rnd() * 1920).toFixed(1)); c.setAttribute('cy', (rnd() * 520).toFixed(1));
+    c.setAttribute('r', (0.7 + rnd() * 1.5).toFixed(2)); c.setAttribute('fill', '#dfe6ff');
+    starEls.push([c, 0.25 + rnd() * 0.55]); stars.appendChild(c);
+  }
+  const $ = T.$;
+  Scene(16, (t) => {
+    const intro = T.fade(t, 0, 1.6);
+    $('#stage').style.opacity = intro;
+    const dawn = T.easeInOut(T.prog(t, 0, 16));
+    $('#dawn').style.opacity = 0.35 + 0.65 * dawn;
+    $('#dawn').style.transform = `translateY(${-60 * dawn}px)`;
+    for (const [c, base] of starEls) c.setAttribute('opacity', (base * (1 - 0.55 * dawn)).toFixed(3));
+    T.set($('#time'), { opacity: T.fade(t, 0.8, 1.2), transform: `translateY(${(1 - T.easeOut(T.prog(t, 0.8, 1.2))) * 14}px)` });
+
+    // The door: ajar with warm light spilling, then it closes behind him.
+    const close = T.easeInOut(T.prog(t, SEND_AT + 1.9, 1.8));
+    $('#gap').setAttribute('width', (28 * (1 - close)).toFixed(2));
+    $('#gap').setAttribute('opacity', (1 - close).toFixed(3));
+    $('#leaf').setAttribute('transform', `translate(${(-10 * (1 - close)).toFixed(2)} 0)`);
+    $('#porchGlow').setAttribute('opacity', (0.55 + 0.45 * Math.min(1, t / 2)).toFixed(3));
+
+    // The phone rises in, Daniel types his one line, sends it, the house writes it down.
+    const ph = T.easeOut(T.prog(t, 1.6, 1.4));
+    T.set($('#phone'), { opacity: ph, transform: `translateY(${(1 - ph) * 40}px)` });
+    const typedText = T.typed(LINE, t, TYPE_AT, CPS);
+    const sent = t >= SEND_AT;
+    const field = $('#field');
+    if (sent || typedText.length === 0) {
+      field.className = 'hint'; field.textContent = 'Tell the house…';
+    } else {
+      field.className = ''; field.innerHTML = '';
+      field.append(typedText);
+      if (T.caretOn(t)) { const c = document.createElement('span'); c.className = 'caret'; field.append(c); }
+    }
+    const ready = !sent && typedText.length === LINE.length;
+    $('#send').style.background = ready ? 'var(--coral-fill)' : '#34343a';
+    const pop = T.easeOut(T.prog(t, SEND_AT, 0.45));
+    $('#bubble').textContent = LINE;
+    T.set($('#bubble'), { opacity: sent ? pop : 0, transform: `scale(${0.94 + 0.06 * pop})` });
+    $('#who').style.opacity = sent ? pop : 0;
+    const ack = T.fade(t, SEND_AT + 1.0, 0.6);
+    T.set($('#ack'), { opacity: ack, transform: `translateY(${(1 - ack) * 8}px)` });
+  });
+</script></body></html>

@@ -1,0 +1,41 @@
+{
+  "about": "The cut, in order. Durations are scripted seconds; a section grows when its narration take is longer (its last segment holds), and segments with a 'min' may shrink to keep the film under max_duration. Narration takes are audio/NN.* where NN is the section. Footage clips live in footage/; a missing clip previews as a placeholder card.",
+  "fps": 30,
+  "crossfade": 0.4,
+  "max_duration": 180.0,
+  "fade_in": 0.8,
+  "fade_out": 1.4,
+  "narration": { "lead": 0.6, "tail": 0.9 },
+  "sections": {
+    "01": { "lead": 1.4 },
+    "03": { "lead": 1.8, "captions": false },
+    "07": { "lead": 0.8 },
+    "10": { "lead": 1.0, "captions": false }
+  },
+  "segments": [
+    { "section": "01", "type": "scene", "scene": "01-cold-open", "duration": 15, "min": 13 },
+    { "section": "02", "type": "scene", "scene": "02-margaret", "duration": 20, "min": 17 },
+    { "section": "03", "type": "scene", "scene": "03-title", "duration": 9, "min": 7 },
+    { "section": "04", "type": "scene", "scene": "04-why", "duration": 13, "min": 11 },
+    { "section": "05", "type": "footage", "clip": "05-margaret-front-door.mp4", "duration": 19, "anchor": "start", "max_speed": 1.5,
+      "describe": "Margaret’s front door: she taps “Ask Daniel to pick up milk”. Muse Spark reads it; the house asks “Do you want me to tell Daniel this…?” and she says yes." },
+    { "section": "05", "type": "footage", "clip": "05b-daniel-inbox.mp4", "duration": 10, "anchor": "start", "max_speed": 1.5,
+      "describe": "Daniel’s Inbox: Margaret’s message arrived, in her words. He marks it seen." },
+    { "section": "06", "type": "scene", "scene": "06a-private", "duration": 10, "min": 9 },
+    { "section": "06", "type": "footage", "clip": "06b-private-trace.mp4", "duration": 10, "anchor": "start", "max_speed": 1.6,
+      "describe": "“My ankle has swollen up again.” Kept private: no model read it. The house asks “Do you want me to tell Daniel?” — yes — then every step." },
+    { "section": "07", "type": "scene", "scene": "07-promise", "duration": 18, "min": 17.5 },
+    { "section": "07", "type": "footage", "clip": "07b-claims.mp4", "duration": 5, "anchor": "end", "max_speed": 1.8,
+      "describe": "Daniel says “I’ll get Mia at 3”; the Claims page shows it open beside “home by three”, kept at 2:55 PM." },
+    { "section": "08", "type": "pip", "scene": "08-models", "duration": 24, "min": 22,
+      "box": [1080, 150, 768, 432],
+      "inserts": [
+        { "clip": "08d-models-page.mp4", "at": 1.8, "duration": 4.4, "anchor": "start", "max_speed": 2.0, "describe": "The models page: each model’s one job." },
+        { "clip": "08a-wonder.mp4", "at": 6.3, "duration": 3.9, "anchor": "end", "max_speed": 2.0, "describe": "Muse Wonder’s review on Briefing, with the entries it relied on." },
+        { "clip": "08b-shelf.mp4", "at": 10.3, "duration": 2.4, "anchor": "end", "max_speed": 2.0, "describe": "SAM 3.1 outlines and counts the supply shelf." },
+        { "clip": "08c-picture-card.mp4", "at": 12.8, "duration": 4.6, "anchor": "end", "max_speed": 2.0, "describe": "Muse Image’s picture card for Timmy: dinner at 6:30." }
+      ] },
+    { "section": "09", "type": "scene", "scene": "09-relay", "duration": 10, "min": 9 },
+    { "section": "10", "type": "scene", "scene": "10-close", "duration": 9, "min": 8 }
+  ]
+}

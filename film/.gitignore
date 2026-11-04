@@ -1,0 +1,7 @@
+# Build outputs and large media stay out of git: the film is uploaded, not committed.
+out/
+footage/
+audio/
+node_modules/
+capture/node_modules/
+__pycache__/
