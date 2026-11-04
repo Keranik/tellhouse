@@ -42,13 +42,13 @@ const ZOOM = {
   pip: { viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1.5 },
 };
 const SHOTS = [
-  { id: '05-margaret-front-door', what: 'As Margaret on her front door: tap the "milk" card, wait for the house to ask, say yes.', run: shotFrontDoor },
-  { id: '05b-daniel-inbox', what: "As Daniel: open the Inbox, show Margaret's message, mark it seen.", run: shotDanielInbox },
-  { id: '06b-private-trace', what: 'As Margaret: type "My ankle has swollen up again.", send, say yes to telling Daniel, open every step.', run: shotPrivate },
+  { id: '05-lisa-asks', what: 'As Lisa: type "Ask Daniel to pick up milk on his way home", send, wait for the house to ask, say yes.', run: shotLisaAsks },
+  { id: '05b-daniel-inbox', what: "As Daniel: open the Inbox, show Lisa's message, mark it seen.", run: shotDanielInbox },
+  { id: '06b-private-surprise', what: 'As Daniel with Private on: "Keep this between Margaret and me: surprise party on Saturday.", send, open every step.', run: shotPrivateSurprise },
   { id: '07b-claims', what: 'As Daniel: say "I\'ll get Mia at 3", then open Claims and scroll.', run: shotClaims },
   { id: '08a-wonder', zoom: 'pip', what: "As Daniel on Briefing: ask Muse Wonder what needs attention; hold on its findings.", run: shotWonder },
-  { id: '08b-shelf', zoom: 'pip', what: 'As Lisa on Briefing: check the shelf photo (SHELF_PHOTO) with SAM 3.1; hold on the outlines.', run: shotShelf },
-  { id: '08c-picture-card', zoom: 'pip', what: 'As Margaret: "Ask Timmy to come down for dinner at 6:30", yes; then Timmy\'s Inbox picture card.', run: shotPictureCard },
+  { id: '08b-shelf', zoom: 'pip', what: 'As Lisa on Briefing: check the pantry shelf photo (SHELF_PHOTO) with SAM 3.1; hold on the outlines.', run: shotShelf },
+  { id: '08c-picture-card', zoom: 'pip', what: 'As Margaret: "Ask Timmy to come down for dinner at 6:30", yes; then Timmy\'s big-button view and his picture card.', run: shotPictureCard },
   { id: '08d-models-page', zoom: 'pip', what: 'The models page, scrolled slowly.', run: shotModels },
 ];
 
@@ -223,14 +223,11 @@ async function confirm(page) {
 }
 
 // ---------------------------------------------------------------- shots
-async function shotFrontDoor(page, rec) {
-  await as(page, 'Margaret', '/');
+async function shotLisaAsks(page, rec) {
+  await as(page, 'Lisa', '/');
   await rec.start();
-  await pause(page, 1400);
-  const card = page.locator('[data-tap-card]').filter({ hasText: /milk/i }).first();
-  await press(page, card);
-  await page.waitForSelector('[data-house-reply]', { timeout: 90000 });
-  await page.waitForLoadState('networkidle');
+  await pause(page, 1100);
+  await sendAndWaitForReply(page, 'Ask Daniel to pick up milk on his way home');
   await pause(page, 2800);
   await confirm(page);
   await pause(page, 3200);
@@ -252,21 +249,26 @@ async function shotDanielInbox(page, rec) {
   await pause(page, 2400);
 }
 
-async function shotPrivate(page, rec) {
-  await as(page, 'Margaret', '/');
+async function shotPrivateSurprise(page, rec) {
+  // /?private=1 pre-ticks the Private switch; tick it here if it is not.
+  await as(page, 'Daniel', '/?private=1');
+  const priv = page.locator('[data-private]').first();
+  if (await priv.count() && !(await priv.isChecked())) await priv.check({ force: true });
   await rec.start();
   await pause(page, 1000);
-  await sendAndWaitForReply(page, 'My ankle has swollen up again.');
-  await pause(page, 2800);
-  await confirm(page);
-  await pause(page, 1600);
+  await typeInto(page, composer(page), 'Keep this between Margaret and me: surprise party on Saturday.');
+  await pause(page, 600);
+  await press(page, sendButton(page));
+  await page.waitForSelector('[data-house-reply], section.convo', { timeout: 90000 });
+  await page.waitForLoadState('networkidle');
+  await pause(page, 2200);
   const more = page.locator('details.trace-more > summary').first();
   if (await more.count()) {
     await press(page, more);
     await pause(page, 900);
-    await smoothScroll(page, 520, 2600);
+    await smoothScroll(page, 420, 2400);
   }
-  await pause(page, 2400);
+  await pause(page, 2600);
 }
 
 async function shotClaims(page, rec) {
@@ -307,7 +309,7 @@ async function shotWonder(page, rec) {
 
 async function shotShelf(page, rec) {
   const photo = process.env.SHELF_PHOTO;
-  if (!photo || !fs.existsSync(photo)) { console.log('   skipped: set SHELF_PHOTO to a photo of the supply shelf'); return 'skipped'; }
+  if (!photo || !fs.existsSync(photo)) { console.log('   skipped: set SHELF_PHOTO to a photo of a pantry shelf (coffee, paper towels, dishwasher tablets, dish soap)'); return 'skipped'; }
   await as(page, 'Lisa', '/Brief');
   const shelf = page.locator('#shelf');
   if (await shelf.count()) await shelf.scrollIntoViewIfNeeded();
@@ -336,8 +338,13 @@ async function shotPictureCard(page, rec) {
   await pause(page, 2300);
   await confirm(page);
   await pause(page, 1600);
+  // Timmy's own Home: the big-button kids' view.
+  await as(page, 'Timmy', '/');
+  const card = page.locator('[data-tap-card]').first();
+  if (await card.count()) { await pause(page, 600); await pointAt(page, card); }
+  await pause(page, 2400);
   rec.pause();
-  await as(page, 'Timmy', '/Member');
+  await page.goto(`${BASE}/Member`, { waitUntil: 'networkidle', timeout: 180000 });
   for (let i = 0; i < 12 && (await page.locator('.picture-card img').count()) === 0; i++) {
     await page.waitForTimeout(5000);
     await page.reload({ waitUntil: 'networkidle' });

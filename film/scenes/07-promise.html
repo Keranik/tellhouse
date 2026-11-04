@@ -50,11 +50,11 @@
   const dueLbl = el('text', { x: xAt(15), y: Y + 84, fill: '#f2846f', 'font-size': 21, 'font-family': 'Inter', 'text-anchor': 'middle' });
   dueLbl.textContent = 'due 3:00 PM';
   // The day going by.
-  const events = [[7.25, 'Margaret: “Where’s Daniel?”', 0], [9.0833, 'Bridge club ride planned', 1], [12.6667, 'Last of the gauze', 0]];
+  const events = [[6.75, 'Recycling tonight', 0], [7.0833, 'Last of the coffee', 1], [7.3333, 'Soccer moved to 5:30', 2], [13.25, 'Got Mia from school', 2]];
   const evEls = events.map(([h, text, row]) => {
     const dot = el('circle', { cx: xAt(h), cy: Y, r: 7, fill: '#6f6f6f' });
     const d = document.createElement('div'); d.className = 'ev'; d.textContent = text;
-    d.style.left = xAt(h) + 'px'; d.style.top = (Y + (row ? 118 : 84) - 22) + 'px';
+    d.style.left = xAt(h) + 'px'; d.style.top = (Y + [84, 118, 152][row] - 22) + 'px';
     document.getElementById('stage').appendChild(d);
     return { h, dot, d };
   });

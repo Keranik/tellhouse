@@ -1,0 +1,98 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>02 who carries it</title>
+<link rel="stylesheet" href="lib/stage.css"><script src="lib/stage.js"></script>
+<style>
+  /* Section 02: the day's small things pile up around one lit window, the
+     way they pile up in one person's head, then gather into the house. */
+  #room { position: absolute; inset: 0; background:
+    radial-gradient(900px 700px at 50% 41%, rgba(255, 196, 120, 0.13), transparent 70%),
+    linear-gradient(180deg, #1c1916 0%, #181513 60%, #141210 100%); }
+  #window { position: absolute; left: 810px; top: 250px; width: 300px; height: 380px; }
+  #glow { position: absolute; left: 960px; top: 440px; width: 900px; height: 900px; margin: -450px 0 0 -450px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(247, 196, 106, 0.30), rgba(247, 196, 106, 0.08) 55%, transparent 80%); }
+  .note { position: absolute; max-width: 560px; padding: 18px 28px 22px; border-radius: 22px; background: #262423;
+    border: 2px solid #3a3634; box-shadow: 0 24px 60px rgba(0,0,0,0.45); white-space: nowrap; }
+  .note small { display: block; font-family: var(--sans); font-size: 20px; color: #a39a90; margin-bottom: 6px; }
+  .note div { font-family: var(--serif); font-size: 46px; line-height: 1.12; color: var(--ink); }
+  .note .dot { position: absolute; right: -9px; top: -9px; width: 22px; height: 22px; border-radius: 50%; background: var(--coral); opacity: 0; }
+  #markGlow { position: absolute; left: 960px; top: 415px; width: 1100px; height: 900px; margin: -450px 0 0 -550px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(242, 132, 111, 0.18), rgba(242, 132, 111, 0.05) 55%, transparent 80%); }
+  #mark { position: absolute; left: 960px; top: 300px; width: 230px; height: 230px; margin-left: -115px; }
+</style></head>
+<body><div id="stage">
+  <div id="room"></div>
+  <div id="glow"></div>
+  <svg id="window" viewBox="0 0 300 380">
+    <rect x="5" y="5" width="290" height="370" rx="10" fill="#f7cf86" fill-opacity="0.16" stroke="#d9b98a" stroke-opacity="0.55" stroke-width="5"/>
+    <rect id="pane" x="5" y="5" width="290" height="370" rx="10" fill="#f7cf86" fill-opacity="0.0"/>
+    <line x1="150" y1="5" x2="150" y2="375" stroke="#d9b98a" stroke-opacity="0.5" stroke-width="4"/>
+    <line x1="5" y1="190" x2="295" y2="190" stroke="#d9b98a" stroke-opacity="0.5" stroke-width="4"/>
+  </svg>
+  <div id="notes"></div>
+  <div id="markGlow"></div>
+  <img id="mark" src="img/tellhouse-mark-white.svg" alt="">
+</div>
+<script>
+  // Each note: who and when, the words, where it sits, its tilt, and when it
+  // appears (in time with the narration's list).
+  const NOTES = [
+    ['Lisa · 6:45 AM', 'Recycling goes out tonight.', 440, 262, -3, 3.6],
+    ['Lisa · 7:05 AM', 'We’re out of coffee.', 1480, 244, 2.5, 5.0],
+    ['Lisa · 11:30 AM', 'Who’s getting Mia?', 410, 560, 2, 6.3],
+    ['Timmy · 7:20 AM', 'Soccer moved to 5:30.', 1510, 548, -2, 7.6],
+    ['Lisa · 12:40 PM', 'Electric bill due Friday.', 960, 128, 1, 8.9],
+    ['Daniel · 1:10 PM', 'Car’s due for its service.', 600, 790, -1.5, 10.1],
+    ['6:30 PM', 'Toilet paper is low.', 1330, 790, 2, 11.0],
+  ];
+  const SLIPPED = 2;                 // "Who's getting Mia?" is the one that slips.
+  const CX = 960, CY = 415;          // where the title's mark will be
+  const host = document.getElementById('notes');
+  const notes = NOTES.map(([who, words, x, y, rot, at]) => {
+    const d = document.createElement('div');
+    d.className = 'note';
+    d.innerHTML = `<small>${who}</small><div>${words}</div><span class="dot"></span>`;
+    host.appendChild(d);
+    return { d, x, y, rot, at };
+  });
+  const $ = T.$;
+  Scene(20, (t) => {
+    $('#stage').style.opacity = T.fade(t, 0, 1.0);
+    // The window: lit, breathing gently, then it gives way to the house.
+    const lit = T.fade(t, 0.4, 1.8);
+    const gone = T.easeInOut(T.prog(t, 16.0, 1.2));
+    $('#glow').style.opacity = (lit * (0.8 + 0.2 * Math.sin(t * 0.8)) * (1 - gone)).toFixed(3);
+    $('#pane').setAttribute('fill-opacity', (0.22 * lit * (1 - gone)).toFixed(3));
+    $('#window').style.opacity = (Math.max(0.0001, T.fade(t, 0.2, 1.2)) * (1 - gone)).toFixed(3);
+    // The notes arrive one by one, pile in a little, then gather into the house.
+    const press = T.easeInOut(T.prog(t, 12.0, 3.5));
+    notes.forEach((n, i) => {
+      const a = T.easeOut(T.prog(t, n.at, 0.55));
+      const jitter = press * 4 * Math.sin(t * 1.7 + i * 2.1);
+      let x = n.x + (CX - n.x) * 0.07 * press;
+      let y = n.y + (CY - n.y) * 0.07 * press + (1 - a) * 18 + jitter;
+      let s = 0.96 + 0.04 * a;
+      let o = a;
+      const g = T.easeInOut(T.prog(t, 16.2 + i * 0.09, 1.5));
+      if (g > 0) {
+        x = x + (CX - x) * g;
+        y = y + (CY - y) * g;
+        s = s * (1 - 0.9 * g);
+        o = o * (1 - T.easeIn(T.prog(g, 0.55, 0.45)));
+      }
+      n.d.style.left = x.toFixed(1) + 'px';
+      n.d.style.top = y.toFixed(1) + 'px';
+      n.d.style.opacity = o.toFixed(3);
+      n.d.style.transform = `translate(-50%, -50%) rotate(${(n.rot * (1 - 0.6 * g)).toFixed(2)}deg) scale(${s.toFixed(4)})`;
+      n.d.style.zIndex = String(10 + i);
+      if (i === SLIPPED) {
+        const slip = T.easeOut(T.prog(t, 13.4, 0.6)) * (1 - g);
+        n.d.style.borderColor = `rgba(242,132,111,${(0.15 + 0.7 * slip).toFixed(3)})`;
+        n.d.querySelector('.dot').style.opacity = slip.toFixed(3);
+      }
+    });
+    // The house that remembers takes it all.
+    const m = T.easeOut(T.prog(t, 17.4, 1.3));
+    T.set($('#mark'), { opacity: m, transform: `scale(${(0.9 + 0.1 * m).toFixed(4)})` });
+    $('#markGlow').style.opacity = (T.fade(t, 17.0, 1.8) * (0.85 + 0.15 * Math.sin(t * 0.9))).toFixed(3);
+  });
+</script></body></html>

@@ -19,13 +19,13 @@ this for you (see README.md). Otherwise, record by hand:
 
 | File | Who | What to do on screen | Used for |
 |---|---|---|---|
-| `05-margaret-front-door.mp4` | Margaret | On her front door (Home), tap the **"…pick up milk"** card. Wait for the house's reply ("Do you want me to tell Daniel this…?"). Hold 2 s. Click **Yes**. Hold 3 s. | Section 05, 19 s |
-| `05b-daniel-inbox.mp4` | Daniel | Open **Inbox**. Rest the mouse on Margaret's message. Hold 2 s. Click **Mark as seen**. Hold 2 s. | Section 05, 10 s |
-| `06b-private-trace.mp4` | Margaret | Type **My ankle has swollen up again.** Send. When the house asks "Do you want me to tell Daniel?", hold 2 s, click **Yes**. Open **See every step**; scroll slowly. | Section 06, 10 s |
+| `05-lisa-asks.mp4` | Lisa | On Home, type **Ask Daniel to pick up milk on his way home**. Send. Wait for the house's reply ("Do you want me to tell Daniel this…?"). Hold 2 s. Click **Yes**. Hold 3 s. | Section 05, 19 s |
+| `05b-daniel-inbox.mp4` | Daniel | Open **Inbox**. Rest the mouse on Lisa's message. Hold 2 s. Click **Mark as seen**. Hold 2 s. | Section 05, 10 s |
+| `06b-private-surprise.mp4` | Daniel | On Home, turn **Private** on. Type **Keep this between Margaret and me: surprise party on Saturday.** Send. Hold 2 s on the reply. Open **See every step** ("Kept private", "Who can see it: Only Daniel and Margaret"); scroll slowly. | Section 06, 10 s |
 | `07b-claims.mp4` | Daniel | Type **I'll get Mia at 3**. Send. Hold on the reply. Open **Claims**; scroll slowly to "home by three". Hold. | Section 07, last 5 s |
-| `08a-wonder.mp4` | Daniel | Open **Briefing**. Click **Ask Muse Wonder what needs attention**. (Stop recording while it thinks if you like.) Hold 4 s on its findings and the entries it cites. | Section 08, picture-in-picture, last 4 s |
-| `08b-shelf.mp4` | Lisa | Briefing → **What's on the shelf**. Choose your shelf photo, click **Check it with SAM 3.1**. Hold 4 s on the outlines and counts. | Section 08, PiP, last 2.5 s |
-| `08c-picture-card.mp4` | Margaret, then Timmy | As Margaret, send **Ask Timmy to come down for dinner at 6:30**, click **Yes**. Switch to Timmy → Inbox; wait for the picture card (up to a minute; reload). Hold 4 s on it. | Section 08, PiP, last 4.5 s |
+| `08a-wonder.mp4` | Daniel | Open **Briefing** (the house's own rules already show the double-booked soccer run). Click **Ask Muse Wonder what needs attention**. (Stop recording while it thinks if you like.) Hold 4 s on its findings and the entries it cites. | Section 08, picture-in-picture, last 4 s |
+| `08b-shelf.mp4` | Lisa | Briefing → **What's on the shelf**. Choose your pantry-shelf photo (coffee, paper towels, dishwasher tablets, dish soap), click **Check it with SAM 3.1**. Hold 4 s on the outlines and counts. | Section 08, PiP, last 2.5 s |
+| `08c-picture-card.mp4` | Margaret, then Timmy | As Margaret, send **Ask Timmy to come down for dinner at 6:30**, click **Yes**. Switch to Timmy: hold 3 s on his big-button Home. Then Inbox; wait for the picture card (up to a minute; reload). Hold 4 s on it. | Section 08, PiP, last 4.5 s |
 | `08d-models-page.mp4` | anyone | Open **How it works** (the models page). Scroll slowly from the top through the five model rows. | Section 08, PiP, 4.5 s |
 
 Tip: do the shots in this order; 05b needs 05's message, and 08c's card takes a

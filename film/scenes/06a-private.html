@@ -2,42 +2,51 @@
 <html><head><meta charset="utf-8"><title>06a private</title>
 <link rel="stylesheet" href="lib/stage.css"><script src="lib/stage.js"></script>
 <style>
+  /* Section 06: not everyone hears everything. Daniel plans a surprise for
+     Lisa: marked private, no model reads it, and only the people he names
+     can see it. */
   #bg { position: absolute; inset: 0; background: radial-gradient(900px 600px at 50% 30%, rgba(127, 212, 193, 0.10), transparent 70%), var(--bg); }
-  #who { position: absolute; left: 0; right: 0; top: 150px; text-align: center; font-size: 24px; color: var(--muted); }
-  #card { position: absolute; left: 510px; width: 900px; top: 196px; height: 150px; border-radius: 26px; background: var(--card);
-    border: 2px solid #3a3a3a; display: grid; place-items: center; font-family: var(--serif); font-size: 64px; color: var(--ink); }
-  #privChip { position: absolute; left: 534px; top: 176px; display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 16px;
+  #who { position: absolute; left: 330px; top: 150px; font-size: 24px; color: var(--muted); }
+  #card { position: absolute; left: 330px; width: 1110px; top: 196px; padding: 30px 40px 34px; border-radius: 26px; background: var(--card);
+    border: 2px solid #3a3a3a; font-family: var(--serif); font-size: 54px; line-height: 1.18; color: var(--ink); }
+  #privChip { position: absolute; left: 354px; top: 176px; display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 16px;
     background: #12302a; color: var(--house); font-size: 20px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-  #model { position: absolute; left: 1640px; top: 196px; width: 150px; text-align: center; }
+  #model { position: absolute; left: 1655px; top: 210px; width: 150px; text-align: center; }
   #model .dot { width: 120px; height: 120px; margin: 0 auto; border-radius: 50%; border: 3px solid var(--model); display: grid; place-items: center; color: var(--model); background: rgba(148, 184, 255, 0.08); }
   #model b { display: block; margin-top: 14px; font-size: 24px; color: var(--model); font-weight: 600; }
   #model span { display: block; font-size: 19px; color: var(--muted); }
   #links { position: absolute; left: 0; top: 0; }
-  #no { position: absolute; left: 0; right: 0; top: 420px; text-align: center; font-size: 60px; font-weight: 650; color: var(--house); }
-  #written { position: absolute; left: 0; right: 0; top: 515px; text-align: center; font-size: 36px; color: var(--ink-soft); }
-  #to { position: absolute; left: 50%; top: 622px; transform: translateX(-50%); display: flex; align-items: center; gap: 18px; padding: 14px 30px 14px 16px; border-radius: 48px; background: var(--card); border: 2px solid rgba(242,132,111,0.6); }
-  #to .av { width: 62px; height: 62px; border-radius: 50%; background: #5a3a32; color: #ffd9cf; display: grid; place-items: center; font-size: 30px; font-weight: 700; }
-  #to b { font-size: 34px; font-weight: 600; }
-  #to span { display: block; font-size: 22px; color: var(--muted); }
+  #no { position: absolute; left: 0; right: 0; top: 470px; text-align: center; font-size: 60px; font-weight: 650; color: var(--house); }
+  #seeLbl { position: absolute; left: 0; right: 0; top: 566px; text-align: center; font-size: 36px; color: var(--ink-soft); }
+  #people { position: absolute; left: 0; right: 0; top: 640px; display: flex; justify-content: center; gap: 22px; }
+  .chip { display: flex; align-items: center; gap: 16px; padding: 12px 30px 12px 14px; border-radius: 48px; background: var(--card); border: 2px solid rgba(127,212,193,0.6); }
+  .chip .av { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; font-weight: 700; }
+  .chip b { font-size: 32px; font-weight: 600; }
+  .chip span { display: block; font-size: 21px; color: var(--muted); }
+  .chip.out { border-color: #3a3a3a; background: #1e1e1e; }
+  .chip.out b { color: #8a8a8a; text-decoration: line-through; text-decoration-thickness: 3px; }
 </style></head>
 <body><div id="stage">
   <div id="bg"></div>
-  <div id="who">Margaret · 7:50 AM</div>
+  <div id="who">Daniel · 10:20 AM</div>
   <svg id="links" width="1920" height="1080">
-    <line id="toModel" x1="1412" y1="271" x2="1654" y2="271" stroke="#94b8ff" stroke-width="4" stroke-dasharray="10 12"/>
-    <g id="lock" transform="translate(1530 271)">
+    <line id="toModel" x1="1442" y1="270" x2="1668" y2="270" stroke="#94b8ff" stroke-width="4" stroke-dasharray="10 12"/>
+    <g id="lock" transform="translate(1550 270)">
       <circle r="56" fill="#191919" stroke="#7fd4c1" stroke-width="4"/>
       <path id="shackle" d="M-16 -4 v-14 a16 16 0 0 1 32 0 v14" fill="none" stroke="#7fd4c1" stroke-width="7" stroke-linecap="round"/>
       <rect x="-24" y="-6" width="48" height="36" rx="8" fill="#7fd4c1"/>
     </g>
-    <path id="toPerson" d="M960 572 v26 M948 588 l12 12 l12 -12" fill="none" stroke="#f2846f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
-  <div id="card">My ankle has swollen up again.</div>
+  <div id="card">Keep this between Margaret and me:<br>surprise party on Saturday.</div>
   <div id="privChip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private</div>
   <div id="model"><div class="dot"><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/></svg></div><b>A model</b><span>never sees it</span></div>
   <div id="no">No model read this.</div>
-  <div id="written">Written down by the house’s own rules, in her words.</div>
-  <div id="to"><div class="av">D</div><div><b>Daniel</b><span>Handed to the person she chooses</span></div></div>
+  <div id="seeLbl">Only Daniel and Margaret can see it.</div>
+  <div id="people">
+    <div class="chip" id="cD"><div class="av" style="background:#33426a;color:#dbe4ff">D</div><div><b>Daniel</b><span>said it</span></div></div>
+    <div class="chip" id="cM"><div class="av" style="background:#5a3a32;color:#ffd9cf">M</div><div><b>Margaret</b><span>named</span></div></div>
+    <div class="chip out" id="cL"><div class="av" style="background:#2c2c2c;color:#8a8a8a">L</div><div><b>Lisa</b><span>not until Saturday</span></div></div>
+  </div>
 </div>
 <script>
   const $ = T.$;
@@ -53,18 +62,17 @@
     $('#model').style.opacity = (m * (1 - 0.72 * closed)).toFixed(3);
     $('#toModel').setAttribute('opacity', (m * (1 - 0.8 * closed)).toFixed(3));
     $('#lock').setAttribute('opacity', lockIn.toFixed(3));
-    $('#lock').setAttribute('transform', `translate(1530 ${(271 - 40 * (1 - lockIn)).toFixed(2)}) scale(${(0.8 + 0.2 * lockIn).toFixed(3)})`);
+    $('#lock').setAttribute('transform', `translate(1550 ${(270 - 40 * (1 - lockIn)).toFixed(2)}) scale(${(0.8 + 0.2 * lockIn).toFixed(3)})`);
     $('#shackle').setAttribute('transform', `translate(0 ${(-12 * (1 - closed)).toFixed(2)})`);
     $('#card').style.borderColor = closed > 0 ? `rgba(127,212,193,${(0.25 + 0.6 * closed).toFixed(3)})` : '#3a3a3a';
     $('#privChip').style.opacity = closed.toFixed(3);
     const n = T.easeOut(T.prog(t, 3.8, 0.7));
     T.set($('#no'), { opacity: n, transform: `translateY(${(1 - n) * 12}px)` });
-    $('#written').style.opacity = T.fade(t, 5.0, 0.7);
-    // Then it goes to a person: Daniel.
-    const arrow = T.easeOut(T.prog(t, 6.3, 0.5));
-    $('#toPerson').setAttribute('opacity', arrow.toFixed(3));
-    $('#toPerson').setAttribute('transform', `translate(0 ${(-10 * (1 - arrow)).toFixed(2)})`);
-    const p = T.easeOut(T.prog(t, 6.8, 0.6));
-    T.set($('#to'), { opacity: p, transform: `translateX(-50%) translateY(${(1 - p) * 12}px)` });
+    $('#seeLbl').style.opacity = T.fade(t, 5.0, 0.7);
+    // Who can see it: the two people it names; Lisa, not this time.
+    [['#cD', 5.8], ['#cM', 6.2], ['#cL', 7.0]].forEach(([sel, at]) => {
+      const p = T.easeOut(T.prog(t, at, 0.6));
+      T.set($(sel), { opacity: p, transform: `translateY(${((1 - p) * 12).toFixed(2)}px)` });
+    });
   });
 </script></body></html>

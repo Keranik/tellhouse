@@ -1,6 +1,6 @@
-# Tellhouse — the 3-minute film: narration script
+# Tellhouse — the 3-minute film: narration script (v2)
 
-Target length 2:50 (hard limit 3:00). Narration ≈ 360 words at an easy pace,
+Target length 2:50 (hard limit 3:00). Narration ≈ 330 words at an easy pace,
 with room for the pictures to breathe. Each numbered section is one take.
 
 ## How to record (10 minutes)
@@ -23,40 +23,38 @@ with room for the pictures to breathe. Each numbered section is one take.
 > Five-forty in the morning. / Daniel's out the door for the depot.
 > On his way out, he tells the house one line: / depot by nine, hardware store after, home by three.
 
-## 02 — Margaret · 0:16–0:36
-**Picture:** warm kitchen light. "7:15 AM". Big serif: "Where's Daniel?" The house's answer appears.
-**On screen:** "Daniel said this morning: depot by nine, the hardware store after, home by three."
+## 02 — Who carries it · 0:16–0:36
+**Picture:** the day's small things pile up around one lit window: "Recycling goes out tonight."
+"We're out of coffee." "Soccer moved to 5:30." "Who's getting Mia?" "Electric bill due Friday."
 
-> At seven-fifteen, his mother Margaret wakes up unsettled. / She's seventy-eight, she lives in the back unit,
-> and her first question is always the same. / She doesn't have to call him. / She asks the house,
-> and the house answers / in his own words.
+> In every house, someone keeps all of it in their head. / The bins before the truck. The last of the coffee.
+> Who's getting Mia. Soccer at five-thirty. The bill that's due on Friday. / And when something slips, / it's on them.
 
 ## 03 — Title · 0:36–0:46
 **Picture:** the Tellhouse mark. "Tellhouse — the house that remembers."
 
 > This is Tellhouse. / The house that remembers.
 
-## 04 — Why · 0:46–1:00
-**Picture:** slow push on the house at dusk; three small lit windows.
+## 04 — What it does · 0:46–1:00
+**Picture:** the house at dusk; windows light up one by one as each person tells it something.
 
-> In a lot of families, the person who knows first what's needed / is the person who needs the help.
-> Most tools give her no way in. / Tellhouse gives her the front door.
+> Everyone tells the house what's happening, once, in their own words. / It writes it down,
+> asks before it tells anyone, / and remembers who said they'd do what. / No one carries it alone.
 
-## 05 — Her front door (real app) · 1:00–1:32
-**Picture:** live app. Margaret's front door: big buttons. She taps "Ask Daniel to pick up milk".
-Muse Spark reads it; the house asks "Do you want me to tell Daniel this…?" — Yes. Cut to Daniel's
-inbox: it's there, in her words.
+## 05 — Asks before it tells (real app) · 1:00–1:32
+**Picture:** live app. Lisa types "Ask Daniel to pick up milk on his way home". Muse Spark reads it; the
+house asks "Do you want me to tell Daniel this…?" — Yes. Cut to Daniel's inbox: it's there, in her words.
 
-> She tells the house the way she'd tell someone in the next room / — by voice, or with one tap.
+> Lisa's at work across town. / She asks the house to have Daniel pick up milk.
 > Meta's Muse Spark reads it into the family's shared record. / But nothing is passed on
 > until a person says yes. / She says yes / — and it's in Daniel's inbox, in her words.
 
-## 06 — Private stays private · 1:32–1:54
-**Picture:** "My ankle has swollen up again." A lock closes over it: "No model read this."
-Then the real app: "I've written that down. Do you want me to tell Daniel?"
+## 06 — Not everyone hears everything · 1:32–1:54
+**Picture:** "Keep this between Margaret and me: surprise party on Saturday." A lock closes over it:
+"No model read this. Only Daniel and Margaret can see it." Then the same thing in the real app.
 
-> Some things never go to a model. / Anything about health, or anything she marks private,
-> is written down by the house's own rules, / word for word, no advice, / and handed to the person she chooses.
+> Not everyone hears everything. / Daniel's planning a surprise for Lisa. / He marks it private:
+> no model reads it, / and only the people he names can see it. / A surprise stays a surprise.
 
 ## 07 — Promises · 1:54–2:16
 **Picture:** a timeline. 5:40 AM "home by three" … 2:55 PM "Home, like I said this morning." ✓
@@ -68,11 +66,12 @@ Then the real app: "I've written that down. Do you want me to tell Daniel?"
 
 ## 08 — Five models, one job each · 2:16–2:40
 **Picture:** five tiles light up in turn — Hear · Read · Review · See · Draw — over real app moments:
-Muse Wonder's review with its citations, SAM 3.1 outlining the shelf, Muse Image's picture card for Timmy.
+the double-booked evening on Briefing, SAM 3.1 outlining the pantry shelf, a picture card in Timmy's
+big-button view.
 
 > Five Meta models, one job each. / Muse Voice Transcribe hears. Muse Spark reads.
-> Muse Wonder reviews the shared record, and shows what it relied on. / SAM 3.1 counts the supply shelf.
-> Muse Image draws "dinner at six-thirty" / so a child can take it in without reading.
+> Muse Wonder reviews the record for what needs attention, / like an evening that's double-booked.
+> SAM 3.1 counts the pantry shelf. / Muse Image draws "dinner at six-thirty" for the kids.
 > Each one proposes. / The house, and a person, decide.
 
 ## 09 — Their own assistants · 2:40–2:50
@@ -84,9 +83,3 @@ Muse Wonder's review with its citations, SAM 3.1 outlining the shelf, Muse Image
 **Picture:** the house at night, one window lit. End card: tellhouse.onrender.com · github.com/Keranik/tellhouse
 
 > Tellhouse. / It's your time. / Spend it doing what you want to do.
-
----
-
-### Optional personal line (swap in for 04 if you like)
-> We built Tellhouse because this is already how our own house works. / The family you'll meet is invented.
-> The problem isn't.

@@ -61,7 +61,7 @@ The app footage must come from a live instance (Muse Spark reading). Either:
 cd film/capture
 npm install
 npx playwright install chromium
-BASE_URL=https://tellhouse.onrender.com SHELF_PHOTO=/path/to/shelf.jpg npm run capture
+BASE_URL=https://tellhouse.onrender.com SHELF_PHOTO=/path/to/pantry.jpg npm run capture
 ```
 
 On Windows PowerShell, set the variables first:
@@ -70,13 +70,13 @@ On Windows PowerShell, set the variables first:
 cd film/capture
 npm install
 npx playwright install chromium
-$env:BASE_URL = "https://tellhouse.onrender.com"; $env:SHELF_PHOTO = "C:\path\to\shelf.jpg"; npm run capture
+$env:BASE_URL = "https://tellhouse.onrender.com"; $env:SHELF_PHOTO = "C:\path\to\pantry.jpg"; npm run capture
 ```
 
 Clips land in `film/footage/` (or in `FOOTAGE_DIR`, for a trial run whose
 clips must not reach the cut). `node record.mjs --list` shows the shots;
 `--only 05,08a` records some of them; `--headed` lets you watch. The shelf shot
-needs `SHELF_PHOTO` (a photo of wipes, gauze and toilet paper on a shelf) and is
+needs `SHELF_PHOTO` (a photo of a pantry shelf: coffee, paper towels, dishwasher tablets, dish soap) and is
 skipped without it. Long model waits are cut out with a jump cut. A shot that
 fails is reported and the rest carry on; re-run it with `--only`.
 
