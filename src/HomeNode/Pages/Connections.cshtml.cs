@@ -60,6 +60,12 @@ public class ConnectionsModel : PageModel
     public string? NewInviteCode => TempData["NewInviteCode"] as string;
     public string? NewInviteFor => TempData["NewInviteFor"] as string;
 
+    // The members' own assistants a visitor can ask to send the house a
+    // note (the Test Send control), each with whether it is joined to
+    // this household right now. Only a joined one gets a button.
+    public List<(StandInEndpoint StandIn, bool Connected)> StandIns { get; private set; } = new();
+    public string? TestSendNote => TempData["TestSendNote"] as string;
+
     // The household zone request times are shown in.
     public TimeZoneInfo HouseholdZone { get; private set; } =
         TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
@@ -238,6 +244,13 @@ public class ConnectionsModel : PageModel
         foreach (var request in PendingRequests)
         {
             Cards[request.Id] = await _door.GetInviterCardAsync(request.Id);
+        }
+        if (HttpContext?.RequestServices?.GetService(typeof(TestSendService)) is TestSendService testSend)
+        {
+            foreach (var standIn in testSend.ConfiguredStandIns)
+            {
+                StandIns.Add((standIn, await testSend.IsConnectedAsync(standIn)));
+            }
         }
     }
 }

@@ -146,6 +146,12 @@ builder.Services.AddHostedService<LapseService>();
 // Services/NodeLivenessService.cs.
 builder.Services.AddHostedService<NodeLivenessService>();
 
+// The demo's reset between visitors (Services/DemoResetService.cs):
+// after a quiet stretch the household's content goes back to its
+// baseline; connections and replay protection are never touched.
+builder.Services.AddSingleton<DemoResetService>();
+builder.Services.AddHostedService<DemoResetTimer>();
+
 // The shared record lives in one SQLite file beside the app. Delete the
 // file to start over; the app creates it and seeds the demo household on
 // the next start.
@@ -270,6 +276,21 @@ app.UseStatusCodePagesWithReExecute("/NotFound");
 app.UseHttpsRedirection();
 app.UseRouting();
 app.UseAuthorization();
+
+// A visitor's change is any page form post; the house's own doors
+// (/door, /admin) and the demo's own reset are not visitor activity.
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value ?? "/";
+    if (HttpMethods.IsPost(context.Request.Method)
+        && !path.StartsWith("/door", StringComparison.OrdinalIgnoreCase)
+        && !path.StartsWith("/admin", StringComparison.OrdinalIgnoreCase)
+        && !path.StartsWith("/demo", StringComparison.OrdinalIgnoreCase))
+    {
+        context.RequestServices.GetRequiredService<DemoResetService>().NoteActivity();
+    }
+    await next();
+});
 
 app.MapStaticAssets();
 app.MapRazorPages()
@@ -656,6 +677,40 @@ app.MapPost("/admin/valve", async (System.Text.Json.Nodes.JsonObject body, HttpR
         }
     }
     return Results.Json(new { valve = state, material_class = materialClass });
+});
+
+// The demo reset (Services/DemoResetService.cs). The baseline is taken
+// by the operator once the members' assistants are connected (DEPLOY.md
+// step 9); a reset puts the household's content back to it and leaves
+// connections and replay protection exactly as they are. Both need the
+// house secret.
+app.MapPost("/admin/baseline", async (HttpRequest req, DemoResetService reset) =>
+{
+    if (!HouseAuthorized(req))
+    {
+        return HouseDenied();
+    }
+    await reset.CaptureBaselineAsync();
+    return Results.Json(new { baseline = "taken", at = DateTime.UtcNow, idle_reset_minutes = reset.IdleMinutes });
+});
+app.MapPost("/admin/reset", async (HttpRequest req, DemoResetService reset) =>
+{
+    if (!HouseAuthorized(req))
+    {
+        return HouseDenied();
+    }
+    var done = await reset.ResetAsync("admin");
+    return Results.Json(new { reset = done, note = done ? "content put back to the baseline" : "no baseline yet: POST /admin/baseline first" });
+});
+
+// A visitor's "Start over" from the demo bar: the house goes back to
+// its starting day (at most once every two minutes), and the visitor
+// comes back to the welcome page as nobody in particular.
+app.MapPost("/demo/start-over", async (HttpContext http, DemoResetService reset) =>
+{
+    await reset.StartOverAsync();
+    CurrentPerson.Set(http, null);
+    return Results.LocalRedirect("/");
 });
 
 app.Run();

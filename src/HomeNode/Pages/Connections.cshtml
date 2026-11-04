@@ -12,12 +12,46 @@
 <div class="page-head">
     <span class="eyebrow">@Icons.Get("lock", 13) Members' own assistants</span>
     <h1>Assistants</h1>
-    <p class="lede">A member can talk to the house through their own AI assistant. Its messages travel sealed through the relay, which cannot read them, and are read by the same model pipeline as Home. No assistant joins until the person who invited it approves.</p>
+    <p class="lede">Family can reach the house through their own AI assistant. Messages travel sealed; the relay in between can&rsquo;t read them. No assistant joins until the person who invited it says yes.</p>
 </div>
 
 @if (note is not null)
 {
     <p class="note">@note</p>
+}
+@if (Model.TestSendNote is string testSendNote)
+{
+    <p class="note" role="status">@testSendNote <a href="/Timeline">See it on the Timeline</a></p>
+}
+
+@if (Model.StandIns.Count > 0)
+{
+    <div class="section-head">
+        <h2>Try it: a note from Lisa&rsquo;s own assistant</h2>
+        <p>In this demo, Lisa and Daniel each have a small stand-in assistant running as its own service. Ask one to send the house a note: it is sealed, carried by the relay, and read by the house the same way it reads Home.</p>
+    </div>
+    <form method="post" action="/?handler=TestSend" data-busy data-busy-label="Sending…">
+        <input type="hidden" name="returnTo" value="assistants" />
+        <div class="assistants">
+            @foreach (var (standIn, connected) in Model.StandIns)
+            {
+                var standInFirst = NameWording.First(standIn.PersonName);
+                <div class="assistant-card">
+                    <strong>@standInFirst&rsquo;s assistant</strong>
+                    @if (connected)
+                    {
+                        <p class="muted">Connected. Ask it to send the house its note.</p>
+                        <button type="submit" name="standInName" value="@standIn.Name" data-test-send>Send a note from @standInFirst&rsquo;s assistant</button>
+                    }
+                    else
+                    {
+                        <p class="muted">Not connected right now, so there is nothing to press. The rest of the house works without it.</p>
+                    }
+                </div>
+            }
+        </div>
+        @Html.AntiForgeryToken()
+    </form>
 }
 @if (Model.HouseSideOpen && newInviteCode is not null)
 {

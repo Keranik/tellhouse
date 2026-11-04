@@ -385,9 +385,9 @@ public class MockExtractionClient : IExtractionClient
             {
                 return SpokenTemplates.DoNotKnow;
             }
-            return ev.Body.StartsWith("I'm at", StringComparison.OrdinalIgnoreCase)
-                ? $"{person.FirstName} said he's{ev.Body[4..]}"
-                : $"{person.FirstName} said: {ev.Body}";
+            // Their own words, quoted as said: the house never
+            // rewrites a person's line (and never guesses a pronoun).
+            return $"{person.FirstName} said: {ev.Body}";
         }
         // "What did Daniel say about Tuesday?"
         var what = Regex.Match(lower, @"^what did\s+(\w+)\s+say about\s+(\w+)");
@@ -528,6 +528,29 @@ public class MockExtractionClient : IExtractionClient
                 Payload = new JsonObject { ["MessageText"] = clause }
             };
             return (ev, act);
+        }
+        // "Tell Daniel: thinking of you" passes a message on, the
+        // same as "Ask Daniel to ...": the whole line goes to the
+        // person named, in the speaker's words, once someone says yes.
+        // Only the colon form: "Tell Daniel the gauze is nearly gone"
+        // stays a supply line, as above.
+        var tellColon = Regex.Match(clause, @"^tell\s+(\w+)\s*:\s*\S", RegexOptions.IgnoreCase);
+        if (tellColon.Success && FindPerson(ctx, tellColon.Groups[1].Value) is { } tellTarget && speaker is not null)
+        {
+            return (new ExtractionEvent
+            {
+                Type = "Request",
+                Body = clause,
+                SubjectPersonId = speaker.PersonId,
+                AuthorPersonId = speaker.PersonId,
+                ConfirmationState = "Proposed",
+                Details = Details(("RequestKind", "Relay"), ("TargetPersonId", tellTarget.PersonId))
+            }, new ExtractionAction
+            {
+                ActionType = "RelayMessage",
+                TargetPersonId = tellTarget.PersonId,
+                Payload = new JsonObject { ["MessageText"] = clause }
+            });
         }
         if (lower.StartsWith("remind me"))
         {

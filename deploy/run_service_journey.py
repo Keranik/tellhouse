@@ -215,8 +215,9 @@ def main():
     check("node service boots through its entrypoint (snapshot restored on a fresh disk)",
           wait_http(NODE_URL + "/", 120) and node_db.exists())
     _, home_html = http("GET", NODE_URL + "/")
-    check("deployed-shaped node carries the DEMO ENVIRONMENT label and the Test Send control",
-          "DEMO ENVIRONMENT" in home_html and "TestSend" in home_html)
+    _, assistants_html = http("GET", NODE_URL + "/Connections")
+    check("deployed-shaped node carries the DEMO ENVIRONMENT label, and the Assistants page carries the Test Send control",
+          "DEMO ENVIRONMENT" in home_html and "TestSend" in assistants_html)
 
     base_persons = sql(node_db, "select count(*) from Persons")[0][0]
     base_events = sql(node_db, "select count(*) from Events")[0][0]

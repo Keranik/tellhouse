@@ -40,6 +40,13 @@ public sealed class TraceOptions
 
     public bool ShowRaw { get; init; } = true;
     public bool Compact { get; init; }
+
+    // Home's conversation shows the words and the decision buttons
+    // itself, above the trace: the embedded trace then leaves out its
+    // own header, words and buttons, and keeps the receipt and every
+    // step.
+    public bool HideHead { get; init; }
+    public bool HideDecisions { get; init; }
     public TimeZoneInfo Zone { get; init; } = HouseholdTime.ZoneFor(null);
 }
 

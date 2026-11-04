@@ -72,6 +72,45 @@ public class TestSendService
 
     public IReadOnlyList<StandInEndpoint> ConfiguredStandIns => _standIns;
 
+    // Whether a stand-in says it is joined to this household right
+    // now, read from its own /status beside the trigger address. The
+    // Assistants page offers the send button only when this is true,
+    // so a visitor never presses a button that cannot work. A short
+    // timeout and a one-minute memory keep the page quick; anything
+    // unexpected reads as not connected.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (bool Joined, DateTime AtUtc)> StatusMemory = new();
+
+    public async Task<bool> IsConnectedAsync(StandInEndpoint standIn)
+    {
+        if (!Uri.TryCreate(standIn.TriggerUrl, UriKind.Absolute, out var trigger))
+        {
+            return false;
+        }
+        var statusUrl = trigger.GetLeftPart(UriPartial.Authority) + "/status";
+        if (StatusMemory.TryGetValue(statusUrl, out var known) && DateTime.UtcNow - known.AtUtc < TimeSpan.FromMinutes(1))
+        {
+            return known.Joined;
+        }
+        var joined = false;
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            using var response = await _http.GetAsync(statusUrl, timeout.Token);
+            if (response.IsSuccessStatusCode)
+            {
+                using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(timeout.Token));
+                joined = doc.RootElement.TryGetProperty("joined", out var value)
+                    && value.ValueKind == JsonValueKind.True;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or OperationCanceledException)
+        {
+            joined = false;
+        }
+        StatusMemory[statusUrl] = (joined, DateTime.UtcNow);
+        return joined;
+    }
+
     // The exact payload shape sent to a stand-in trigger endpoint.
     // Kept as one method so the suite can serialize it and assert
     // that no content bearing field exists. The act field is an
