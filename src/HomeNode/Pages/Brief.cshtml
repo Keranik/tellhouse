@@ -156,7 +156,7 @@
                         }
                     </form>
                 }
-                <p class="muted small attention-never">Never shown to Muse Wonder: anything private or about health, and medicines on the supply list. Those stay with the house&rsquo;s own rules.</p>
+                <p class="muted small attention-never">Never shown to Muse Wonder: anything private. That stays with the house&rsquo;s own rules.</p>
             </div>
         </div>
     </section>
@@ -168,7 +168,7 @@
     <section class="shelf" aria-labelledby="shelf" id="shelf">
         <div class="section-head">
             <h2 id="shelf">What&rsquo;s on the shelf</h2>
-            <p>Snap the supply shelf and SAM 3.1 looks for each thing the house tracks, by name, and outlines what it finds. Nothing is written to the record: where it sees none, you can say so in one tap.</p>
+            <p>Snap the pantry shelf and SAM 3.1 looks for each thing the house tracks, by name, and outlines what it finds. Nothing is written to the record: where it sees none, you can say so in one tap.</p>
         </div>
         <div class="shelf-grid">
             <div class="shelf-photo">
@@ -228,7 +228,7 @@
                         <button type="submit" class="primary">Check it with SAM 3.1</button>
                     </form>
                 }
-                <p class="muted small">SAM looks for: @(Model.ShelfAsks.Count == 0 ? "nothing yet" : string.Join(", ", Model.ShelfAsks.Select(a => a.Name))). It is never asked to look for a medicine@(Model.ShelfNeverAsked.Count > 0 ? $" ({string.Join(", ", Model.ShelfNeverAsked)} stay with the house's own rules)" : "").</p>
+                <p class="muted small">SAM looks for: @(Model.ShelfAsks.Count == 0 ? "nothing yet" : string.Join(", ", Model.ShelfAsks.Select(a => a.Name))). It looks for nothing else.</p>
             </div>
         </div>
     </section>

@@ -29,7 +29,6 @@
         ("Task", "Household work that needs doing, a pickup, an errand, or whose turn a job is."),
         ("Supply", "Something running low, out, used, or restocked. Tracked items move their count."),
         ("Location", "Where someone is, is heading, or has arrived."),
-        ("Health", "Anything about a body or a medication. Written down in the speaker's own words, never advised on, and only ever handed to a person."),
         ("Note", "Anything else for the household, including open decisions such as what is for dinner."),
         ("Journal", "An answer to a journal prompt; personal to the person it is about."),
         ("Building notice", "A notice from outside the household, such as a water shut-off."),
@@ -51,7 +50,7 @@
 <div class="page-head">
     <span class="eyebrow">@Icons.Get("spark", 13) Behind the scenes</span>
     <h1>Five models, one job each</h1>
-    <p class="lede">Tellhouse doesn&rsquo;t chat. Each of Meta&rsquo;s models has one job, through the Meta Model API: hearing, reading, reviewing, seeing and drawing. Anything private or about health never reaches any of them. The model proposes; the house&rsquo;s rules and a person decide.</p>
+    <p class="lede">Tellhouse doesn&rsquo;t chat. Each of Meta&rsquo;s models has one job, through the Meta Model API: hearing, reading, reviewing, seeing and drawing. Anything marked Private never reaches any of them. The model proposes; the house&rsquo;s rules and a person decide.</p>
 </div>
 
 <div class="model-rows">
@@ -69,7 +68,7 @@
         <div class="model-main">
             <h2>@Icons.Get("spark", 16) Muse Spark <code>@Model.ModelId</code></h2>
             <p>Reads each message once into typed entries (who, what, when, which supply) and at most one proposed action, under a strict JSON schema. The house&rsquo;s code checks every field before anything is written.</p>
-            <p class="model-never">@Icons.Get("lock", 13) Never given a private or health-shaped message.</p>
+            <p class="model-never">@Icons.Get("lock", 13) Never given anything marked Private.</p>
         </div>
         <p class="model-count">@(liveSpark is not null ? $"{liveSpark.Count} reading{(liveSpark.Count == 1 ? "" : "s")} · middle one {Ms(liveSpark.MedianMs)}" : mockSpark is not null ? $"{mockSpark.Count} read by the local stand-in (no model call)" : "No readings yet.")</p>
     </article>
@@ -77,7 +76,7 @@
         <span class="model-step">Keep private</span>
         <div class="model-main">
             <h2>@Icons.Get("lock", 16) No model</h2>
-            <p>A message about a body, a medicine, a doctor or how someone feels inside, or anything marked Private, is read by the house&rsquo;s own deterministic rules on this server. There is no fallback to a model: if those rules fail, nothing is saved and nothing is sent anywhere.</p>
+            <p>Anything marked Private is read by the house&rsquo;s own deterministic rules on this server, and so is anything about someone&rsquo;s health, written down in their own words with no advice. There is no fallback to a model: if those rules fail, nothing is saved and nothing is sent anywhere.</p>
             <p class="model-never">@Icons.Get("shield", 13) The rule errs toward private: a near miss costs only the model&rsquo;s reading.</p>
         </div>
         <p class="model-count">@(Model.PrivateReadings == 1 ? "1 message kept private" : $"{Model.PrivateReadings} messages kept private")</p>
@@ -87,7 +86,7 @@
         <div class="model-main">
             <h2>@Icons.Get("bulb", 16) Muse Wonder <code>@Model.Models.ReviewModel</code></h2>
             <p>On Briefing, a person can ask Meta&rsquo;s reasoning model to look over the shared record they may see: two people claiming the same pickup, a claim that is slipping, a supply that runs out before an order could arrive. Every finding must cite the entries it relies on, or the house drops it; a draft only fills the message box.</p>
-            <p class="model-never">@Icons.Get("lock", 13) Never shown anything private, health-shaped, or a medicine.</p>
+            <p class="model-never">@Icons.Get("lock", 13) Never shown anything private.</p>
         </div>
         <p class="model-count">@(modelsCallable ? CallLine(reviewStat, "review") + (Model.ReviewFindingsKept + Model.ReviewFindingsDropped > 0 ? $" · {Model.ReviewFindingsKept} findings kept, {Model.ReviewFindingsDropped} dropped by the house's checks" : "") : "Available on a Live instance.")</p>
     </article>
@@ -96,7 +95,7 @@
         <div class="model-main">
             <h2>@Icons.Get("eye", 16) SAM 3.1 <code>@Model.Models.SeeModel</code></h2>
             <p>On Briefing, snap the supply shelf. The house&rsquo;s own supply list becomes SAM&rsquo;s prompts, one noun phrase per request, side by side; SAM outlines every instance it finds and the house counts them. Where it sees none, the page offers &ldquo;We&rsquo;re out of &hellip;&rdquo; for the message box. Nothing is written to the record by a photo.</p>
-            <p class="model-never">@Icons.Get("lock", 13) Never asked to look for a medicine.</p>
+            <p class="model-never">@Icons.Get("lock", 13) Looks only for the house&rsquo;s own supply list.</p>
         </div>
         <p class="model-count">@(modelsCallable ? CallLine(seeStat, "shelf check") : "Available on a Live instance.")</p>
     </article>
@@ -105,7 +104,7 @@
         <div class="model-main">
             <h2>@Icons.Get("image", 16) Muse Image <code>@Model.Models.DrawModel</code></h2>
             <p>When the house passes a message on to a child, Muse Image draws a picture card for it in the background (a plate and a big clock at 6:30 for &ldquo;dinner at 6:30&rdquo;), so it can be taken in without reading. It appears with the message in the child&rsquo;s Inbox and as a step in the trace.</p>
-            <p class="model-never">@Icons.Get("lock", 13) Only for what the whole household may see; never for anything health-shaped; no faces, no writing.</p>
+            <p class="model-never">@Icons.Get("lock", 13) Only for what the whole household may see; no faces, no writing.</p>
         </div>
         <p class="model-count">@(modelsCallable ? CallLine(drawStat, "picture card") : "Available on a Live instance.")</p>
     </article>
@@ -181,14 +180,14 @@
         <span class="stage-icon">@Icons.Get("shield", 17)</span>
         <div>
             <h3>4. The house checks the reading <span class="who">House code</span></h3>
-            <p>Every entry's words must appear verbatim in the message, every person must be in this household, health stays a single health entry, no alert fires from words alone, and the reply carries no medication instruction. A reading that fails is not saved.</p>
+            <p>Every entry's words must appear verbatim in the message, every person must be in this household, no alert fires from words alone, and the reply comes from fixed templates. A reading that fails is not saved.</p>
         </div>
     </li>
     <li class="stage--house">
         <span class="stage-icon">@Icons.Get("shield", 17)</span>
         <div>
             <h3>5. Code decides who can see it <span class="who">House code</span></h3>
-            <p>The audience of every entry is decided by deterministic rules (health, claims, whose-turn tasks, each person's sharing default) and stored with the entry. The model is never asked who should see anything.</p>
+            <p>The audience of every entry is decided by deterministic rules (private entries, claims, whose-turn tasks, each person's sharing default) and stored with the entry. The model is never asked who should see anything.</p>
         </div>
     </li>
     <li class="stage--person">
@@ -284,7 +283,7 @@
 
 <div class="section-head">
     <h2>What it can return</h2>
-    <p>Nine kinds of entry and four kinds of action, nothing else. The schema forbids any other field.</p>
+    <p>Typed entries and four kinds of action, nothing else. The schema forbids any other field.</p>
 </div>
 <div class="type-grid">
     @foreach (var (kind, text) in entryTypes)

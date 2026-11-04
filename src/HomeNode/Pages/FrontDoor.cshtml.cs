@@ -226,11 +226,12 @@ public class FrontDoorModel : PageModel
     public ActivityItem? Featured { get; private set; }
     public bool AnyReadings { get; private set; }
 
-    // A person's own front door: big type, a few big choices, and the
-    // house's reply as the main thing on the page. Shown for the
-    // people the configuration names (Home:SimpleViewFor, Margaret in
-    // the demo), or for anyone who asks for it with ?view=simple;
-    // ?view=full turns it off. The choice is kept in a cookie.
+    // The big-button front door: big type, a few big choices, and the
+    // house's reply as the main thing on the page. The household's
+    // children get it by default (their picture cards from Muse Image
+    // land in the same spirit); anyone can ask for it with
+    // ?view=simple, and ?view=full turns it off. The choice is kept in
+    // a cookie.
     public bool SimpleView { get; private set; }
     public string Greeting { get; private set; } = "Hello";
 
@@ -244,6 +245,12 @@ public class FrontDoorModel : PageModel
 
     [BindProperty(SupportsGet = true, Name = "step")]
     public int? TourStepNumber { get; set; }
+
+    // ?private=1 starts the message box with Private already on (the
+    // tour's surprise-party step); it changes nothing until Send.
+    [BindProperty(SupportsGet = true, Name = "private")]
+    public int? PrivateStart { get; set; }
+    public bool StartPrivate => PrivateStart == 1;
 
     public const string ViewCookie = "th-view";
 
@@ -754,9 +761,10 @@ public class FrontDoorModel : PageModel
         var viewCookie = HttpContext?.Request.Cookies[ViewCookie];
         var choice = ViewChoice is "simple" or "full" ? ViewChoice : viewCookie;
         var configured = (HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) as IConfiguration)?
-            .GetSection("Home:SimpleViewFor").Get<string[]>() ?? new[] { "Margaret Ellis" };
+            .GetSection("Home:SimpleViewFor").Get<string[]>() ?? Array.Empty<string>();
         SimpleView = viewer is not null && (choice == "simple"
-            || (choice != "full" && configured.Any(name => string.Equals(name, viewer.DisplayName, StringComparison.OrdinalIgnoreCase))));
+            || (choice != "full" && (viewer.MinorFlag
+                || configured.Any(name => string.Equals(name, viewer.DisplayName, StringComparison.OrdinalIgnoreCase)))));
         Tour = BuildTour(People);
 
         var services = HttpContext?.RequestServices;
@@ -819,32 +827,32 @@ public class FrontDoorModel : PageModel
     private static List<TourStep> BuildTour(IReadOnlyList<Person> people)
     {
         int? Id(string first) => people.FirstOrDefault(p => NameWording.First(p.DisplayName) == first)?.Id;
-        if (Id("Margaret") is not int margaret || Id("Daniel") is not int daniel)
+        if (Id("Lisa") is not int lisa || Id("Daniel") is not int daniel || Id("Margaret") is not int margaret)
         {
             return new List<TourStep>();
         }
-        string Say(int person, string words, int step) =>
-            CurrentPerson.SwitchHref(person, $"/?say={Uri.EscapeDataString(words)}&step={step}");
+        string Say(int person, string words, int step, bool privately = false) =>
+            CurrentPerson.SwitchHref(person, $"/?say={Uri.EscapeDataString(words)}&step={step}" + (privately ? "&private=1" : ""));
         var steps = new List<TourStep>
         {
-            new(1, "Margaret", "Ask for something", "Ask Daniel to pick up milk on his way home",
-                Say(margaret, "Ask Daniel to pick up milk on his way home", 1),
+            new(1, "Lisa", "Ask for something", "Ask Daniel to pick up milk on his way home",
+                Say(lisa, "Ask Daniel to pick up milk on his way home", 1),
                 "The house writes it down, then asks before it tells Daniel."),
             new(2, "Daniel", "See it arrive", null,
                 CurrentPerson.SwitchHref(daniel, "/Member"),
-                "It's in Daniel's inbox, in Margaret's own words."),
-            new(3, "Margaret", "Say something private", "My knee hurts when I stand up",
-                Say(margaret, "My knee hurts when I stand up", 3),
-                "Anything about health is kept from every model and handed to a person."),
-            new(4, "Daniel", "Take something on", "I'll get Mia at 3",
-                Say(daniel, "I'll get Mia at 3", 4),
+                "It's in Daniel's inbox, in Lisa's own words."),
+            new(3, "Daniel", "Take something on", "I'll get Mia at 3",
+                Say(daniel, "I'll get Mia at 3", 3),
                 "The house remembers who said they'd do what, until they close it."),
+            new(4, "Daniel", "Keep a surprise", "Keep this between Margaret and me: surprise party on Saturday.",
+                Say(daniel, "Keep this between Margaret and me: surprise party on Saturday.", 4, privately: true),
+                "Marked Private: no model reads it, and only Daniel and Margaret can see it."),
         };
         if (Id("Timmy") is int)
         {
-            steps.Add(new(5, "Margaret", "Tell a child", "Ask Timmy to come down for dinner at 6:30",
+            steps.Add(new(5, "Margaret", "Call the kids down", "Ask Timmy to come down for dinner at 6:30",
                 Say(margaret, "Ask Timmy to come down for dinner at 6:30", 5),
-                "Then open Timmy's inbox. On the live site, Muse Image draws him a picture card."));
+                "Then be Timmy: the kids get big buttons, and on the live site Muse Image draws them a picture card."));
         }
         return steps;
     }

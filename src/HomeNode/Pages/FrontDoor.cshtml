@@ -25,50 +25,48 @@
     var viewer = Model.People.FirstOrDefault(p => p.Id == Model.ViewerId);
     var viewerFirst = NameWording.First(viewer?.DisplayName);
     // Lines to try, chosen for whoever is speaking. Each one is read
-    // correctly by the local stand-in too, so the demo works off Live;
-    // the health-shaped ones show the private path (no model reads them).
+    // correctly by the local stand-in too, so the demo works off Live.
     string[] examples = viewerFirst switch
     {
         "Margaret" => new[]
         {
-            "Ask Daniel to pick up milk on his way home",
-            "My knee hurts when I stand up",
             "Ask Timmy to come down for dinner at 6:30",
-            "Remind me on Friday to call the pharmacy"
+            "Where's Daniel?",
+            "I'll walk Timmy to the bus",
+            "Remind me on Friday to call the plumber"
         },
         "Daniel" => new[]
         {
             "I'll get Mia at 3",
-            "We're out of wipes",
+            "We're out of coffee",
             "What are we having for dinner tonight?",
             "Where is Lisa?"
         },
         "Lisa" => new[]
         {
-            "Ask Daniel to bring the ladder in from the garage",
-            "I'll get Mia at 3",
-            "We're out of wipes",
-            "What are we having for dinner tonight?"
+            "Ask Daniel to pick up milk on his way home",
+            "We're out of coffee",
+            "What are we having for dinner tonight?",
+            "I'll get Mia at 3"
         },
         _ => new[]
         {
             "Ask Daniel to pick up milk on his way home",
             "I'll get Mia at 3",
-            "We're out of wipes",
+            "We're out of coffee",
             "Where is Lisa?"
         }
     };
-    // Margaret's big choices: each one is a whole message, sent the
-    // same way as typed words, read the same way, and confirmed the
-    // same way.
-    var daniel = Model.People.FirstOrDefault(p => NameWording.First(p.DisplayName) == "Daniel");
-    (string Icon, string Label, string Words)[] tapCards = viewerFirst == "Margaret" && daniel is not null
+    // The kids' big choices: each one is a whole message, sent the same
+    // way as typed words, read the same way, and confirmed the same way.
+    // "Mom" means Lisa in this house: the household glossary says so.
+    (string Icon, string Label, string Words)[] tapCards = viewer?.MinorFlag == true
         ? new[]
         {
-            ("person", "Where's Daniel?", "Where's Daniel?"),
-            ("chat", "Tell Daniel I'm all right", "Tell Daniel: thinking of you, all quiet here."),
-            ("send", "Ask Daniel to pick up milk", "Ask Daniel to pick up milk on his way home"),
-            ("eye", "Put my program on", "Put my program on.")
+            ("house", "I'm home", "I'm at home now."),
+            ("send", "Ask Mom to pick me up", "Ask Mom to pick me up from soccer at 6:30."),
+            ("check", "I'll take the bins out", "I'll take the bins out tonight."),
+            ("chat", "What's for dinner?", "What are we having for dinner tonight?")
         }
         : Array.Empty<(string, string, string)>();
     // The person this page shows, for the shell's person switcher.
@@ -100,7 +98,7 @@
 @{
     // The conversation: the words, the house's reply, the one yes or
     // no it needs, and underneath, how the house handled it, step by
-    // step. Shared by the everyday view and Margaret's front door.
+    // step. Shared by the everyday view and the big-button view.
     async Task Conversation(bool big)
     {
         if (Model.JustNow is { } now)
@@ -325,13 +323,13 @@
         <h1>The house that remembers</h1>
         <p class="lede">Tell the house what&rsquo;s happening, once, in your own words. It writes it down, asks before it tells anyone, and remembers who said they&rsquo;d do what.</p>
         @{
-            var margaret = Model.People.FirstOrDefault(p => NameWording.First(p.DisplayName) == "Margaret");
+            var lisa = Model.People.FirstOrDefault(p => NameWording.First(p.DisplayName) == "Lisa");
         }
-        @if (margaret is not null)
+        @if (lisa is not null)
         {
             <div class="welcome-story">
-                <p>Meet the Ellis household. <strong>Margaret</strong> is 78 and lives in the back unit. Her son <strong>Daniel</strong> leaves for the depot at 5:40 in the morning, and his partner <strong>Lisa</strong> works across town. Their kids are <strong>Timmy</strong> and <strong>Mia</strong>, and <strong>June</strong> sits with Margaret on Tuesdays. Tellhouse gives Margaret the front door.</p>
-                <a class="primary welcome-go" href="@CurrentPerson.SwitchHref(margaret.Id, "/?step=1&say=" + Uri.EscapeDataString("Ask Daniel to pick up milk on his way home"))" data-start-tour>Start as Margaret @Icons.Get("arrow", 16)</a>
+                <p>Meet the Ellis household. <strong>Daniel</strong> leaves for the depot at 5:40 in the morning and <strong>Lisa</strong> works across town. <strong>Timmy</strong> has soccer, <strong>Mia</strong> has homework, Daniel's mother <strong>Margaret</strong> lives in the back unit, and <strong>June</strong> next door does the Tuesday school run. Bins, bills, pickups, the last of the coffee: someone always ends up carrying it all in their head. Here, the house carries it.</p>
+                <a class="primary welcome-go" href="@CurrentPerson.SwitchHref(lisa.Id, "/?step=1&say=" + Uri.EscapeDataString("Ask Daniel to pick up milk on his way home"))" data-start-tour>Start as Lisa @Icons.Get("arrow", 16)</a>
             </div>
         }
         <div class="welcome-people" aria-label="Or choose who you are">
@@ -347,8 +345,8 @@
 }
 else if (Model.SimpleView)
 {
-    @* Margaret's front door: big type, a few big choices, the house's
-       reply as the main thing on the page. *@
+    @* The big-button front door (the kids' view by default): big type,
+       a few big choices, the house's reply as the main thing on the page. *@
     <section class="simple" aria-label="@viewerFirst's front door">
         <p class="simple-greeting">@Model.Greeting, @viewerFirst.</p>
         @{ await Conversation(true); }
@@ -387,7 +385,7 @@ else if (Model.SimpleView)
                     </button>
                 }
                 <label class="private-switch" title="No model reads a private message. The house's own rules write it down, in your words.">
-                    <input type="checkbox" name="keepPrivate" value="true" data-private />
+                    <input type="checkbox" name="keepPrivate" value="true" data-private checked="@Model.StartPrivate" />
                     <span class="switch-track" aria-hidden="true"></span>
                     @Icons.Get("lock", 14) <span>Private</span>
                 </label>
@@ -395,7 +393,7 @@ else if (Model.SimpleView)
                 <button type="submit" class="primary simple-send" data-send>Tell the house</button>
             </div>
         </form>
-        <p class="simple-foot">Anything about health, or marked Private, is written down by the house&rsquo;s own rules. No model reads it. <a href="/?view=full">Use the full view</a></p>
+        <p class="simple-foot">Anything marked Private is written down by the house&rsquo;s own rules. No model reads it. <a href="/?view=full">Use the full view</a></p>
     </section>
     TourCard(false);
 }
@@ -450,7 +448,7 @@ else
                     </button>
                 }
                 <label class="private-switch" title="No model reads a private message. The house's own rules write it down, in your words.">
-                    <input type="checkbox" name="keepPrivate" value="true" data-private />
+                    <input type="checkbox" name="keepPrivate" value="true" data-private checked="@Model.StartPrivate" />
                     <span class="switch-track" aria-hidden="true"></span>
                     @Icons.Get("lock", 14) <span>Private</span>
                 </label>
@@ -468,7 +466,7 @@ else
             </div>
         </form>
     </div>
-    <p class="composer-note">Anything about health or medicine, or marked Private, is read by the house&rsquo;s own rules, never by a model. Nothing is passed on until someone says yes.</p>
+    <p class="composer-note">Anything you mark Private is read by the house&rsquo;s own rules, never by a model. Nothing is passed on until someone says yes.</p>
 
     await Conversation(false);
 

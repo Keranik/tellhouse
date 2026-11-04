@@ -2148,11 +2148,17 @@ public static class NodeSuite
         await seedDb.Database.EnsureCreatedAsync();
         DbSeeder.Seed(seedDb);
 
-        Check("Seeded record: pristine counts hold at 6 persons, 16 events, 23 audits, 1 claim",
+        Check("Seeded record: pristine counts hold at 6 persons, 19 events, 24 audits, 3 claims",
             await seedDb.Persons.CountAsync() == 6
-            && await seedDb.Events.CountAsync() == 16
-            && await seedDb.EventAudits.CountAsync() == 23
-            && await seedDb.Promises.CountAsync() == 1);
+            && await seedDb.Events.CountAsync() == 19
+            && await seedDb.EventAudits.CountAsync() == 24
+            && await seedDb.Promises.CountAsync() == 3);
+        Check("Seeded record: an ordinary household day: no health entry, and every tracked supply is a household staple",
+            !await seedDb.Events.AnyAsync(e => e.Type == EventType.HealthMention)
+            && (await seedDb.SupplyItems.Select(i => i.Name).ToListAsync())
+                .OrderBy(n => n).SequenceEqual(new[] { "coffee", "dish soap", "dishwasher tablets", "paper towels" }));
+        Check("Seeded record: the evening is double-booked on the record: Daniel and Lisa both hold an open claim to take Timmy to soccer",
+            await seedDb.Promises.CountAsync(p => p.State == PromiseState.Made && p.CommitmentText == "take Timmy to soccer at 5:30") == 2);
 
         var daniel = await seedDb.Persons.FirstAsync(p => p.DisplayName == "Daniel");
         var lisa = await seedDb.Persons.FirstAsync(p => p.DisplayName == "Lisa");
@@ -2223,8 +2229,8 @@ public static class NodeSuite
         var didReset = await reset.ResetAsync("check");
         using (var db = new AppDbContext(options))
         {
-            Check("Demo reset: the household's content is back to the baseline (16 events, 1 claim) and the visitor's message is gone",
-                didReset && await db.Events.CountAsync() == 16 && await db.Promises.CountAsync() == 1
+            Check("Demo reset: the household's content is back to the baseline (19 events, 3 claims) and the visitor's message is gone",
+                didReset && await db.Events.CountAsync() == 19 && await db.Promises.CountAsync() == 3
                 && !await db.Events.AnyAsync(e => e.Body == "A visitor's message after the baseline."));
             Check("Demo reset: connections and seen packets made after the baseline are untouched",
                 await db.HouseConnections.AnyAsync(c => c.ConnectionId == "conn-reset-check" && c.Standing == ConnectionStanding.Active)

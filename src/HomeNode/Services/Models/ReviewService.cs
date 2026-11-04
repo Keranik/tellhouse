@@ -233,7 +233,9 @@ public sealed class ReviewService
             findings.Add(new ReviewFinding
             {
                 Kind = "unanswered",
-                Headline = $"{Name(ev.AuthorPersonId)}'s message lapses in {Math.Max(1, (int)left.TotalHours)} hours.",
+                Headline = ev.AuthorPersonId is int author
+                    ? $"{Name(author)}'s message lapses in {Math.Max(1, (int)left.TotalHours)} hours."
+                    : $"A note to the house lapses in {Math.Max(1, (int)left.TotalHours)} hours.",
                 Detail = "Nobody has said yes or no. If nobody answers, it is not sent.",
                 EntryIds = new() { ev.Id },
                 PersonIds = ev.AuthorPersonId is int a ? new() { a } : new()

@@ -258,7 +258,7 @@ def main():
         # Lisa's scripted telling lands with federated provenance.
         s, sent = req("POST", LISA + "/trigger/test-send", {"act": "lisa-telling-1"})
         got = wait_for(lambda: len(record()) == 2, timeout=20)
-        telling_events = [e for e in record() if "gauze pads" in e["body_text"]]
+        telling_events = [e for e in record() if "out of coffee" in e["body_text"]]
         check("Lisa telling lands on the record exactly once", bool(got) and len(telling_events) == 1, record())
         if telling_events:
             e = telling_events[0]
@@ -275,7 +275,7 @@ def main():
             relay_blob += open(os.path.join(stores["relay"], fn)).read()
         check("real relay snapshot and logs hold no canary phrase, sender name, check phrase, or token",
               "velvet cactus lantern" not in relay_blob and "Lisa" not in relay_blob
-              and "maple river stone" not in relay_blob and "gauze" not in relay_blob
+              and "maple river stone" not in relay_blob and "out of coffee" not in relay_blob
               and lisa_token not in relay_blob)
         s, view = req("GET", RELAY + "/relay/view")
         f3 = {"packet_id", "household_endpoint", "connection_id", "envelope_class", "delivery_mode",
@@ -315,14 +315,14 @@ def main():
         check("Daniel trigger act runs his receive and acknowledge act", s == 200, b)
         daniel_inbox = json.load(open(os.path.join(stores["daniel"], "inbox.json")))
         admitted = {"Lisa here. The porch light bulb burned out, adding it to the house list.",
-                    "Lisa here. We are out of gauze pads for Margaret, and Daniel is the one picking up groceries on Thursday.",
+                    "Lisa here. We're out of coffee, and Daniel is the one picking up groceries on Thursday.",
                     "Lisa here. Note for the house: velvet cactus lantern 417 goes on the hall shelf."}
         got_texts = {d["body_text"] for d in daniel_inbox if d.get("kind") == "delivery"}
         check("Daniel delivery bodies arrive verbatim, addressed to Daniel only",
               got_texts == admitted, got_texts)
         proposals_inbox = [d for d in daniel_inbox if d.get("kind") == "proposal"]
         check("Daniel receives the house proposal as a sealed proposal delivery",
-              len(proposals_inbox) == 1 and "gauze pads" in proposals_inbox[0]["body_text"], proposals_inbox)
+              len(proposals_inbox) == 1 and "coffee" in proposals_inbox[0]["body_text"], proposals_inbox)
         acks = wait_for(lambda: (lambda a: a if len(a) == len(daniel_inbox) else None)(
             req("GET", NODE + "/harness/acks")[1]), timeout=25) or []
         check("Daniel acknowledgements recorded as reported, not observed",
@@ -416,7 +416,7 @@ def main():
             lisa_blob += open(os.path.join(stores["lisa"], fn)).read()
         check("Lisa store holds no record events and no plaintext telling bodies",
               "evt-" not in lisa_blob and "velvet cactus" not in lisa_blob
-              and "gauze pads for Margaret" not in lisa_blob, lisa_blob[:200])
+              and "out of coffee, and Daniel" not in lisa_blob, lisa_blob[:200])
         check("stand-ins hold distinct key fingerprints in distinct stores",
               lisa_status["fingerprint"] != daniel_status["fingerprint"])
         daniel_keys = json.load(open(os.path.join(stores["daniel"], "keys.json")))

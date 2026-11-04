@@ -33,7 +33,11 @@ public class ModelOptions
     {
         ["pads"] = "package of pads",
         ["wipes"] = "package of wet wipes",
-        ["gauze"] = "box of gauze pads"
+        ["gauze"] = "box of gauze pads",
+        ["coffee"] = "bag of coffee",
+        ["dishwasher tablets"] = "box of dishwasher tablets",
+        ["paper towels"] = "roll of paper towels",
+        ["dish soap"] = "bottle of dish soap"
     };
 
     // Muse Image, picture cards.

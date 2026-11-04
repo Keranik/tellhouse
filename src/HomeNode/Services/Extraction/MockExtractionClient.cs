@@ -916,10 +916,24 @@ public class MockExtractionClient : IExtractionClient
         return lastOf.Success ? lastOf.Value : null;
     }
 
-    private static ExtractionSlicePerson? FindPerson(ExtractionContext ctx, string name) =>
-        ctx.Persons.FirstOrDefault(p =>
+    // A person by name, or by the household's own word for them: the
+    // glossary says what "Mom" or "Grandma" means in this house ("Lisa,
+    // Timmy and Mia's mother"), and its meaning starts with the name.
+    private static ExtractionSlicePerson? FindPerson(ExtractionContext ctx, string name)
+    {
+        var direct = ctx.Persons.FirstOrDefault(p =>
             p.FirstName.Equals(name, StringComparison.OrdinalIgnoreCase)
             || p.DisplayName.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (direct is not null)
+        {
+            return direct;
+        }
+        var term = ctx.Glossary.FirstOrDefault(g => g.Term.Equals(name, StringComparison.OrdinalIgnoreCase));
+        var meantName = term is null ? null : Regex.Match(term.Meaning, @"^\s*(\w+)").Groups[1].Value;
+        return string.IsNullOrEmpty(meantName)
+            ? null
+            : ctx.Persons.FirstOrDefault(p => p.FirstName.Equals(meantName, StringComparison.OrdinalIgnoreCase));
+    }
 
     private static List<string> SplitClauses(string transcript)
     {
