@@ -298,6 +298,12 @@
     }
 }
 
+@* Home's POST handlers (Tell, Confirm, TestSend) are also driven by the
+   deploy journeys and the end-to-end lanes, which read the antiforgery
+   token from this page. Every view of Home carries it, the welcome
+   included, even when that view has no form of its own. *@
+@Html.AntiForgeryToken()
+
 @if (Model.TestSendNote is string testSendNote)
 {
     <p class="note" role="status">@testSendNote <a href="/Timeline">See it on the Timeline</a></p>

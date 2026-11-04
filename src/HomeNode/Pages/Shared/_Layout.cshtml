@@ -145,7 +145,7 @@
                         <div class="demo-reset">
                             @if (LayoutReset.IdleMinutes > 0)
                             {
-                                <span>It resets itself after @LayoutReset.IdleMinutes quiet minutes.</span>
+                                <span>It resets itself after @(LayoutReset.IdleMinutes == 1 ? "1 quiet minute" : $"{LayoutReset.IdleMinutes} quiet minutes").</span>
                             }
                             @if (LayoutReset.StartOverAllowed)
                             {
