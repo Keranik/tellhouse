@@ -262,6 +262,7 @@ using (var scope = app.Services.CreateScope())
         createCalls.ExecuteNonQuery();
     }
     conn.Close();
+    DbSeeder.UseStoryDayFor(db, DateTime.UtcNow);
     DbSeeder.Seed(db);
 }
 

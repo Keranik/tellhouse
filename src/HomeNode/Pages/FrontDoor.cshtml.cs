@@ -844,7 +844,7 @@ public class FrontDoorModel : PageModel
         {
             steps.Add(new(5, "Margaret", "Tell a child", "Ask Timmy to come down for dinner at 6:30",
                 Say(margaret, "Ask Timmy to come down for dinner at 6:30", 5),
-                "Then open Timmy's inbox: Muse Image draws him a picture card."));
+                "Then open Timmy's inbox. On the live site, Muse Image draws him a picture card."));
         }
         return steps;
     }

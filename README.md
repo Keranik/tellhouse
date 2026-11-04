@@ -1,35 +1,33 @@
 # Tellhouse — the house that remembers
 
-One shared record for any household: tell it once, it writes it down, and it asks before it tells anyone.
+Tell the house once, in your own words. It writes it down, asks before it tells anyone, and remembers who said they'd do what.
 
-**It's your time, spend it doing what you want to do.**
+**[Try the live demo](https://tellhouse.onrender.com)** · built with Meta's Muse Spark, Muse Wonder, Muse Voice Transcribe, SAM 3.1 and Muse Image
 
-People tell Tellhouse what is happening, who is doing what, who is available, what is running low, and what needs picking up. The house turns each message into an entry in a shared record. When something is meant for one person, Tellhouse tells that person and no one else, and only after someone confirms it.
+> Households don't fail on forgotten facts. They fail on forgotten promises: when someone said they'd handle it, and the person waiting quietly stops believing anyone is coming.
 
-Claims stay visible as claims, so a person who is waiting can see who has taken something on. Entries are shown to the people their stored audience allows. Not everyone hears everything.
+In a lot of families, the person who knows first what's needed is the person who needs the help, and most tools give her no way in. Tellhouse gives her the front door. Margaret, 78, says what she needs in her own words, or taps one big button. The house writes it down, asks before it passes anything on, and keeps anything about her health away from every model. Everyone else in the household tells the house what's happening the same way: where they are, what's running low, what they'll pick up. The house remembers it, so the person who is waiting can see that someone is coming.
 
-Tellhouse coordinates a household: it records, reminds, and relays between the people in it. It does not give medical advice, diagnoses, or treatment recommendations. Anything health related is written down in the person's own words and handed to a person.
+An agent proposes, a person confirms, and there is a written record of both.
 
-In many households, the person who knows first what is needed may also be the person who needs support. Tellhouse gives them a way to speak into the system in their own words. Margaret can tell the house what she needs; the record is updated once a person confirms it, and what she asked to pass on reaches the person it names. The everyday coordination around that moment, including whereabouts, groceries, and supplies running low, belongs in the same record.
+**It's your time. Spend it doing what you want to do.**
 
-Tellhouse is for any household and for the people that household chooses to include: family near or far, friends, neighbors, sitters, and helpers, whether or not they live under the same roof. It is personal: one household, its own shared record.
+## Try it in two minutes
 
-An agent proposes, a human confirms, and there is a written record of both.
+Open **https://tellhouse.onrender.com** and follow the path on Home, or:
 
-## Try the live demo
+1. **Start as Margaret.** Tap *Ask Daniel to pick up milk*. Muse Spark reads it; the house asks before it tells Daniel. Say yes.
+2. **Be Daniel.** It's in his Inbox, in her words.
+3. **Back to Margaret:** *"My knee hurts when I stand up."* No model reads it. The house writes it down in her words and asks whether to tell Daniel.
+4. **Be Daniel:** *"I'll get Mia at 3."* The house keeps it on Claims, next to Daniel's *home by three* from the demo's starting Tuesday, kept at 2:55 PM.
+5. **As Margaret, ask Timmy to come down for dinner at 6:30**, then open Timmy's Inbox: Muse Image has drawn him a picture card.
+6. **How it works:** five Meta models, one job each, and what none of them ever sees. Under every message, *See every step* shows exactly what each one did.
 
-**Live demo:** https://tellhouse.onrender.com
+The demo is shared and open on purpose, because everyone in it is invented. It puts itself back to its starting day after 20 quiet minutes, and *Start over* in the demo bar does the same at once.
 
-The first load may take a minute while the services wake.
+![Margaret's front door in Tellhouse: "Good morning, Margaret." Her words, "Ask Daniel to pick up milk on his way home", the house's reply asking whether to tell Daniel, big Yes and No buttons, a folded summary of how the house handled it, and four big choices: Where's Daniel?, Tell Daniel I'm all right, Ask Daniel to pick up milk, Put my program on.](docs/images/tellhouse-margaret.png)
 
-1. Choose who you are at the top of the page (Margaret is the person the house is built around), then on Home type or say a short message, such as “Ask Daniel to pick up the milk on his way home.” The mic uses Muse Voice Transcribe.
-2. Watch what happens to it, step by step: what Muse Spark read in your words, the record entry it made, who the house's rules let see it, and the action waiting for a yes. Say yes, then switch to Daniel: it is in his Inbox. (A plain statement, such as “We're out of milk,” is simply written down; there is nothing to confirm.)
-3. Send something about health, such as “My knee hurts when I stand up.” The house keeps it private: no model reads it, and the trace says so.
-4. Open Briefing and ask Muse Wonder what needs attention, then open The models to see every model's job, what each one never sees, and what they have done so far.
-
-![Tellhouse Home in the demo: the household rail on the left, the "Tell the house" message box with example messages, and below it the most recent message traced step by step: the entry the model made, who the house's rules let see it, and the decision waiting on a person.](docs/images/tellhouse-home-desktop.png)
-
-*Screenshot: Tellhouse Home, served from the build in this repository, here reading with the local stand-in (no API key; on the live deployment the same trace names Muse Spark, the model id, and the time the reading took, with token counts when the API reports them). Every message is shown as a trace: the words, what the model made of them, what the house's rules decided, and what a person decided.*
+*Margaret's front door, from the build in this repository, here reading with the local stand-in (no API key). On the live demo the same summary names Muse Spark, the model id, and how long the reading took.*
 
 ## This demo
 
@@ -43,16 +41,14 @@ There is no Tellhouse app to install. Home is where a person sends the house a m
 
 The deployed demo uses separate services for the home node, the sealed relay, and the two member stand-ins. The home node holds the record and the door. The relay carries messages it cannot read. Each stand-in is a reference assistant for a fictional member, built to the house protocol.
 
-The house layer's surfaces are:
-
 The pages follow one loop, seen through one person's eyes at a time (the person switcher at the top):
 
-- **Home:** say it. Type or speak a message to the house, mark it Private if it should go to no model, and watch what happens to it, step by step.
-- **Inbox:** needs you. What is waiting on this person: a yes the house is asking for, a question about who should see something, plan items, and what the house has passed on.
-- **Briefing:** the house now. What needs attention (the house's own rules, and Muse Wonder's review), what is on the shelf (SAM 3.1), who has taken what on, what is running low, and what is planned. Plans and Claims open from here.
-- **Timeline:** the record. Every message, newest first, from the words that came in to where they went.
-- **The models:** each Meta model's job in the house, what it never sees, the exact instructions and output schema, and live counts.
-- **Assistants:** who is connected to the house through their own assistant, and how one joins.
+- **Home:** tell the house. Margaret gets her own front door: big type, big choices, and the house's reply as the main thing on the page. Everyone else gets the message box. Mark a message Private and no model reads it. After you send, the house answers, asks for the one yes it needs, and folds every step underneath.
+- **Inbox:** what is waiting on this person, and what the house has passed on to them.
+- **Briefing:** the house right now. What needs attention (the house's own rules, and Muse Wonder's review), what is on the shelf (SAM 3.1), who is on what, and what is running low. Plans and Claims open from here.
+- **Timeline:** everything said to the house, newest first, from the words that came in to where they went.
+- **How it works:** each Meta model's job in the house, what it never sees, the exact instructions and output schema, and live counts.
+- **Assistants:** who is connected through their own assistant, how one joins, and a button that asks Lisa's assistant to send the house a sealed note.
 
 ## Meta's models in Tellhouse
 

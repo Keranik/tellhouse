@@ -138,17 +138,22 @@
                 <span class="app-topbar-title">@ViewData["Title"]</span>
             </header>
             <div class="app-demo-banner">
-                <p><strong>DEMO ENVIRONMENT</strong> &middot; The people in this house are invented, and <strong>no real family's data is in it.</strong>
-                @if (LayoutReset.HasBaseline)
-                {
-                    <span class="demo-reset">@(LayoutReset.IdleMinutes > 0 ? $"It resets itself after {LayoutReset.IdleMinutes} quiet minutes." : "")
-                        @if (LayoutReset.StartOverAllowed)
-                        {
-                            <form method="post" action="/demo/start-over" class="demo-reset-form"><button type="submit" class="demo-reset-button" title="Put the house back to its starting day">Start over</button></form>
-                        }
-                    </span>
-                }
-                </p>
+                <div class="demo-bar">
+                    <p><strong>DEMO ENVIRONMENT</strong> &middot; The people in this house are invented, and <strong>no real family's data is in it.</strong></p>
+                    @if (LayoutReset.HasBaseline)
+                    {
+                        <div class="demo-reset">
+                            @if (LayoutReset.IdleMinutes > 0)
+                            {
+                                <span>It resets itself after @LayoutReset.IdleMinutes quiet minutes.</span>
+                            }
+                            @if (LayoutReset.StartOverAllowed)
+                            {
+                                <form method="post" action="/demo/start-over" class="demo-reset-form"><button type="submit" class="demo-reset-button" title="Put the house back to its starting day">Start over</button></form>
+                            }
+                        </div>
+                    }
+                </div>
             </div>
             <partial name="_PersonSwitcher" model="switcherView" />
             <main role="main" class="app-canvas">

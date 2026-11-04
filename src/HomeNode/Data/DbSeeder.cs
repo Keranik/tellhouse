@@ -28,8 +28,47 @@ public static class DbSeeder
             new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified),
             HouseholdZone);
 
+    // The demo's ordinary Tuesday. The suites keep the scenario's own
+    // date (Oct 27, 2026); the running node sets it before seeding a new
+    // record to the most recent Tuesday before today, so a visitor meets
+    // a day that just happened (see UseStoryDayFor).
+    public static DateOnly StoryDay { get; set; } = new(2026, 10, 27);
+
     private static DateTime DemoDay(int hour, int minute) =>
-        ChicagoToUtc(2026, 10, 27, hour, minute);
+        ChicagoToUtc(StoryDay.Year, StoryDay.Month, StoryDay.Day, hour, minute);
+
+    // A time on a day before the story day (the household's usual
+    // meals and the fridge, told in the days before).
+    private static DateTime BeforeStoryDay(int daysBefore, int hour, int minute)
+    {
+        var day = StoryDay.AddDays(-daysBefore);
+        return ChicagoToUtc(day.Year, day.Month, day.Day, hour, minute);
+    }
+
+    private const string StoryAnchorWords = "Depot by nine, hardware store after, home by three.";
+
+    // Chooses the story day for this node: the day an existing record
+    // was seeded with (its first entry's household date), or for a new
+    // record the most recent Tuesday strictly before today.
+    public static void UseStoryDayFor(AppDbContext db, DateTime utcNow)
+    {
+        // The scenario's first line of its Tuesday, Daniel at 5:40 AM,
+        // dates an existing record.
+        var anchor = db.Events.Where(e => e.Body == StoryAnchorWords)
+            .OrderBy(e => e.CreatedAtUtc).Select(e => (DateTime?)e.CreatedAtUtc).FirstOrDefault();
+        if (anchor is DateTime anchorUtc)
+        {
+            StoryDay = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(anchorUtc, HouseholdZone));
+            return;
+        }
+        if (db.Events.Any())
+        {
+            return;
+        }
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utcNow, HouseholdZone));
+        var back = ((int)today.DayOfWeek - (int)DayOfWeek.Tuesday + 7) % 7;
+        StoryDay = today.AddDays(back == 0 ? -7 : -back);
+    }
 
     // The record time of the last entry this seeder writes (8:45 PM
     // on the scenario's Tuesday). Every seeded entry is at or before
@@ -392,12 +431,12 @@ public static class DbSeeder
         };
         var provenanceEvents = new[]
         {
-            ProvenanceTelling(margaret, "Pasta bake is a usual dinner in this house.", "UsualMeal", "Pasta bake", ChicagoToUtc(2026, 10, 23, 18, 20)),
-            ProvenanceTelling(daniel, "Soup and sandwiches is one of our usual dinners.", "UsualMeal", "Soup and sandwiches", ChicagoToUtc(2026, 10, 24, 19, 12)),
-            ProvenanceTelling(lisa, "Tacos are one of our usual dinners.", "UsualMeal", "Tacos", ChicagoToUtc(2026, 10, 25, 18, 5)),
-            ProvenanceTelling(lisa, "There are eggs in the fridge.", "Fridge", "eggs", ChicagoToUtc(2026, 10, 26, 9, 20)),
-            ProvenanceTelling(daniel, "There are greens in the fridge.", "Fridge", "greens", ChicagoToUtc(2026, 10, 26, 17, 40)),
-            ProvenanceTelling(lisa, "There is cheese in the fridge.", "Fridge", "cheese", ChicagoToUtc(2026, 10, 27, 8, 15)),
+            ProvenanceTelling(margaret, "Pasta bake is a usual dinner in this house.", "UsualMeal", "Pasta bake", BeforeStoryDay(4, 18, 20)),
+            ProvenanceTelling(daniel, "Soup and sandwiches is one of our usual dinners.", "UsualMeal", "Soup and sandwiches", BeforeStoryDay(3, 19, 12)),
+            ProvenanceTelling(lisa, "Tacos are one of our usual dinners.", "UsualMeal", "Tacos", BeforeStoryDay(2, 18, 5)),
+            ProvenanceTelling(lisa, "There are eggs in the fridge.", "Fridge", "eggs", BeforeStoryDay(1, 9, 20)),
+            ProvenanceTelling(daniel, "There are greens in the fridge.", "Fridge", "greens", BeforeStoryDay(1, 17, 40)),
+            ProvenanceTelling(lisa, "There is cheese in the fridge.", "Fridge", "cheese", BeforeStoryDay(0, 8, 15)),
         };
         db.Events.AddRange(provenanceEvents);
         db.SaveChanges();
@@ -422,7 +461,7 @@ public static class DbSeeder
             PromiseePersonId = null,
             CommitmentText = "home by three",
             DueText = "three",
-            DueAtLocal = new DateTime(2026, 10, 27, 15, 0, 0),
+            DueAtLocal = StoryDay.ToDateTime(new TimeOnly(15, 0)),
             SourceEventId = events[0].Id,
             State = PromiseState.Kept,
             ClosedByEventId = events[6].Id,

@@ -2376,7 +2376,8 @@ button.simple-send { font-size: 1.15rem; padding: 0.75rem 1.6rem; margin: 0 0 0 
 }
 
 /* The demo bar's reset line and its Start over button. */
-.demo-reset { display: inline-flex; align-items: center; gap: 0.5rem; margin-left: 0.4rem; }
+.demo-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.3rem 0.8rem; }
+.demo-reset { display: inline-flex; align-items: center; gap: 0.55rem; color: var(--demo-ink); font-size: 0.875rem; }
 .demo-reset-form { display: inline; margin: 0; }
 button.demo-reset-button {
   margin: 0;
