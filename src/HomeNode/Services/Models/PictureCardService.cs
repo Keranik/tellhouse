@@ -10,16 +10,16 @@ using Microsoft.EntityFrameworkCore;
 namespace HomeNode.Services.Models;
 
 // Drawing: Muse Image makes a picture card for a message the house has
-// passed on to a child, so it can be taken in without reading: a plate
-// and a big clock at 6:30 for "Dinner at 6:30". It runs in the
-// background after the delivery is written (a drawing takes seconds),
-// and the card appears with the delivery in the child's Inbox.
+// passed on to an adult, so it can be taken in at a glance: a milk
+// carton and a front door for "pick up milk on your way home", a big
+// clock when the words name a time. It runs in the background after
+// the delivery is written (a drawing takes seconds), and the card
+// appears with the delivery in that person's Inbox.
 //
-// Only for what a whole household may see, and never for anything
-// health-shaped: the card is drawn from words already shared with the
-// household, and a private or health entry is never sent to a model.
-// The prompt asks for no faces and no writing; the child's name is
-// not sent.
+// Never for anyone under 18, only for what a whole household may see,
+// and never for anything private: the card is drawn from words already
+// shared with the household. The prompt asks for no faces and no
+// writing, and no one's name is sent.
 public interface IDrawClient
 {
     Task<(byte[] Image, string MediaType, int ElapsedMs)> DrawAsync(string prompt, CancellationToken ct = default);
@@ -101,11 +101,11 @@ public sealed class PictureCardService : BackgroundService
         _logger = logger;
     }
 
-    // A delivery gets a picture card only when it went to a child and
-    // came from an entry the whole household may see, with no
-    // health-shaped words in it.
+    // A delivery gets a picture card only when it went to an adult
+    // (never anyone under 18) and came from an entry the whole
+    // household may see, with no health-shaped words in it.
     public static bool Eligible(Person? to, Event? source, string body) =>
-        to is { MinorFlag: true }
+        to is { MinorFlag: false }
         && source is not null
         && source.Type != EventType.HealthMention
         && source.SensitivityClass is SensitivityClass.Open or SensitivityClass.Household
@@ -140,7 +140,7 @@ public sealed class PictureCardService : BackgroundService
             var minute = time.Groups[2].Success ? time.Groups[2].Value : time.Groups[5].Success ? time.Groups[5].Value : "00";
             clock = $" Include one large, simple analog clock with its hands at {hour}:{minute}.";
         }
-        return "A simple, friendly picture card for a young child, showing this household message as one clear scene: \""
+        return "A simple, friendly picture card showing this household message as one clear scene: \""
             + words + "\". Flat illustration, bright soft colours, rounded shapes, plain light background."
             + " Do not draw any faces. Do not write any words, letters or numbers." + clock;
     }
@@ -182,7 +182,7 @@ public sealed class PictureCardService : BackgroundService
         var recent = await db.AlertDeliveries
             .Include(d => d.ToPerson)
             .Include(d => d.Event)
-            .Where(d => d.DeliveredAtUtc >= since && d.ToPerson != null && d.ToPerson.MinorFlag)
+            .Where(d => d.DeliveredAtUtc >= since && d.ToPerson != null && !d.ToPerson.MinorFlag)
             .ToListAsync(ct);
         if (recent.Count == 0)
         {

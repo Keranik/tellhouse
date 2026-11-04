@@ -43,7 +43,7 @@
 @if (Model.Member is null)
 {
     <div class="who-grid">
-        @foreach (var person in Model.People)
+        @foreach (var person in Model.People.Where(p => !p.MinorFlag))
         {
             var first = NameWording.First(person.DisplayName);
             var count = Model.WaitingByPerson.GetValueOrDefault(person.Id);

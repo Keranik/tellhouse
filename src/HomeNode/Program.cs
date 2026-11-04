@@ -304,7 +304,8 @@ app.MapRazorPages()
 // still fences what it shows to the person chosen.
 app.MapGet("/as/{personId:int?}", async (int? personId, string? @return, HttpContext http, AppDbContext db) =>
 {
-    var valid = personId is int id && await db.Persons.AnyAsync(p => p.Id == id);
+    // Under-18 members are never the house's users: nobody can be them.
+    var valid = personId is int id && await db.Persons.AnyAsync(p => p.Id == id && !p.MinorFlag);
     CurrentPerson.Set(http, valid ? personId : null);
     return Results.LocalRedirect(CurrentPerson.SafeReturn(@return));
 });

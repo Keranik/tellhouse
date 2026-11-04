@@ -155,7 +155,8 @@ public class BriefModel : PageModel
         var services = HttpContext?.RequestServices;
         if (services?.GetService(typeof(HomeNode.Services.Models.ShelfCheckService)) is not HomeNode.Services.Models.ShelfCheckService shelf
             || !shelf.Available || photo is null || photo.Length == 0
-            || photo.Length > HomeNode.Services.Models.ShelfCheckService.MaxBytes)
+            || photo.Length > HomeNode.Services.Models.ShelfCheckService.MaxBytes
+            || await _db.Persons.AnyAsync(p => p.Id == personId && p.MinorFlag))
         {
             return RedirectToPage(new { PersonId = personId });
         }
@@ -185,7 +186,7 @@ public class BriefModel : PageModel
     {
         if (HttpContext?.RequestServices.GetService(typeof(HomeNode.Services.Models.ReviewService))
             is HomeNode.Services.Models.ReviewService reviews && reviews.WonderAvailable
-            && await _db.Persons.AnyAsync(p => p.Id == personId))
+            && await _db.Persons.AnyAsync(p => p.Id == personId && !p.MinorFlag))
         {
             var slice = await reviews.SliceForAsync(personId);
             if (slice is not null)

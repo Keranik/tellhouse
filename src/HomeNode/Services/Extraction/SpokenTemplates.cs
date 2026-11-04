@@ -15,6 +15,10 @@ public static class SpokenTemplates
 
     public const string Recorded = "Written down.";
 
+    // Under-18s are never the house's users: it does not pass messages
+    // on to them.
+    public const string NotForChildren = "Written down. The house doesn't pass messages on to anyone under 18; tell them yourself.";
+
     public static string RelayConfirm(string firstName, string messageText) =>
         $"Do you want me to tell {firstName} this: \u201c{messageText}\u201d?";
 

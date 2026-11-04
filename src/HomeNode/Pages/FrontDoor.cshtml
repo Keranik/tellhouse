@@ -30,7 +30,7 @@
     {
         "Margaret" => new[]
         {
-            "Ask Timmy to come down for dinner at 6:30",
+            "Ask Daniel to take the bins out tonight",
             "Where's Daniel?",
             "I'll walk Timmy to the bus",
             "Remind me on Friday to call the plumber"
@@ -57,18 +57,9 @@
             "Where is Lisa?"
         }
     };
-    // The kids' big choices: each one is a whole message, sent the same
-    // way as typed words, read the same way, and confirmed the same way.
-    // "Mom" means Lisa in this house: the household glossary says so.
-    (string Icon, string Label, string Words)[] tapCards = viewer?.MinorFlag == true
-        ? new[]
-        {
-            ("house", "I'm home", "I'm at home now."),
-            ("send", "Ask Mom to pick me up", "Ask Mom to pick me up from soccer at 6:30."),
-            ("check", "I'll take the bins out", "I'll take the bins out tonight."),
-            ("chat", "What's for dinner?", "What are we having for dinner tonight?")
-        }
-        : Array.Empty<(string, string, string)>();
+    // The big-button view's choices (none by default): each would be a
+    // whole message, sent, read and confirmed like typed words.
+    (string Icon, string Label, string Words)[] tapCards = Array.Empty<(string, string, string)>();
     // The person this page shows, for the shell's person switcher.
     ViewData["AsPersonId"] = Model.ViewerId;
     var justNowView = Model.JustNow is null ? null : new TraceView(Model.JustNow, new TraceOptions
@@ -334,7 +325,7 @@
         }
         <div class="welcome-people" aria-label="Or choose who you are">
             <span class="muted small">Or be someone else:</span>
-            @foreach (var person in Model.People)
+            @foreach (var person in Model.People.Where(p => !p.MinorFlag))
             {
                 var first = NameWording.First(person.DisplayName);
                 <a class="who-chip" href="@CurrentPerson.SwitchHref(person.Id, "/")"><span class="avatar avatar--@PersonStyle.Slot(person.Id) avatar--sm" aria-hidden="true">@PersonStyle.Initial(first)</span><span class="who-name">@first</span></a>
@@ -345,8 +336,8 @@
 }
 else if (Model.SimpleView)
 {
-    @* The big-button front door (the kids' view by default): big type,
-       a few big choices, the house's reply as the main thing on the page. *@
+    @* The big-button front door (off by default): big type, the house's
+       reply as the main thing on the page. *@
     <section class="simple" aria-label="@viewerFirst's front door">
         <p class="simple-greeting">@Model.Greeting, @viewerFirst.</p>
         @{ await Conversation(true); }

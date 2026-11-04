@@ -226,12 +226,10 @@ public class FrontDoorModel : PageModel
     public ActivityItem? Featured { get; private set; }
     public bool AnyReadings { get; private set; }
 
-    // The big-button front door: big type, a few big choices, and the
-    // house's reply as the main thing on the page. The household's
-    // children get it by default (their picture cards from Muse Image
-    // land in the same spirit); anyone can ask for it with
-    // ?view=simple, and ?view=full turns it off. The choice is kept in
-    // a cookie.
+    // The big-button front door: big type and the house's reply as the
+    // main thing on the page. Off by default; anyone can ask for it with
+    // ?view=simple (or name people in Home:SimpleViewFor), and
+    // ?view=full turns it off. The choice is kept in a cookie.
     public bool SimpleView { get; private set; }
     public string Greeting { get; private set; } = "Hello";
 
@@ -287,6 +285,13 @@ public class FrontDoorModel : PageModel
         var speaker = speakerId is int id
             ? await _db.Persons.FirstOrDefaultAsync(p => p.Id == id)
             : null;
+        // Under-18 members are never the house's users: nothing they say
+        // is taken, so nothing of theirs ever reaches a model.
+        if (speaker is { MinorFlag: true })
+        {
+            TempData["HouseReply"] = "The house takes messages from adults only. Nothing was sent anywhere.";
+            return RedirectToPage();
+        }
         var context = await _contextBuilder.BuildAsync(household.Id);
         var tz = TimeZoneInfo.FindSystemTimeZoneById(household.TimeZoneId ?? "America/Chicago");
         // A clip Muse Voice Transcribe heard for this message a moment
@@ -763,8 +768,7 @@ public class FrontDoorModel : PageModel
         var configured = (HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) as IConfiguration)?
             .GetSection("Home:SimpleViewFor").Get<string[]>() ?? Array.Empty<string>();
         SimpleView = viewer is not null && (choice == "simple"
-            || (choice != "full" && (viewer.MinorFlag
-                || configured.Any(name => string.Equals(name, viewer.DisplayName, StringComparison.OrdinalIgnoreCase)))));
+            || (choice != "full" && configured.Any(name => string.Equals(name, viewer.DisplayName, StringComparison.OrdinalIgnoreCase))));
         Tour = BuildTour(People);
 
         var services = HttpContext?.RequestServices;
@@ -827,7 +831,7 @@ public class FrontDoorModel : PageModel
     private static List<TourStep> BuildTour(IReadOnlyList<Person> people)
     {
         int? Id(string first) => people.FirstOrDefault(p => NameWording.First(p.DisplayName) == first)?.Id;
-        if (Id("Lisa") is not int lisa || Id("Daniel") is not int daniel || Id("Margaret") is not int margaret)
+        if (Id("Lisa") is not int lisa || Id("Daniel") is not int daniel)
         {
             return new List<TourStep>();
         }
@@ -840,7 +844,7 @@ public class FrontDoorModel : PageModel
                 "The house writes it down, then asks before it tells Daniel."),
             new(2, "Daniel", "See it arrive", null,
                 CurrentPerson.SwitchHref(daniel, "/Member"),
-                "It's in Daniel's inbox, in Lisa's own words."),
+                "It's in Daniel's inbox, in Lisa's own words. On the live site, Muse Image adds a picture card."),
             new(3, "Daniel", "Take something on", "I'll get Mia at 3",
                 Say(daniel, "I'll get Mia at 3", 3),
                 "The house remembers who said they'd do what, until they close it."),
@@ -848,12 +852,9 @@ public class FrontDoorModel : PageModel
                 Say(daniel, "Keep this between Margaret and me: surprise party on Saturday.", 4, privately: true),
                 "Marked Private: no model reads it, and only Daniel and Margaret can see it."),
         };
-        if (Id("Timmy") is int)
-        {
-            steps.Add(new(5, "Margaret", "Call the kids down", "Ask Timmy to come down for dinner at 6:30",
-                Say(margaret, "Ask Timmy to come down for dinner at 6:30", 5),
-                "Then be Timmy: the kids get big buttons, and on the live site Muse Image draws them a picture card."));
-        }
+        steps.Add(new(5, "Daniel", "See what the house noticed", null,
+            CurrentPerson.SwitchHref(daniel, "/Brief"),
+            "The evening is double-booked: Daniel and Lisa both said they'd take Timmy to soccer. Ask Muse Wonder what else needs attention."));
         return steps;
     }
 
@@ -892,6 +893,10 @@ public class FrontDoorModel : PageModel
         if (household is null || audio is null || audio.Length == 0)
         {
             return new JsonResult(new { ok = false, note = "Nothing was recorded." });
+        }
+        if (speakerId is int voiceSpeaker && await _db.Persons.AnyAsync(p => p.Id == voiceSpeaker && p.MinorFlag))
+        {
+            return new JsonResult(new { ok = false, note = "The house takes messages from adults only." });
         }
         if (audio.Length > HomeNode.Services.Models.WavCheck.MaxBytes)
         {

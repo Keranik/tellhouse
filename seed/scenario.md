@@ -19,7 +19,7 @@ Lisa: "Used the last of the coffee." The count goes to zero, and Briefing shows 
 one who orders it.
 
 ## 7:20 AM: the schedule moves
-Timmy: "Soccer practice moved to 5:30 tonight."
+Lisa: "Timmy's soccer practice moved to 5:30 tonight."
 
 ## 9:05 AM: a shared lift
 Margaret: "Daniel is driving me to bridge club on Tuesday, and June is the backup."

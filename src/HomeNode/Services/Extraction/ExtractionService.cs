@@ -140,6 +140,23 @@ public class ExtractionService
             return result;
         }
 
+        // Under-18 members are part of the household but never its
+        // users: the house passes nothing on to them and asks no one to.
+        // A proposed action that would tell or remind a child is dropped
+        // before anything is written; the entry itself stays on the
+        // record, as said, with nothing waiting on it.
+        if (output.ProposedAction?.TargetPersonId is int childTarget
+            && await _db.Persons.AnyAsync(p => p.Id == childTarget && p.MinorFlag))
+        {
+            if (output.ProposedAction.EventIndex is int childIndex && childIndex >= 0 && childIndex < output.Events.Count)
+            {
+                output.Events[childIndex].ConfirmationState = "Confirmed";
+            }
+            output.ProposedAction = null;
+            output.ConfirmationPrompt = null;
+            output.SpokenResponse = SpokenTemplates.NotForChildren;
+        }
+
         var channel = input.SourceType;
         var actionIndex = output.ProposedAction?.EventIndex;
         for (var i = 0; i < output.Events.Count; i++)

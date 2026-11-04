@@ -78,6 +78,7 @@
             <h2>@Icons.Get("lock", 16) No model</h2>
             <p>Anything marked Private is read by the house&rsquo;s own deterministic rules on this server, and so is anything about someone&rsquo;s health, written down in their own words with no advice. There is no fallback to a model: if those rules fail, nothing is saved and nothing is sent anywhere.</p>
             <p class="model-never">@Icons.Get("shield", 13) The rule errs toward private: a near miss costs only the model&rsquo;s reading.</p>
+            <p class="model-never">@Icons.Get("lock", 13) Nobody under 18 uses the house: no model ever reads a message from a child, and nothing is passed on to or drawn for one.</p>
         </div>
         <p class="model-count">@(Model.PrivateReadings == 1 ? "1 message kept private" : $"{Model.PrivateReadings} messages kept private")</p>
     </article>
@@ -103,8 +104,8 @@
         <span class="model-step">Draw</span>
         <div class="model-main">
             <h2>@Icons.Get("image", 16) Muse Image <code>@Model.Models.DrawModel</code></h2>
-            <p>When the house passes a message on to a child, Muse Image draws a picture card for it in the background (a plate and a big clock at 6:30 for &ldquo;dinner at 6:30&rdquo;), so it can be taken in without reading. It appears with the message in the child&rsquo;s Inbox and as a step in the trace.</p>
-            <p class="model-never">@Icons.Get("lock", 13) Only for what the whole household may see; no faces, no writing.</p>
+            <p>When the house passes a message on to someone, Muse Image draws a small picture card for it in the background (a milk carton and a front door for &ldquo;pick up milk on your way home&rdquo;), so it can be taken in at a glance. It appears with the message in their Inbox and as a step in the trace.</p>
+            <p class="model-never">@Icons.Get("lock", 13) Only for adults, and only for what the whole household may see; no faces, no writing.</p>
         </div>
         <p class="model-count">@(modelsCallable ? CallLine(drawStat, "picture card") : "Available on a Live instance.")</p>
     </article>
@@ -144,7 +145,7 @@
         <dt>Seeing</dt>
         <dd><code>@Model.Models.SeeModel</code> (SAM 3.1) through the Responses API, streamed: one noun phrase per request, the photo as a data URL, boxes read from SAM&rsquo;s token grammar, score threshold @Model.Models.SeeScoreThreshold</dd>
         <dt>Drawing</dt>
-        <dd><code>@Model.Models.DrawModel</code> (Muse Image) through the Responses API: picture cards for deliveries to children</dd>
+        <dd><code>@Model.Models.DrawModel</code> (Muse Image) through the Responses API: picture cards for messages passed on to adults</dd>
         <dt>Private messages</dt>
         <dd>Read by the house&rsquo;s own rules on this server; no model is called for them</dd>
     </dl>

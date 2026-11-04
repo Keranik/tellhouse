@@ -19,14 +19,11 @@ Lives in the back unit and is part of the household's day: she helps with the ki
 on Tuesdays (Daniel drives, June is the backup), and tells the house what's going on the same way everyone else
 does.
 
-## Timmy
-Has soccer, and it just moved to 5:30. He uses the kids' big-button view: "I'm home", "Ask Mom to pick me up",
-"I'll take the bins out", "What's for dinner?". When the house passes something on to him, Muse Image draws it
-as a picture card.
-
-## Mia
-Has homework most nights and a side-gate pickup on Tuesdays. Her sharing default is "ask me each time", set
-when she joined, as it is for every child in the household.
+## Timmy and Mia
+Daniel and Lisa's kids. Timmy has soccer, and it just moved to 5:30; Mia has homework most nights and a
+side-gate pickup on Tuesdays. They are part of the household the house knows about, and the adults talk about
+them all day ("I'll get Mia at 3"), but they don't use the house themselves: nobody under 18 does. The house
+takes no message from a child and passes nothing on to one.
 
 ## June, next door
 Not family and doesn't live in the house. She has a key, does the Tuesday school pickup, and reads the

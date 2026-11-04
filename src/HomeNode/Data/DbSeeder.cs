@@ -232,7 +232,7 @@ public static class DbSeeder
             """{"Direction":"Used","QuantityText":"the last of the coffee"}""");
         lastCoffee.RelatedSupplyItemId = coffee.Id;
         // 7:20 AM. The schedule moves.
-        var soccerMoved = Said(timmy, timmy, EventType.HouseholdNote, 7, 20, "Soccer practice moved to 5:30 tonight.");
+        var soccerMoved = Said(lisa, timmy, EventType.HouseholdNote, 7, 20, "Timmy's soccer practice moved to 5:30 tonight.");
         // 9:05 AM. A shared lift, arranged in Margaret's own words.
         var bridge = Said(margaret, margaret, EventType.HouseholdNote, 9, 5, "Daniel is driving me to bridge club on Tuesday, and June is the backup.");
         // 12:40 PM. A bill, before it is late.
