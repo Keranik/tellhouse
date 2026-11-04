@@ -11,8 +11,7 @@ where he is or when he'll be back. He keeps the coffee stocked and does the recy
 
 ## Lisa, 44
 Works across town and is the one who usually ends up holding the whole schedule in her head: pickups, soccer,
-the bill due Friday. Tellhouse is how she hands that to the house instead. Her default is private: what she says
-is seen by her and the people she names, unless she says otherwise.
+the bill due Friday. Tellhouse is how she hands that to the house instead. Her sharing default is everyone in the household, so what she passes on can be seen by the whole house.
 
 ## Margaret, Daniel's mother
 Lives in the back unit and is part of the household's day: she helps with the kids after school, plays bridge
