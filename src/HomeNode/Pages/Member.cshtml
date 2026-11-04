@@ -26,12 +26,12 @@
     @if (Model.Member is null)
     {
         <h1>Inbox</h1>
-        <p class="lede">Each person's inbox holds what is waiting on them: a yes the house is asking for, a question about who should see something, and what the house has passed on. Choose who you are to open theirs.</p>
+        <p class="lede">What&rsquo;s waiting on each person, and what the house passed on to them. Choose someone to open their inbox.</p>
     }
     else
     {
         <h1>@memberFirst's inbox</h1>
-        <p class="lede">What is waiting on @memberFirst, and what the house has passed on to @memberFirst. Nothing the house proposes happens without a yes.</p>
+        <p class="lede">What&rsquo;s waiting on @memberFirst, and what the house passed on. Nothing happens without a yes.</p>
     }
 </div>
 
@@ -43,7 +43,7 @@
 @if (Model.Member is null)
 {
     <div class="who-grid">
-        @foreach (var person in Model.People)
+        @foreach (var person in Model.People.Where(p => !p.MinorFlag))
         {
             var first = NameWording.First(person.DisplayName);
             var count = Model.WaitingByPerson.GetValueOrDefault(person.Id);

@@ -1,1 +1,55 @@
-{"arithmetic_notes":"All counts are seeded for the scenario's Tuesday morning. Heart pills: 7 pills on hand at 1 each morning means the last pill is taken next Tuesday morning, so the bottle is empty a week from the scenario day. The pharmacy needs 7 days (refill_lead_days 7), so the refill must be ordered this Tuesday, a full week before the bottle runs out. That makes the brief line 'order by Tuesday' true. Wipes: 12 on hand at a seeded rate of 5 a day lasts 2.4 days from Tuesday morning, which lands partway through Thursday, so the forecast line 'wipes run out around Thursday' is true. Pads: 18 at 4 a day lasts 4.5 days, out on Saturday; with a 3 day lead the order-by day is Wednesday. Gauze: 1 on hand at 1 a day, so it is gone Wednesday at the latest; Lisa's Tuesday capture uses the last one and the count goes to none, which updates the shared record the same day.","items":[{"assigned_to":"Lisa","daily_usage_rate":4,"forecast_note":"Runs out Saturday. Order by Wednesday.","name":"pads","quantity_on_hand":18,"reorder_lead_days":3,"unit":"pad"},{"assigned_to":"Daniel","daily_usage_rate":5,"forecast_note":"Runs out around Thursday.","name":"wipes","quantity_on_hand":12,"reorder_lead_days":2,"unit":"wipe"},{"assigned_to":"Daniel","daily_usage_rate":1,"forecast_note":"Last one in the house on Tuesday morning. Lisa's capture uses it and the count goes to none; Daniel picks up more on his way home.","name":"gauze","quantity_on_hand":1,"reorder_lead_days":2,"unit":"dressing"},{"assigned_to":"Lisa","daily_usage_rate":1,"forecast_note":"Order by Tuesday so the refill arrives before the bottle is empty. This entry records only a schedule a person set and a refill date. It carries no advice about taking the pills, and the coordinator never changes the schedule; only Daniel does.","name":"heart pills","order_by_day":"Tuesday","quantity_on_hand":7,"refill_lead_days":7,"schedule":"one each morning","schedule_set_by":"Daniel","type":"medication_schedule","unit":"pill"}],"seed_day":"Tuesday"}
+{
+ "arithmetic_notes": "All counts are seeded for the morning of the demo's Tuesday. Coffee: one bag on hand until Lisa uses the last of it at 7:05 AM, so it reads out on the record and on Briefing. Dishwasher tablets: 9 on hand at one a day lasts 9 days, with 3 days' lead, so they are not due yet. Paper towels: 3 rolls at 0.3 a day lasts 10 days, 2 days' lead. Dish soap: 1 bottle at 0.1 a day lasts 10 days, 3 days' lead. Toilet paper is not a tracked item; the 6:30 PM note about it is told to the house and waits for anyone to close it.",
+ "items": [
+  {
+   "name": "coffee",
+   "unit": "bag",
+   "on_hand": 1,
+   "daily_rate": 0.25,
+   "reorder_lead_days": 2,
+   "orders": "Daniel",
+   "aliases": [
+    "coffee",
+    "the coffee",
+    "coffee beans"
+   ]
+  },
+  {
+   "name": "dishwasher tablets",
+   "unit": "tablet",
+   "on_hand": 9,
+   "daily_rate": 1,
+   "reorder_lead_days": 3,
+   "orders": "Lisa",
+   "aliases": [
+    "dishwasher tablets",
+    "dishwasher pods",
+    "the tablets"
+   ]
+  },
+  {
+   "name": "paper towels",
+   "unit": "roll",
+   "on_hand": 3,
+   "daily_rate": 0.3,
+   "reorder_lead_days": 2,
+   "orders": "Daniel",
+   "aliases": [
+    "paper towels",
+    "kitchen roll"
+   ]
+  },
+  {
+   "name": "dish soap",
+   "unit": "bottle",
+   "on_hand": 1,
+   "daily_rate": 0.1,
+   "reorder_lead_days": 3,
+   "orders": "Lisa",
+   "aliases": [
+    "dish soap",
+    "washing up liquid"
+   ]
+  }
+ ]
+}

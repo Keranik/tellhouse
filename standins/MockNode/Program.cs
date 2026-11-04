@@ -348,7 +348,7 @@ async Task ProcessPacket(JsonObject wire)
                 new JsonObject { ["kind"] = "delivery", ["text"] = body["text"]!.GetValue<string>() },
                 daniel["party_id"]!.GetValue<string>(), danielConn!, deliveryId);
             await SendNodePacket(delivery, danielConn!, daniel["public_key"]!.GetValue<string>(), "session");
-            if (body["text"]!.GetValue<string>().Contains("gauze"))
+            if (body["text"]!.GetValue<string>().Contains("coffee"))
             {
                 // The proposal act: the house sends Daniel a
                 // proposal as a sealed delivery (kind proposal).
@@ -357,7 +357,7 @@ async Task ProcessPacket(JsonObject wire)
                 var proposalId = NewId("pkt-");
                 var proposal = MakePlain("delivery",
                     new JsonObject { ["kind"] = "proposal",
-                        ["text"] = "The house asks Daniel: shall the house add gauze pads to the Thursday grocery run?" },
+                        ["text"] = "The house asks Daniel: shall the house add coffee to the Thursday grocery run?" },
                     daniel["party_id"]!.GetValue<string>(), danielConn!, proposalId);
                 lock (Gate)
                 {

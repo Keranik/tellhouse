@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>03 title</title>
+<link rel="stylesheet" href="lib/stage.css"><script src="lib/stage.js"></script>
+<style>
+  #glow { position: absolute; left: 960px; top: 400px; width: 1300px; height: 1000px; margin: -500px 0 0 -650px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(242, 132, 111, 0.16), rgba(242, 132, 111, 0.05) 55%, transparent 80%); }
+  #mark { position: absolute; left: 960px; top: 300px; width: 230px; height: 230px; margin-left: -115px; }
+  #word { position: absolute; left: 0; right: 0; top: 560px; text-align: center; font-size: 132px; font-weight: 650; color: var(--ink); }
+  #tag { position: absolute; left: 0; right: 0; top: 735px; text-align: center; font-family: var(--serif); font-size: 60px; color: #cfc8c0; }
+</style></head>
+<body><div id="stage">
+  <div id="glow"></div>
+  <img id="mark" src="img/tellhouse-mark-white.svg" alt="">
+  <div id="word">Tellhouse</div>
+  <div id="tag">The house that remembers.</div>
+</div>
+<script>
+  const $ = T.$;
+  Scene(10, (t) => {
+    const g = T.fade(t, 0.2, 2.2);
+    $('#glow').style.opacity = g * (0.85 + 0.15 * Math.sin(t * 0.9));
+    const m = T.easeOut(T.prog(t, 0.4, 1.6));
+    T.set($('#mark'), { opacity: m, transform: `scale(${0.9 + 0.1 * m}) translateY(${(1 - m) * 16}px)` });
+    const w = T.easeOut(T.prog(t, 1.5, 1.2));
+    T.set($('#word'), { opacity: w, letterSpacing: `${(0.07 * (1 - w) - 0.01).toFixed(4)}em` });
+    const s = T.easeOut(T.prog(t, 2.6, 1.2));
+    T.set($('#tag'), { opacity: s, transform: `translateY(${(1 - s) * 14}px)` });
+  });
+</script></body></html>

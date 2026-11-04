@@ -176,19 +176,26 @@
     </article>
     return;
 }
-<article class="@($"trace trace--{item.StatusKey}{(o.Compact ? " trace--compact" : "")}")" id="@item.Key">
-    <header class="trace-head">
-        <span class="avatar avatar--@PersonStyle.Slot(item.SpeakerId)" aria-hidden="true">@PersonStyle.Initial(item.SpeakerName)</span>
-        <div class="trace-head-text">
-            <span class="trace-who">@item.SpeakerName</span>
-            <span class="trace-sub">@item.ChannelLabel &middot; <time>@Time(item.AtUtc)</time></span>
-        </div>
-        <span class="status status--@item.StatusKey">@item.StatusLabel</span>
-    </header>
-
-    @if (!string.IsNullOrWhiteSpace(item.Words))
+<article class="@($"trace trace--{item.StatusKey}{(o.Compact ? " trace--compact" : "")}{(o.HideHead ? " trace--embedded" : "")}")" id="@item.Key">
+    @if (!o.HideHead)
     {
-        <p class="trace-words">&ldquo;@item.Words&rdquo;</p>
+        <header class="trace-head">
+            <span class="avatar avatar--@PersonStyle.Slot(item.SpeakerId)" aria-hidden="true">@PersonStyle.Initial(item.SpeakerName)</span>
+            <div class="trace-head-text">
+                <span class="trace-who">@item.SpeakerName</span>
+                <span class="trace-sub">@item.ChannelLabel &middot; <time>@Time(item.AtUtc)</time></span>
+            </div>
+            <span class="status status--@item.StatusKey">@item.StatusLabel</span>
+        </header>
+
+        @if (!string.IsNullOrWhiteSpace(item.Words))
+        {
+            <p class="trace-words">&ldquo;@item.Words&rdquo;</p>
+        }
+    }
+    else
+    {
+        <p class="trace-embedded-head"><span class="status status--@item.StatusKey">@item.StatusLabel</span> <span class="muted small">How the house handled it</span></p>
     }
 
     @{
@@ -510,7 +517,10 @@
                 <li class="receipt-line receipt--@line.Actor"><span class="receipt-icon">@Icons.Get(line.Icon, 13)</span><span>@line.Text</span></li>
             }
         </ol>
-        await Decisions();
+        if (!o.HideDecisions)
+        {
+            await Decisions();
+        }
         <details class="trace-more">
             <summary>See every step</summary>
             @{ await Steps(false); Raw(); }

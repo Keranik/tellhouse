@@ -1,0 +1,72 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>09 relay</title>
+<link rel="stylesheet" href="lib/stage.css"><script src="lib/stage.js"></script>
+<style>
+  #bg { position: absolute; inset: 0; background:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px) 0 0 / 60px 60px,
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px) 0 0 / 60px 60px, var(--bg); }
+  #head { position: absolute; left: 0; right: 0; top: 110px; text-align: center; font-size: 60px; font-weight: 650; }
+  #head span { color: var(--coral); }
+  .phone { left: 230px; top: 300px; width: 230px; height: 440px; border-radius: 38px; }
+  .phone .screen { inset: 10px; border-radius: 30px; }
+  .phone .notch { top: 18px; width: 70px; height: 18px; margin-left: -35px; }
+  #pmsg { position: absolute; left: 16px; right: 16px; top: 120px; padding: 14px 16px; border-radius: 18px 18px 18px 6px; background: #26324a; color: #dfe7ff; font-size: 19px; line-height: 1.3; }
+  #pwho { position: absolute; left: 18px; top: 88px; font-size: 14px; color: var(--muted); }
+  .lbl { position: absolute; text-align: center; transform: translateX(-50%); white-space: nowrap; }
+  .lbl b { display: block; font-size: 30px; font-weight: 600; }
+  .lbl span { display: block; font-size: 22px; color: var(--muted); margin-top: 4px; }
+  #relay { position: absolute; left: 860px; top: 430px; width: 200px; height: 160px; border-radius: 26px; background: #232323; border: 2px solid #4a4a4a; display: grid; place-items: center; }
+  #houseGlow { position: absolute; left: 1600px; top: 510px; width: 420px; height: 420px; margin: -210px 0 0 -210px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(247, 196, 106, 0.45), transparent 75%); }
+  #house { position: absolute; left: 1510px; top: 420px; width: 180px; height: 180px; }
+  svg#paths, svg#env { position: absolute; left: 0; top: 0; }
+</style></head>
+<body><div id="stage">
+  <div id="bg"></div>
+  <div id="head">Sealed <span>end to end.</span></div>
+  <svg id="paths" width="1920" height="1080">
+    <line x1="470" y1="510" x2="850" y2="510" stroke="#555" stroke-width="3" stroke-dasharray="4 12" stroke-linecap="round"/>
+    <line x1="1070" y1="510" x2="1495" y2="510" stroke="#555" stroke-width="3" stroke-dasharray="4 12" stroke-linecap="round"/>
+  </svg>
+  <div class="phone" id="phone"><div class="screen"><div class="notch"></div><div id="pwho">Lisa’s assistant</div><div id="pmsg">We’re out of coffee.</div></div></div>
+  <div class="lbl" style="left:345px; top:770px"><b>Lisa’s own assistant</b><span>her phone, her AI</span></div>
+  <svg id="env" width="1920" height="1080"><g id="envelope">
+    <rect x="-46" y="-32" width="92" height="64" rx="7" fill="#efe6d8"/>
+    <path d="M-46 -26 L0 6 L46 -26" fill="none" stroke="#b9ad99" stroke-width="3"/>
+    <circle cx="0" cy="8" r="13" fill="#c8432f"/><circle cx="0" cy="8" r="6" fill="none" stroke="#f59b87" stroke-width="2"/>
+  </g></svg>
+  <div id="relay"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#9e9e9e" stroke-width="1.6" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+  <div class="lbl" style="left:960px; top:620px"><b>Relay</b><span>carries it, can’t read it</span></div>
+  <div id="houseGlow"></div>
+  <img id="house" src="img/tellhouse-mark-white.svg" alt="">
+  <div class="lbl" style="left:1600px; top:620px"><b>The house</b><span>opens it, writes it down</span></div>
+</div>
+<script>
+  const $ = T.$;
+  const env = document.getElementById('envelope');
+  Scene(10, (t) => {
+    $('#stage').style.opacity = T.fade(t, 0, 0.8);
+    const p = T.easeOut(T.prog(t, 0.3, 0.8));
+    T.set($('#phone'), { opacity: p, transform: `translateY(${(1 - p) * 16}px)` });
+    $('#pmsg').style.opacity = T.fade(t, 0.9, 0.5);
+    // Sealed at the phone, through the relay, into the house.
+    let x, y = 510, show = 1;
+    if (t < 1.6) { x = 470; show = T.fade(t, 1.2, 0.4); }
+    else if (t < 3.8) { x = 470 + (960 - 470) * T.easeInOut(T.prog(t, 1.6, 2.2)); }
+    else if (t < 5.2) { x = 960; show = 0; }
+    else if (t < 7.3) { x = 960 + (1600 - 960) * T.easeInOut(T.prog(t, 5.2, 2.1)); show = T.fade(t, 5.2, 0.3) * (1 - T.prog(t, 7.0, 0.3)); }
+    else { x = 1600; show = 0; }
+    env.setAttribute('transform', `translate(${x.toFixed(1)} ${y})`);
+    env.setAttribute('opacity', show.toFixed(3));
+    // The relay holds it a moment, closed.
+    const inside = T.prog(t, 3.7, 0.3) * (1 - T.prog(t, 5.1, 0.3));
+    $('#relay').style.borderColor = `rgba(242,132,111,${(0.25 + 0.6 * inside).toFixed(3)})`;
+    $('#relay').style.boxShadow = `0 0 ${(40 * inside).toFixed(1)}px rgba(242,132,111,${(0.25 * inside).toFixed(3)})`;
+    // The house receives it.
+    const got = T.easeOut(T.prog(t, 7.2, 0.8));
+    $('#houseGlow').style.opacity = (0.15 + 0.85 * got).toFixed(3);
+    $('#house').style.transform = `scale(${(1 + 0.05 * got * (1 - T.prog(t, 8.0, 1.0))).toFixed(4)})`;
+    const h = T.easeOut(T.prog(t, 7.7, 0.8));
+    T.set($('#head'), { opacity: h, transform: `translateY(${(1 - h) * 10}px)` });
+  });
+</script></body></html>

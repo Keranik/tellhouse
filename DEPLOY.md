@@ -276,10 +276,20 @@ MODEL_API_KEY is set:
    product reset restores the deployment's first-boot
    snapshot, which predates this step; repeat it after
    any reset.
-8. Open the website and use the Test Send control once.
-   Lisa's telling should land on the record with her
-   assistant's provenance. The deployment is now running
-   entirely on values created during these steps.
+8. Open the website and use the Test Send control once (it
+   is on the Assistants page, and it appears only while
+   Lisa's assistant reports itself joined). Lisa's telling
+   should land on the record with her assistant's
+   provenance. The deployment is now running entirely on
+   values created during these steps.
+9. Take the demo's baseline, the starting point the house
+   returns to between visitors:
+   `curl -X POST https://tellhouse.onrender.com/admin/baseline
+   -H 'X-House-Secret: <the house secret>'`. Take it after
+   step 8, so the connections and consents are in place; the
+   reset never touches them anyway (see "Reset between
+   judges"). The demo bar then shows the reset line and the
+   Start over button.
 
 A restart of all four services on the free plan's ephemeral
 disks starts this over: fresh mode boots unseeded again, and
@@ -320,7 +330,48 @@ demo-scope line already discloses ("it runs on one
 computer"), at the cost of the four-service shape this
 package proves.
 
+## Keeping it awake during judging
+
+Free web services sleep after about 15 minutes without an
+inbound request, and on wake their /tmp is empty again: the
+node re-seeds and the assistants lose their keys, which means
+rerunning steps 1 to 9. So during the judging window an
+outside pinger keeps all four services awake with a plain GET
+every 10 minutes:
+
+- https://tellhouse.onrender.com/ (the node)
+- https://tellhouse-relay.onrender.com/health
+- https://tellhouse-lisa.onrender.com/status
+- https://tellhouse-daniel.onrender.com/status
+
+Four services awake around the clock use about 96 of the
+account's free instance hours a day, so start the pinger when
+judging starts and stop it when judging ends. The pings are
+GETs, so they never count as a visitor's activity and never
+hold off the reset below.
+
 ## Reset between judges
+
+**In the running demo (automatic).** The node puts the
+household's content back to the baseline from step 9 after
+20 minutes in which no visitor changed anything
+(Demo:IdleResetMinutes; 0 turns it off). A visitor can also
+press Start over in the demo bar (at most once every two
+minutes), and the operator can force one with
+`curl -X POST https://tellhouse.onrender.com/admin/reset -H
+'X-House-Secret: <the house secret>'`. This reset runs inside
+the live node through SQLite itself, in one transaction, so it
+is safe while the node runs. It restores every content table
+and never touches the household, its people, the connections,
+invites, join requests, consents, session challenges, seen
+packets or used nonces: the assistants stay connected and a
+packet the house has already seen still cannot land twice.
+Services/DemoResetService.cs says exactly which tables are
+kept.
+
+**The whole node (stop first).** The rest of this section is
+the product's own backup and restore reset, for returning a
+node's database and keystore to a sealed snapshot.
 
 The reset is the product's own backup and restore machinery,
 the same machinery the node entrypoint boots from. To return

@@ -1,0 +1,17 @@
+{
+  "name": "tellhouse-film-capture",
+  "private": true,
+  "description": "Records the live Tellhouse app, one clip per shot, for the film.",
+  "type": "module",
+  "scripts": {
+    "capture": "node record.mjs",
+    "list": "node record.mjs --list"
+  },
+  "dependencies": {
+    "playwright": "1.63.0"
+  },
+  "optionalDependencies": {
+    "ffmpeg-static": "5.2.0"
+  },
+  "engines": { "node": ">=18" }
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>04 why</title>
+<link rel="stylesheet" href="lib/stage.css"><script src="lib/stage.js"></script><script src="lib/house.js"></script>
+<style>
+  #sky { position: absolute; inset: 0; background: linear-gradient(180deg, #17122a 0%, #2f2140 38%, #6b3a4c 66%, #c8653f 86%, #e08a4f 100%); }
+  #sun { position: absolute; left: 1180px; top: 760px; width: 900px; height: 900px; margin: -450px 0 0 -450px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(255, 190, 120, 0.55), rgba(255, 150, 90, 0.18) 50%, transparent 75%); }
+  svg#scene { position: absolute; left: 0; top: 0; }
+</style></head>
+<body><div id="stage">
+  <div id="sky"></div><div id="sun"></div>
+  <svg id="scene" width="1920" height="1080"><g id="world"><g id="h" transform="translate(900 880)"></g></g></svg>
+</div>
+<script>
+  const H = house(document.getElementById('h'));
+  const $ = T.$;
+  Scene(14, (t) => {
+    $('#stage').style.opacity = T.fade(t, 0, 1.0);
+    // Slow push toward Margaret's window in the back unit.
+    const push = T.easeInOut(T.prog(t, 0, 14));
+    const s = 1 + 0.085 * push, ox = 1214, oy = 720;
+    $('#world').setAttribute('transform', `translate(${ox} ${oy}) scale(${s.toFixed(5)}) translate(${-ox} ${-oy})`);
+    // The sun sinks as the windows warm, one by one.
+    $('#sun').style.transform = `translateY(${(push * 70).toFixed(2)}px)`;
+    $('#sun').style.opacity = 1 - 0.45 * push;
+    H.windows[0].set(T.easeOut(T.prog(t, 2.6, 1.4)));
+    H.windows[1].set(T.easeOut(T.prog(t, 5.4, 1.4)));
+    H.windows[2].set(T.easeOut(T.prog(t, 8.2, 1.6)));
+  });
+</script></body></html>

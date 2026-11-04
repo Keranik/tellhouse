@@ -42,12 +42,15 @@ public static class CurrentPerson
     // otherwise the switcher's choice, checked against the household.
     public static int? Resolve(HttpContext? http, int? explicitId, IEnumerable<Person> people)
     {
-        if (explicitId is not null)
+        // Under-18 members are never the house's users: in a real
+        // request nobody is shown the house as a child. (Pages built
+        // outside a request, by the suites, keep their own reader.)
+        if (explicitId is int named)
         {
-            return explicitId;
+            return http is not null && people.Any(p => p.Id == named && p.MinorFlag) ? null : explicitId;
         }
         var chosen = FromCookie(http);
-        return chosen is int id && people.Any(p => p.Id == id) ? id : null;
+        return chosen is int id && people.Any(p => p.Id == id && !p.MinorFlag) ? id : null;
     }
 
     public static void Set(HttpContext http, int? personId)

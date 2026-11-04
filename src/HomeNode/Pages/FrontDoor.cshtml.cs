@@ -75,6 +75,9 @@ public class JustReadView
     }
 }
 
+// One step of the demo's sixty-second path on Home.
+public sealed record TourStep(int Number, string Who, string Title, string? Words, string Href, string Detail);
+
 public class FrontDoorModel : PageModel
 {
     private readonly AppDbContext _db;
@@ -218,16 +221,54 @@ public class FrontDoorModel : PageModel
     // view, carried in the session's own TempData, never stored.
     public JustReadView? JustRead { get; private set; }
 
-    // The newest message a model read that this reader may see, shown
-    // in full when nothing was just sent.
+    // Kept for the page's shape; Home no longer leads with another
+    // visitor's newest message, so this stays empty.
     public ActivityItem? Featured { get; private set; }
     public bool AnyReadings { get; private set; }
+
+    // The big-button front door: big type and the house's reply as the
+    // main thing on the page. Off by default; anyone can ask for it with
+    // ?view=simple (or name people in Home:SimpleViewFor), and
+    // ?view=full turns it off. The choice is kept in a cookie.
+    public bool SimpleView { get; private set; }
+    public string Greeting { get; private set; } = "Hello";
+
+    // The sixty-second path through the demo: each step chooses the
+    // person and puts the words in the message box; nothing is sent
+    // until the visitor presses Send.
+    public List<TourStep> Tour { get; private set; } = new();
+
+    [BindProperty(SupportsGet = true, Name = "view")]
+    public string? ViewChoice { get; set; }
+
+    [BindProperty(SupportsGet = true, Name = "step")]
+    public int? TourStepNumber { get; set; }
+
+    // ?private=1 starts the message box with Private already on (the
+    // tour's surprise-party step); it changes nothing until Send.
+    [BindProperty(SupportsGet = true, Name = "private")]
+    public int? PrivateStart { get; set; }
+    public bool StartPrivate => PrivateStart == 1;
+
+    public const string ViewCookie = "th-view";
 
     public async Task OnGetAsync()
     {
         // The switcher's choice when the link named no one (see
         // CurrentPerson); a named reader in the link still wins.
         ViewerId = CurrentPerson.Resolve(HttpContext, ViewerId, await _db.Persons.ToListAsync());
+        if (HttpContext is not null && ViewChoice is "simple" or "full")
+        {
+            HttpContext.Response.Cookies.Append(ViewCookie, ViewChoice, new CookieOptions
+            {
+                HttpOnly = true,
+                SameSite = SameSiteMode.Lax,
+                Secure = HttpContext.Request.IsHttps,
+                IsEssential = true,
+                MaxAge = TimeSpan.FromDays(30),
+                Path = "/"
+            });
+        }
         await LoadAsync();
     }
 
@@ -244,6 +285,13 @@ public class FrontDoorModel : PageModel
         var speaker = speakerId is int id
             ? await _db.Persons.FirstOrDefaultAsync(p => p.Id == id)
             : null;
+        // Under-18 members are never the house's users: nothing they say
+        // is taken, so nothing of theirs ever reaches a model.
+        if (speaker is { MinorFlag: true })
+        {
+            TempData["HouseReply"] = "The house takes messages from adults only. Nothing was sent anywhere.";
+            return RedirectToPage();
+        }
         var context = await _contextBuilder.BuildAsync(household.Id);
         var tz = TimeZoneInfo.FindSystemTimeZoneById(household.TimeZoneId ?? "America/Chicago");
         // A clip Muse Voice Transcribe heard for this message a moment
@@ -436,7 +484,7 @@ public class FrontDoorModel : PageModel
     // reports what the stand-in answered, in the stand-in's own
     // terms. If the relay is stopped, the stand-in answers
     // queued-unrecorded and nothing lands here.
-    public async Task<IActionResult> OnPostTestSendAsync(string standInName)
+    public async Task<IActionResult> OnPostTestSendAsync(string standInName, string? returnTo = null)
     {
         var result = await _testSend.TriggerAsync(standInName);
         // The note reports the result in the page's own
@@ -458,7 +506,9 @@ public class FrontDoorModel : PageModel
             _ =>
                 $"{personFirst}'s assistant isn't connected to this household."
         };
-        return RedirectToPage();
+        // The Assistants page carries the control; it asks to come back
+        // there. Any other caller comes back to Home, as before.
+        return returnTo == "assistants" ? RedirectToPage("/Connections") : RedirectToPage();
     }
 
     // Setting a default by telling (clause 4): the telling is
@@ -700,17 +750,26 @@ public class FrontDoorModel : PageModel
         }
         var feed = await activity.BuildAsync(ViewerId, take: 60);
         Waiting = feed.Items.Where(i => i.NeedsDecision).Take(6).ToList();
-        // With nothing just sent, the newest message a model read leads
-        // the page, traced in full, so the model's work is the first
-        // thing a visitor sees.
-        Featured = JustNow is null && JustRead is null
-            ? feed.Items.FirstOrDefault(i => i.Engine.ModelRead)
-            : null;
+        // Home leads with the visitor's own conversation, never with
+        // the newest message someone else sent: the demo is shared, and
+        // the next visitor should not land on the last one's words.
+        Featured = null;
         Activity = feed.Items
-            .Where(i => i.Key != JustNow?.Key && i.Key != Featured?.Key)
+            .Where(i => i.Key != JustNow?.Key)
             .Take(4)
             .ToList();
         AnyReadings = feed.Items.Any(i => i.Engine.HasReading);
+
+        var localNow = HouseholdTime.ToLocal(DateTime.UtcNow, HouseholdZone);
+        Greeting = localNow.Hour < 12 ? "Good morning" : localNow.Hour < 17 ? "Good afternoon" : "Good evening";
+        var viewer = People.FirstOrDefault(p => p.Id == ViewerId);
+        var viewCookie = HttpContext?.Request.Cookies[ViewCookie];
+        var choice = ViewChoice is "simple" or "full" ? ViewChoice : viewCookie;
+        var configured = (HttpContext?.RequestServices?.GetService(typeof(IConfiguration)) as IConfiguration)?
+            .GetSection("Home:SimpleViewFor").Get<string[]>() ?? Array.Empty<string>();
+        SimpleView = viewer is not null && (choice == "simple"
+            || (choice != "full" && configured.Any(name => string.Equals(name, viewer.DisplayName, StringComparison.OrdinalIgnoreCase))));
+        Tour = BuildTour(People);
 
         var services = HttpContext?.RequestServices;
         if (services?.GetService(typeof(HomeNode.Services.Models.MetaApi)) is HomeNode.Services.Models.MetaApi api)
@@ -766,6 +825,39 @@ public class FrontDoorModel : PageModel
         }
     }
 
+    // The demo's path, built from the household's own people so every
+    // link names the right person. A household without these people
+    // gets no tour.
+    private static List<TourStep> BuildTour(IReadOnlyList<Person> people)
+    {
+        int? Id(string first) => people.FirstOrDefault(p => NameWording.First(p.DisplayName) == first)?.Id;
+        if (Id("Lisa") is not int lisa || Id("Daniel") is not int daniel)
+        {
+            return new List<TourStep>();
+        }
+        string Say(int person, string words, int step, bool privately = false) =>
+            CurrentPerson.SwitchHref(person, $"/?say={Uri.EscapeDataString(words)}&step={step}" + (privately ? "&private=1" : ""));
+        var steps = new List<TourStep>
+        {
+            new(1, "Lisa", "Ask for something", "Ask Daniel to pick up milk on his way home",
+                Say(lisa, "Ask Daniel to pick up milk on his way home", 1),
+                "The house writes it down, then asks before it tells Daniel."),
+            new(2, "Daniel", "See it arrive", null,
+                CurrentPerson.SwitchHref(daniel, "/Member"),
+                "It's in Daniel's inbox, in Lisa's own words. On the live site, Muse Image adds a picture card."),
+            new(3, "Daniel", "Take something on", "I'll get Mia at 3",
+                Say(daniel, "I'll get Mia at 3", 3),
+                "The house remembers who said they'd do what, until they close it."),
+            new(4, "Daniel", "Keep a surprise", "Keep this between Margaret and me: surprise party on Saturday.",
+                Say(daniel, "Keep this between Margaret and me: surprise party on Saturday.", 4, privately: true),
+                "Marked Private: no model reads it, and only Daniel and Margaret can see it."),
+        };
+        steps.Add(new(5, "Daniel", "See what the house noticed", null,
+            CurrentPerson.SwitchHref(daniel, "/Brief"),
+            "The evening is double-booked: Daniel and Lisa both said they'd take Timmy to soccer. Ask Muse Wonder what else needs attention."));
+        return steps;
+    }
+
     private static int? ReadDuration(string? json)
     {
         if (json is null)
@@ -801,6 +893,10 @@ public class FrontDoorModel : PageModel
         if (household is null || audio is null || audio.Length == 0)
         {
             return new JsonResult(new { ok = false, note = "Nothing was recorded." });
+        }
+        if (speakerId is int voiceSpeaker && await _db.Persons.AnyAsync(p => p.Id == voiceSpeaker && p.MinorFlag))
+        {
+            return new JsonResult(new { ok = false, note = "The house takes messages from adults only." });
         }
         if (audio.Length > HomeNode.Services.Models.WavCheck.MaxBytes)
         {

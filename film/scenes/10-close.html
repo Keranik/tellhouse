@@ -1,0 +1,49 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>10 close</title>
+<link rel="stylesheet" href="lib/stage.css"><script src="lib/stage.js"></script><script src="lib/house.js"></script>
+<style>
+  #sky { position: absolute; inset: 0; background: linear-gradient(180deg, #05080f 0%, #0a1222 55%, #121b30 100%); }
+  svg.full { position: absolute; left: 0; top: 0; }
+  #l1 { position: absolute; left: 0; right: 0; top: 118px; text-align: center; font-family: var(--serif); font-size: 84px; color: var(--ink); }
+  #l2 { position: absolute; left: 0; right: 0; top: 232px; text-align: center; font-family: var(--serif); font-size: 58px; color: #cfd3de; }
+  #sign { position: absolute; left: 0; right: 0; top: 372px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  #brand { display: flex; align-items: center; gap: 16px; font-size: 40px; font-weight: 650; color: var(--ink); }
+  #brand img { width: 52px; height: 52px; }
+  #urls { font-size: 30px; color: #aab0bf; letter-spacing: 0.01em; }
+  #urls b { color: var(--coral); font-weight: 600; }
+</style></head>
+<body><div id="stage">
+  <div id="sky"></div>
+  <svg id="stars" class="full" width="1920" height="700"></svg>
+  <svg class="full" width="1920" height="1080"><g transform="translate(960 1010) scale(0.66)"><g id="h"></g></g></svg>
+  <div id="l1">It’s your time.</div>
+  <div id="l2">Spend it doing what you want to do.</div>
+  <div id="sign"><div id="brand"><img src="img/tellhouse-mark-white.svg" alt="">Tellhouse</div>
+    <div id="urls"><b>tellhouse.onrender.com</b> · github.com/Keranik/tellhouse</div></div>
+</div>
+<script>
+  const H = house(document.getElementById('h'), { ink: '#05060a', ground: '#04050a' });
+  const stars = document.getElementById('stars'); let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const starEls = [];
+  for (let i = 0; i < 110; i++) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', (rnd() * 1920).toFixed(1)); c.setAttribute('cy', (rnd() * 680).toFixed(1));
+    c.setAttribute('r', (0.6 + rnd() * 1.6).toFixed(2)); c.setAttribute('fill', '#e3e9ff');
+    starEls.push([c, 0.2 + rnd() * 0.6, rnd() * 6]); stars.appendChild(c);
+  }
+  const $ = T.$;
+  Scene(10, (t) => {
+    $('#stage').style.opacity = T.fade(t, 0, 1.0);
+    for (const [c, base, ph] of starEls) c.setAttribute('opacity', (base * (0.8 + 0.2 * Math.sin(t * 1.3 + ph))).toFixed(3));
+    // Only Margaret's window is still lit.
+    H.windows[0].set(0); H.windows[1].set(0);
+    H.windows[2].set(T.easeOut(T.prog(t, 0.8, 1.6)));
+    const a = T.easeOut(T.prog(t, 1.8, 1.2));
+    T.set($('#l1'), { opacity: a, transform: `translateY(${(1 - a) * 14}px)` });
+    const b = T.easeOut(T.prog(t, 3.0, 1.2));
+    T.set($('#l2'), { opacity: b, transform: `translateY(${(1 - b) * 14}px)` });
+    const c = T.easeOut(T.prog(t, 4.6, 1.2));
+    T.set($('#sign'), { opacity: c, transform: `translateY(${(1 - c) * 10}px)` });
+  });
+</script></body></html>

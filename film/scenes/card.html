@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>card</title>
+<link rel="stylesheet" href="lib/stage.css">
+<style>
+  #frame { position: absolute; inset: 70px; border-radius: 36px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 26px; padding: 0 140px; }
+  .placeholder #frame { border: 3px dashed #4a4a4a; background: repeating-linear-gradient(135deg, #1c1c1c 0 26px, #1a1a1a 26px 52px); }
+  #kicker { font-size: 26px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--wait); }
+  #title { font-size: 60px; font-weight: 650; color: var(--ink); line-height: 1.15; }
+  .card #title { font-family: var(--serif); font-weight: 500; font-size: 84px; }
+  #sub { font-size: 34px; color: var(--muted); line-height: 1.4; max-width: 1400px; text-wrap: balance; }
+  #hint { font-size: 24px; color: #7c7c7c; }
+  #hint code { font-family: ui-monospace, Menlo, monospace; color: #b8b8b8; }
+</style></head>
+<body><div id="stage"><div id="frame"><div id="kicker"></div><div id="title"></div><div id="sub"></div><div id="hint"></div></div></div>
+<script>
+  // ?kind=placeholder|card&title=...&sub=...&kicker=...&hint=...
+  const q = new URLSearchParams(location.search);
+  const kind = q.get('kind') || 'card';
+  document.body.className = kind;
+  const put = (id, v) => { const e = document.getElementById(id); if (v) e.textContent = v; else e.remove(); };
+  put('kicker', q.get('kicker') || (kind === 'placeholder' ? 'Live footage goes here' : ''));
+  put('title', q.get('title'));
+  put('sub', q.get('sub'));
+  if (kind === 'placeholder') {
+    document.getElementById('hint').innerHTML = q.get('hint') || 'Capture it with <code>film/capture/record.mjs</code>, or record it by hand from <code>film/shotlist.md</code>.';
+  } else put('hint', q.get('hint'));
+  window.DURATION = 1; window.seek = () => true;
+</script></body></html>

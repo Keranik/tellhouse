@@ -8,7 +8,9 @@ using HomeNode.Data;
 using HomeNode.Protocol;
 using HomeNode.Services.Extraction;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using SessionChallenge = HomeNode.Protocol.SessionChallenge;
 
 namespace HomeNode.Services;
@@ -96,6 +98,7 @@ public static class NodeSuite
 
         await VectorChecksAsync();
         await SeededRecordChecksAsync();
+        await DemoResetChecksAsync();
 
         // ---------- The node key file is owner only ----------
         if (!OperatingSystem.IsWindows())
@@ -2145,11 +2148,17 @@ public static class NodeSuite
         await seedDb.Database.EnsureCreatedAsync();
         DbSeeder.Seed(seedDb);
 
-        Check("Seeded record: pristine counts hold at 6 persons, 16 events, 23 audits, 1 claim",
+        Check("Seeded record: pristine counts hold at 6 persons, 19 events, 24 audits, 3 claims",
             await seedDb.Persons.CountAsync() == 6
-            && await seedDb.Events.CountAsync() == 16
-            && await seedDb.EventAudits.CountAsync() == 23
-            && await seedDb.Promises.CountAsync() == 1);
+            && await seedDb.Events.CountAsync() == 19
+            && await seedDb.EventAudits.CountAsync() == 24
+            && await seedDb.Promises.CountAsync() == 3);
+        Check("Seeded record: an ordinary household day: no health entry, and every tracked supply is a household staple",
+            !await seedDb.Events.AnyAsync(e => e.Type == EventType.HealthMention)
+            && (await seedDb.SupplyItems.Select(i => i.Name).ToListAsync())
+                .OrderBy(n => n).SequenceEqual(new[] { "coffee", "dish soap", "dishwasher tablets", "paper towels" }));
+        Check("Seeded record: the evening is double-booked on the record: Daniel and Lisa both hold an open claim to take Timmy to soccer",
+            await seedDb.Promises.CountAsync(p => p.State == PromiseState.Made && p.CommitmentText == "take Timmy to soccer at 5:30") == 2);
 
         var daniel = await seedDb.Persons.FirstAsync(p => p.DisplayName == "Daniel");
         var lisa = await seedDb.Persons.FirstAsync(p => p.DisplayName == "Lisa");
@@ -2167,6 +2176,78 @@ public static class NodeSuite
             answer == "At 2:55 PM, Daniel said: Home, like I said this morning.");
 
         try { File.Delete(seedDbPath); } catch (IOException) { }
+    }
+
+    // The demo's reset between visitors (Services/DemoResetService.cs):
+    // a reset puts the household's content back to the baseline, and
+    // never touches the tables that keep the members' assistants
+    // connected or the house's replay protection; Start over cannot be
+    // pressed twice inside two minutes; and with no baseline a reset
+    // changes nothing.
+    private static async Task DemoResetChecksAsync()
+    {
+        var resetDbPath = Path.Combine(Path.GetTempPath(), $"tellhouse-node-reset-{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={resetDbPath}";
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connectionString).Options;
+        using (var seedDb = new AppDbContext(options))
+        {
+            await seedDb.Database.EnsureCreatedAsync();
+            DbSeeder.Seed(seedDb);
+        }
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:HomeNode"] = connectionString,
+            ["Demo:IdleResetMinutes"] = "20"
+        }).Build();
+        var reset = new DemoResetService(configuration, NullLogger<DemoResetService>.Instance);
+
+        Check("Demo reset: with no baseline, a reset changes nothing and says so",
+            !reset.HasBaseline && !await reset.ResetAsync("check"));
+
+        await reset.CaptureBaselineAsync();
+        using (var db = new AppDbContext(options))
+        {
+            var household = await db.Households.FirstAsync();
+            db.Events.Add(new Event
+            {
+                HouseholdId = household.Id, Type = EventType.HouseholdNote, Body = "A visitor's message after the baseline.",
+                CreatedAtUtc = DateTime.UtcNow, ConfirmationState = ConfirmationState.Confirmed
+            });
+            db.PacketSeen.Add(new PacketSeen { PacketId = "reset-check-packet", ConnectionId = "conn-reset-check", SeenAtUtc = DateTime.UtcNow });
+            db.HouseConnections.Add(new HouseConnection
+            {
+                ConnectionId = "conn-reset-check", HouseholdId = household.Id, PersonId = 3, ProviderClaim = "check",
+                Level = "Standard", Standing = ConnectionStanding.Active, PartyId = "member-reset-check",
+                PublicKeyBase64Url = "AAAA", Fingerprint = "ffff", EnrollingInviterPersonId = 1, CreatedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+        reset.NoteActivity();
+        Check("Demo reset: a visitor's change marks the house due for a quiet reset only after the quiet minutes",
+            !reset.DueForQuietReset(DateTime.UtcNow) && reset.DueForQuietReset(DateTime.UtcNow.AddMinutes(21)));
+
+        var didReset = await reset.ResetAsync("check");
+        using (var db = new AppDbContext(options))
+        {
+            Check("Demo reset: the household's content is back to the baseline (19 events, 3 claims) and the visitor's message is gone",
+                didReset && await db.Events.CountAsync() == 19 && await db.Promises.CountAsync() == 3
+                && !await db.Events.AnyAsync(e => e.Body == "A visitor's message after the baseline."));
+            Check("Demo reset: connections and seen packets made after the baseline are untouched",
+                await db.HouseConnections.AnyAsync(c => c.ConnectionId == "conn-reset-check" && c.Standing == ConnectionStanding.Active)
+                && await db.PacketSeen.AnyAsync(p => p.PacketId == "reset-check-packet"));
+            Check("Demo reset: the household and its people are untouched",
+                await db.Persons.CountAsync() == 6 && await db.Households.CountAsync() == 1);
+        }
+        Check("Demo reset: after a reset nothing is due until a visitor changes something again",
+            !reset.DueForQuietReset(DateTime.UtcNow.AddHours(1)));
+        Check("Demo reset: Start over works once, then refuses inside two minutes",
+            await reset.StartOverAsync() && !await reset.StartOverAsync());
+
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        foreach (var path in new[] { resetDbPath, reset.BaselinePath })
+        {
+            try { File.Delete(path); } catch (IOException) { }
+        }
     }
 
     private static string? FindVectorsFile()

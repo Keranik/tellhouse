@@ -16,7 +16,7 @@
         <a class="who-chip@(householdCurrent ? " active" : "")" href="@CurrentPerson.SwitchHref(null, Model.ReturnTo)" aria-current="@(householdCurrent ? "true" : null)" title="The household view: only what is shared with everyone">
             <span class="avatar avatar--0 avatar--sm" aria-hidden="true">@Icons.Get("house", 12)</span><span class="who-name">Household</span>
         </a>
-        @foreach (var person in Model.People)
+        @foreach (var person in Model.People.Where(p => !p.MinorFlag))
         {
             var current = Model.Current == person.Id;
             var first = NameWording.First(person.DisplayName);

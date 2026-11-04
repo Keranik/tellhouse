@@ -2,8 +2,9 @@ namespace HomeNode.Data;
 
 // Seed content for the demo household, mirroring the files in this
 // repository's seed folder (personas.md, scenario.md, supplies.json,
-// task-notes.json, journal-prompts.json). All people are fictional. The
-// day seeded is the scenario's Tuesday, Oct 27, 2026; seed times are
+// task-notes.json, journal-prompts.json): one ordinary, busy family
+// Tuesday. All people are fictional. The day seeded is the most recent
+// Tuesday (the suites use Oct 27, 2026; see StoryDay); seed times are
 // the scenario's America/Chicago wall clock times, converted to and
 // stored as the true UTC instants of those local times, the same
 // convention the pipeline uses (ExtractionService stores
@@ -28,8 +29,47 @@ public static class DbSeeder
             new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified),
             HouseholdZone);
 
+    // The demo's ordinary Tuesday. The suites keep the scenario's own
+    // date (Oct 27, 2026); the running node sets it before seeding a new
+    // record to the most recent Tuesday before today, so a visitor meets
+    // a day that just happened (see UseStoryDayFor).
+    public static DateOnly StoryDay { get; set; } = new(2026, 10, 27);
+
     private static DateTime DemoDay(int hour, int minute) =>
-        ChicagoToUtc(2026, 10, 27, hour, minute);
+        ChicagoToUtc(StoryDay.Year, StoryDay.Month, StoryDay.Day, hour, minute);
+
+    // A time on a day before the story day (the household's usual
+    // meals and the fridge, told in the days before).
+    private static DateTime BeforeStoryDay(int daysBefore, int hour, int minute)
+    {
+        var day = StoryDay.AddDays(-daysBefore);
+        return ChicagoToUtc(day.Year, day.Month, day.Day, hour, minute);
+    }
+
+    private const string StoryAnchorWords = "Depot by nine, hardware store after, home by three.";
+
+    // Chooses the story day for this node: the day an existing record
+    // was seeded with (its first entry's household date), or for a new
+    // record the most recent Tuesday strictly before today.
+    public static void UseStoryDayFor(AppDbContext db, DateTime utcNow)
+    {
+        // The scenario's first line of its Tuesday, Daniel at 5:40 AM,
+        // dates an existing record.
+        var anchor = db.Events.Where(e => e.Body == StoryAnchorWords)
+            .OrderBy(e => e.CreatedAtUtc).Select(e => (DateTime?)e.CreatedAtUtc).FirstOrDefault();
+        if (anchor is DateTime anchorUtc)
+        {
+            StoryDay = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(anchorUtc, HouseholdZone));
+            return;
+        }
+        if (db.Events.Any())
+        {
+            return;
+        }
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utcNow, HouseholdZone));
+        var back = ((int)today.DayOfWeek - (int)DayOfWeek.Tuesday + 7) % 7;
+        StoryDay = today.AddDays(back == 0 ? -7 : -back);
+    }
 
     // The record time of the last entry this seeder writes (8:45 PM
     // on the scenario's Tuesday). Every seeded entry is at or before
@@ -49,12 +89,13 @@ public static class DbSeeder
         db.Households.Add(household);
         db.SaveChanges();
 
-        // The household circle: Daniel and Lisa are partners and Timmy
-        // and Mia's parents; Margaret is Daniel's mother, in the circle,
-        // living in the house's second unit; June is the Tuesday helper.
-        // One household, one property, one record. Insertion order fixes
-        // the demo ids the extraction context carries: Margaret 1,
-        // Daniel 2, Lisa 3, Timmy 4, Mia 5, June 6.
+        // The household: Daniel and Lisa are partners and Timmy and Mia's
+        // parents; Margaret is Daniel's mother, living in the house's
+        // second unit and very much part of the day; June lives next door,
+        // has a key, and does the Tuesday school pickup. One household,
+        // one record. Insertion order fixes the demo ids the extraction
+        // context carries: Margaret 1, Daniel 2, Lisa 3, Timmy 4, Mia 5,
+        // June 6.
         var margaret = new Person { HouseholdId = household.Id, DisplayName = "Margaret Ellis", Role = PersonRole.Family };
         var daniel = new Person { HouseholdId = household.Id, DisplayName = "Daniel", Role = PersonRole.Family };
         var lisa = new Person { HouseholdId = household.Id, DisplayName = "Lisa", Role = PersonRole.Family };
@@ -64,20 +105,18 @@ public static class DbSeeder
         db.Persons.AddRange(margaret, daniel, lisa, timmy, mia, june);
         db.SaveChanges();
 
-        // Routing defaults: Daniel is the
-        // default route person, Lisa the backup. Set on the household once
-        // the persons exist.
+        // Routing defaults: Daniel is the default route person, Lisa the
+        // backup. Set on the household once the persons exist.
         household.DefaultRoutePersonId = daniel.Id;
         household.BackupRoutePersonId = lisa.Id;
         db.SaveChanges();
 
-        // Audience defaults: Lisa is the seeded holder.
-        // She set her Private default by telling, with read-back, and
-        // the request row below is that telling and her disposal.
-        // Mia's Ask was set at enrollment by Daniel, the adult who
-        // enrolled her (clause 8), and is recorded as an enrollment
-        // act. Both rows are seed facts; a change from here on goes
-        // through the same telling and read-back path.
+        // Audience defaults: Lisa set her Private default by telling, with
+        // read-back, and the request row below is that telling and her
+        // disposal. Mia's Ask was set at enrollment by Daniel, the adult
+        // who enrolled her (clause 8), and is recorded as an enrollment
+        // act. A change from here on goes through the same telling and
+        // read-back path.
         var seedNow = DemoDay(6, 0);
         db.PersonAudienceDefaults.AddRange(
             new PersonAudienceDefault { HouseholdId = household.Id, HolderPersonId = lisa.Id, Value = AudienceDefaultValue.Private, SetAtUtc = seedNow },
@@ -103,28 +142,32 @@ public static class DbSeeder
         db.SaveChanges();
 
         // The context slice's household rows: alert levels in the
-        // person's own words, the schedules a person set, and the
-        // household glossary.
+        // household's own words, the times a person set, and the
+        // household's own words for its people and things.
         db.AlertLevels.AddRange(
             new AlertLevel { HouseholdId = household.Id, LevelKey = "now", Label = "Right away", RouteToPersonId = daniel.Id, BackupPersonId = lisa.Id },
             new AlertLevel { HouseholdId = household.Id, LevelKey = "brief", Label = "Put it in the brief" },
             new AlertLevel { HouseholdId = household.Id, LevelKey = "here", Label = "Just keep it here" }
         );
         db.HouseholdSchedules.AddRange(
-            new HouseholdSchedule { HouseholdId = household.Id, Label = "Morning ones", SetByPersonId = daniel.Id, TimeLocal = "08:00" },
-            new HouseholdSchedule { HouseholdId = household.Id, Label = "Evening ones", SetByPersonId = daniel.Id, TimeLocal = "19:00" }
+            new HouseholdSchedule { HouseholdId = household.Id, Label = "School pickup", SetByPersonId = lisa.Id, TimeLocal = "15:00" },
+            new HouseholdSchedule { HouseholdId = household.Id, Label = "Recycling out", SetByPersonId = daniel.Id, TimeLocal = "20:00" }
         );
-        db.GlossaryTerms.Add(new GlossaryTerm { HouseholdId = household.Id, Term = "my program", Meaning = "the afternoon show Margaret watches at four" });
+        db.GlossaryTerms.AddRange(
+            new GlossaryTerm { HouseholdId = household.Id, Term = "Mom", Meaning = "Lisa, Timmy and Mia's mother" },
+            new GlossaryTerm { HouseholdId = household.Id, Term = "Dad", Meaning = "Daniel, Timmy and Mia's father" },
+            new GlossaryTerm { HouseholdId = household.Id, Term = "Grandma", Meaning = "Margaret, Daniel's mother, in the back unit" },
+            new GlossaryTerm { HouseholdId = household.Id, Term = "the truck", Meaning = "the recycling truck, Wednesdays at seven in the morning" }
+        );
         db.SaveChanges();
 
-        // Consumables, with the rates and lead days from supplies.json.
-        // The heart pills entry records only a schedule a person set and a
-        // refill date; it carries nothing about taking them.
-        var pads = new SupplyItem { HouseholdId = household.Id, Name = "pads", Unit = "pad", QuantityOnHand = 18m, SeededDailyUsageRate = 4m, ReorderLeadDays = 3, AssignedPersonId = lisa.Id, Aliases = """["pads","the big pads"]""" };
-        var wipes = new SupplyItem { HouseholdId = household.Id, Name = "wipes", Unit = "wipe", QuantityOnHand = 12m, SeededDailyUsageRate = 5m, ReorderLeadDays = 2, AssignedPersonId = daniel.Id, Aliases = """["wipes","the wipes"]""" };
-        var gauze = new SupplyItem { HouseholdId = household.Id, Name = "gauze", Unit = "dressing", QuantityOnHand = 1m, SeededDailyUsageRate = 1m, ReorderLeadDays = 2, AssignedPersonId = daniel.Id, Aliases = """["gauze"]""" };
-        var heartPills = new SupplyItem { HouseholdId = household.Id, Name = "heart pills", Unit = "pill", QuantityOnHand = 7m, SeededDailyUsageRate = 1m, ReorderLeadDays = 7, AssignedPersonId = lisa.Id, Aliases = """["heart pills","morning ones"]""" };
-        db.SupplyItems.AddRange(pads, wipes, gauze, heartPills);
+        // The household staples the house keeps count of, with the rates
+        // and lead days from supplies.json.
+        var coffee = new SupplyItem { HouseholdId = household.Id, Name = "coffee", Unit = "bag", QuantityOnHand = 1m, SeededDailyUsageRate = 0.25m, ReorderLeadDays = 2, AssignedPersonId = daniel.Id, Aliases = """["coffee","the coffee","coffee beans"]""" };
+        var tablets = new SupplyItem { HouseholdId = household.Id, Name = "dishwasher tablets", Unit = "tablet", QuantityOnHand = 9m, SeededDailyUsageRate = 1m, ReorderLeadDays = 3, AssignedPersonId = lisa.Id, Aliases = """["dishwasher tablets","dishwasher pods","the tablets"]""" };
+        var towels = new SupplyItem { HouseholdId = household.Id, Name = "paper towels", Unit = "roll", QuantityOnHand = 3m, SeededDailyUsageRate = 0.3m, ReorderLeadDays = 2, AssignedPersonId = daniel.Id, Aliases = """["paper towels","kitchen roll"]""" };
+        var soap = new SupplyItem { HouseholdId = household.Id, Name = "dish soap", Unit = "bottle", QuantityOnHand = 1m, SeededDailyUsageRate = 0.1m, ReorderLeadDays = 3, AssignedPersonId = lisa.Id, Aliases = """["dish soap","washing up liquid"]""" };
+        db.SupplyItems.AddRange(coffee, tablets, towels, soap);
         db.SaveChanges();
 
         // Household notes that answer by task, in the family's own words,
@@ -132,15 +175,12 @@ public static class DbSeeder
         // written; it does not write or change them.
         (string Task, string Note)[] taskNotes =
         {
-            ("getting dressed", "The blue cardigan, from the chair. The green one has the broken button."),
-            ("getting dressed", "Shoes go on sitting on the bed, not standing."),
-            ("getting dressed", "Tea after, one sugar. She will say two. It is one."),
-            ("making lunch", "Tea first, always. The kettle goes on before anything else, and her cup is the one with the flowers on it."),
-            ("making lunch", "She likes her sandwich cut corner to corner, crusts on. If there is soup, it goes in a mug, not a bowl, so she can hold it steady."),
-            ("making lunch", "Sit with her while she eats if you have the minutes. Lunch is when she tells the good stories, and she eats better with company."),
-            ("getting ready for bed", "Her program ends at eight, and that is her signal to wind down. Anything she says then goes on the timeline in her words, the same as the rest of the day."),
-            ("getting ready for bed", "The porch light stays on all night. Her water glass goes on the left side of the bed table, where she can reach it without sitting up."),
-            ("getting ready for bed", "Say goodnight out loud, even if you are leaving by the side door. She answers back, and the house settles once she has heard it."),
+            ("school pickup", "Mia waits at the side gate, not the front."),
+            ("school pickup", "Tuesdays Timmy has soccer. His boots are in the hall closet."),
+            ("school pickup", "Snacks are in the blue tin. One each, then homework."),
+            ("the bins", "Recycling is the blue bin, out Tuesday night. The lid has to close or they skip it."),
+            ("the bins", "Bring them back in on Wednesday after work."),
+            ("the dishwasher", "Pots go by hand. Tablets are under the sink."),
         };
         var sortByTask = new Dictionary<string, int>();
         foreach (var (task, note) in taskNotes)
@@ -155,17 +195,13 @@ public static class DbSeeder
             });
         }
 
-        // Journaling prompts Margaret set herself, from journal-prompts.json.
+        // Journal prompts the household set, from journal-prompts.json.
         string[] prompts =
         {
-            "What is one thing on the porch you can see from your chair?",
-            "Who were the birds in the garden arguing with this morning?",
-            "What song do you remember from when Daniel was little?",
-            "What did the kitchen smell like when you first came down today?",
-            "Tell about one photograph on the shelf, the day it was taken.",
-            "What is something you heard on the radio this week that stayed with you?",
-            "If June could bring you anything from the shops, what would make you laugh?",
-            "What are you looking forward to on Sunday?",
+            "What was the best part of your day?",
+            "What should the house know about tomorrow?",
+            "Who helped you out today?",
+            "What are you looking forward to this weekend?",
         };
         foreach (var text in prompts)
         {
@@ -173,173 +209,97 @@ public static class DbSeeder
         }
         db.SaveChanges();
 
-        // One Tuesday on the shared record, from scenario.md. Statement-only
+        // One ordinary Tuesday on the shared record, from scenario.md: the
+        // things households most often forget or argue about, each said
+        // once, in the words of the person who said it. Statement-only
         // events are written already Confirmed, their author the confirmer
-        // of record. The 7:15 AM lookup leaves no event: lookups are read
-        // only and create nothing.
-        Event[] events =
+        // of record.
+        Event Said(Person? author, Person? subject, EventType type, int hour, int minute, string body, string? details = null) => new()
         {
-            // 5:40 AM. Daniel leaves his one line at the door.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = daniel.Id, AuthorPersonId = daniel.Id,
-                Type = EventType.Whereabouts, CreatedAtUtc = DemoDay(5, 40),
-                ConfirmationState = ConfirmationState.Confirmed,
-                Body = "Depot by nine, hardware store after, home by three.",
-                Details = """{"PlaceText":"depot","Motion":"HeadingTo","NextText":"hardware store after, home by three"}"""
-            },
-            // 7:20 AM. Margaret asks for her program; she confirms with a
-            // spoken yes and the program starts, so the day ends with this
-            // Done. Her lookup in the same breath creates no event.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = margaret.Id, AuthorPersonId = margaret.Id,
-                Type = EventType.Request, CreatedAtUtc = DemoDay(7, 20),
-                ConfirmationState = ConfirmationState.Done,
-                Body = "Put my program on.",
-                Details = """{"RequestKind":"Media"}"""
-            },
-            // 7:50 AM. A health mention, recorded in her words and handed to
-            // Daniel at the level she chose in advance. Done: the hand off
-            // was delivered. The record holds her words and nothing else.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = margaret.Id, AuthorPersonId = margaret.Id,
-                Type = EventType.HealthMention, CreatedAtUtc = DemoDay(7, 50),
-                ConfirmationState = ConfirmationState.Done,
-                Body = "My ankle has swollen up again.",
-                Details = """{"Form":"Statement"}"""
-            },
-            // 9:05 AM. Margaret states her Tuesday bridge club
-            // arrangement in her own words: Daniel drives, June is
-            // the backup. A statement of her plan, written already
-            // Confirmed with Margaret as its confirmer of record,
-            // the same shape as every statement-only entry on this
-            // day. This is the record line the demo shows among the
-            // day's entries; it is record content, not a telling
-            // produced live.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = margaret.Id, AuthorPersonId = margaret.Id,
-                Type = EventType.HouseholdNote, CreatedAtUtc = DemoDay(9, 5),
-                ConfirmationState = ConfirmationState.Confirmed,
-                Body = "Daniel is driving me to bridge club on Tuesday, and June is the backup."
-            },
-            // 12:40 PM. Lisa uses the last of the gauze and says so the
-            // moment she notices.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = margaret.Id, AuthorPersonId = lisa.Id,
-                Type = EventType.Supply, CreatedAtUtc = DemoDay(12, 40),
-                ConfirmationState = ConfirmationState.Confirmed,
-                Body = "Last of the gauze going on now.",
-                RelatedSupplyItemId = gauze.Id,
-                Details = """{"Direction":"Used","QuantityText":"last of the gauze"}"""
-            },
-            // 1:15 PM. June arrives and opens the notes for getting dressed.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = margaret.Id, AuthorPersonId = june.Id,
-                Type = EventType.HouseholdNote, CreatedAtUtc = DemoDay(13, 15),
-                ConfirmationState = ConfirmationState.Confirmed,
-                Body = "June arrived and opened the getting dressed notes."
-            },
-            // 2:55 PM. Daniel is home, five minutes ahead of the
-            // morning's promise. A commitment on the timeline, kept on
-            // the same timeline, in his words both times.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = daniel.Id, AuthorPersonId = daniel.Id,
-                Type = EventType.Whereabouts, CreatedAtUtc = DemoDay(14, 55),
-                ConfirmationState = ConfirmationState.Confirmed,
-                Body = "Home, like I said this morning.",
-                Details = """{"PlaceText":"home","Motion":"Arrived"}"""
-            },
-            // 3:30 PM. Margaret's voice is tired; she taps instead of
-            // talking. She taps "Tell Daniel," confirms "Send" on the
-            // card, and the note goes to Daniel.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = daniel.Id, AuthorPersonId = margaret.Id,
-                Type = EventType.HouseholdNote, CreatedAtUtc = DemoDay(15, 30),
-                ConfirmationState = ConfirmationState.Done,
-                Body = "Thinking of you. All quiet here.",
-                Details = """{"InputMode":"Tap","RelayTo":"Daniel"}"""
-            },
-            // 6:30 PM. A note to the house, from no one in particular:
-            // the toilet paper is low. Events are told to the house, so
-            // this one carries no subject and no author, and it is not
-            // pinned to a tracked supply item. It sits Proposed until
-            // anyone in the circle closes it. Attribution is recorded
-            // when it is known and matters; here it is neither.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = null, AuthorPersonId = null,
-                Type = EventType.Supply, CreatedAtUtc = DemoDay(18, 30),
-                ConfirmationState = ConfirmationState.Proposed,
-                Body = "Toilet paper is low.",
-                Details = """{"Direction":"Low","UnresolvedItem":"toilet paper"}"""
-            },
-            // 8:45 PM. The day closes in her words.
-            new()
-            {
-                HouseholdId = household.Id, SubjectPersonId = margaret.Id, AuthorPersonId = margaret.Id,
-                Type = EventType.HouseholdNote, CreatedAtUtc = DemoDay(20, 45),
-                ConfirmationState = ConfirmationState.Confirmed,
-                Body = "Well. That is the whole day, written down. Goodnight.",
-                Details = """{"MedMention":"None"}"""
-            },
+            HouseholdId = household.Id, SubjectPersonId = subject?.Id, AuthorPersonId = author?.Id,
+            Type = type, CreatedAtUtc = DemoDay(hour, minute),
+            ConfirmationState = ConfirmationState.Confirmed,
+            Body = body, Details = details
         };
-        // Discretion, computed at write time:
-        // the ankle mention is Restricted, routed to Daniel with Lisa
-        // behind him; everything else on this ordinary day is Household.
-        // The person-free toilet paper notice is record-pending: its fact
-        // is on the record, unconfirmed, until a person closes it.
-        events[2].SensitivityClass = SensitivityClass.Restricted;
-        events[2].AudienceRule = "{\"Class\":\"Restricted\",\"RoutePersonId\":" + daniel.Id + ",\"BackupPersonId\":" + lisa.Id + "}";
-        events[8].RecordPending = true;
+        // 5:40 AM. Daniel leaves his one line at the door. The last part
+        // is a promise, and the record treats it as one.
+        var leaving = Said(daniel, daniel, EventType.Whereabouts, 5, 40, StoryAnchorWords,
+            """{"PlaceText":"depot","Motion":"HeadingTo","NextText":"hardware store after, home by three"}""");
+        // 6:45 AM. Which bin, before the truck.
+        var bins = Said(lisa, null, EventType.HouseholdNote, 6, 45, "Recycling goes out tonight, the truck comes at seven tomorrow.");
+        // 7:05 AM. The last of a staple, said out loud for once.
+        var lastCoffee = Said(lisa, null, EventType.Supply, 7, 5, "Used the last of the coffee.",
+            """{"Direction":"Used","QuantityText":"the last of the coffee"}""");
+        lastCoffee.RelatedSupplyItemId = coffee.Id;
+        // 7:20 AM. The schedule moves.
+        var soccerMoved = Said(lisa, timmy, EventType.HouseholdNote, 7, 20, "Timmy's soccer practice moved to 5:30 tonight.");
+        // 9:05 AM. A shared lift, arranged in Margaret's own words.
+        var bridge = Said(margaret, margaret, EventType.HouseholdNote, 9, 5, "Daniel is driving me to bridge club on Tuesday, and June is the backup.");
+        // 12:40 PM. A bill, before it is late.
+        var bill = Said(lisa, null, EventType.HouseholdNote, 12, 40, "Electric bill is due Friday.");
+        // 1:15 PM. The school pickup, done.
+        var pickup = Said(june, mia, EventType.HouseholdNote, 13, 15, "Got Mia from school, we're at the house.");
+        // 2:55 PM. Daniel is home, five minutes ahead of the morning's
+        // promise, in his words both times.
+        var home = Said(daniel, daniel, EventType.Whereabouts, 14, 55, "Home, like I said this morning.",
+            """{"PlaceText":"home","Motion":"Arrived"}""");
+        // 3:30 PM. Margaret passes word to Lisa at work with one tap.
+        var homework = Said(margaret, lisa, EventType.HouseholdNote, 15, 30, "Mia's homework is done and she's had a snack.",
+            """{"InputMode":"Tap","RelayTo":"Lisa"}""");
+        homework.ConfirmationState = ConfirmationState.Done;
+        // 4:50 PM and 5:05 PM. The evening, double-booked: both parents
+        // say they will take Timmy to soccer, neither checks. The house's
+        // own rules and Muse Wonder both notice.
+        var danielSoccer = Said(daniel, daniel, EventType.Commitment, 16, 50, "I'll take Timmy to soccer at 5:30.",
+            """{"CommitmentText":"take Timmy to soccer at 5:30","DueText":"5:30"}""");
+        var lisaSoccer = Said(lisa, lisa, EventType.Commitment, 17, 5, "I'll take Timmy to soccer at 5:30.",
+            """{"CommitmentText":"take Timmy to soccer at 5:30","DueText":"5:30"}""");
+        // 6:30 PM. A note to the house, from no one in particular: the
+        // toilet paper is low. It carries no subject and no author and is
+        // not pinned to a tracked item; it sits Proposed until anyone in
+        // the household closes it.
+        var paper = Said(null, null, EventType.Supply, 18, 30, "Toilet paper is low.",
+            """{"Direction":"Low","UnresolvedItem":"toilet paper"}""");
+        paper.ConfirmationState = ConfirmationState.Proposed;
+        paper.RecordPending = true;
+        // 8:45 PM. The day closes: the bins went out after all.
+        var goodnight = Said(daniel, null, EventType.HouseholdNote, 20, 45, "Bins are out, dishwasher's running. Goodnight.");
+
+        Event[] events = { leaving, bins, lastCoffee, soccerMoved, bridge, bill, pickup, home, homework, danielSoccer, lisaSoccer, paper, goodnight };
+        // Everyone in the household may see everything on this ordinary
+        // day: each entry's audience is written down with it.
         foreach (var ev in events)
         {
             ev.AudienceRule ??= "{\"Class\":\"" + ev.SensitivityClass + "\"}";
         }
-
         db.Events.AddRange(events);
         db.SaveChanges();
 
-        // The day's actions, deliveries, and audit trail, so the seeded
-        // record shows the whole machinery, not just its end states.
-        var mediaAction = new EventAction { EventId = events[1].Id, ActionType = EventActionType.MediaPlay, Payload = """{"WhatText":"my program","AtLocal":null}""", CreatedAtUtc = DemoDay(7, 20) };
-        var notifyAction = new EventAction { EventId = events[2].Id, ActionType = EventActionType.NotifyPerson, Payload = """{"AboutEventIndex":0}""", CreatedAtUtc = DemoDay(7, 50) };
-        var relayAction = new EventAction { EventId = events[7].Id, ActionType = EventActionType.RelayMessage, TargetPersonId = daniel.Id, Payload = """{"MessageText":"Thinking of you. All quiet here."}""", CreatedAtUtc = DemoDay(15, 30) };
-        db.EventActions.AddRange(mediaAction, notifyAction, relayAction);
+        // Margaret's word to Lisa, passed on and delivered: the action
+        // and the delivery are on the record with it.
+        var relayAction = new EventAction { EventId = homework.Id, ActionType = EventActionType.RelayMessage, TargetPersonId = lisa.Id, Payload = """{"MessageText":"Mia's homework is done and she's had a snack."}""", CreatedAtUtc = DemoDay(15, 30) };
+        db.EventActions.Add(relayAction);
         db.SaveChanges();
-
-        // The ankle hand off, delivered to Daniel at the level Margaret
-        // chose in advance: her words verbatim, and nothing else.
         db.AlertDeliveries.Add(new AlertDelivery
         {
-            EventId = events[2].Id, EventActionId = notifyAction.Id, LevelKey = "now",
-            ToPersonId = daniel.Id, BodyText = events[2].Body,
-            DeliveredAtUtc = DemoDay(7, 50), IsBackupHop = false
+            EventId = homework.Id, EventActionId = relayAction.Id, LevelKey = "brief",
+            ToPersonId = lisa.Id, BodyText = homework.Body,
+            DeliveredAtUtc = DemoDay(15, 30), IsBackupHop = false
         });
 
-        // Lisa used the last of the gauze at 12:40; the count afterward
-        // is zero, and the adjustment is the paper trail for it. The
-        // item's own count moves to zero with it, the same way the
-        // live pipeline moves a count when a supply telling lands
-        // (ExtractionService.ApplySupplyAdjustmentAsync): a seed that
-        // left the item at one would show one on hand on the same
-        // timeline that records the last of it being used.
+        // Lisa used the last of the coffee at 7:05; the count afterward is
+        // zero, and the adjustment is the paper trail for it, the same way
+        // the live pipeline moves a count when a supply message lands.
         db.SupplyAdjustments.Add(new SupplyAdjustment
         {
-            SupplyItemId = gauze.Id, EventId = events[4].Id, ActorPersonId = lisa.Id,
-            Direction = "Used", QuantityOnHandAfter = 0m, AtUtc = DemoDay(12, 40)
+            SupplyItemId = coffee.Id, EventId = lastCoffee.Id, ActorPersonId = lisa.Id,
+            Direction = "Used", QuantityOnHandAfter = 0m, AtUtc = DemoDay(7, 5)
         });
-        gauze.QuantityOnHand = 0m;
+        coffee.QuantityOnHand = 0m;
 
         // Audit rows: statement-only writes name their author as the
-        // confirmer of record with the input's channel; the three
-        // action events carry their full write, confirm, done chain.
+        // confirmer of record; the relayed note carries its full write,
+        // confirm, done chain.
         EventAudit Write(Event ev, string channel) => new()
         {
             ObjectKind = "Event", EventId = ev.Id, FromState = null,
@@ -357,21 +317,20 @@ public static class DbSeeder
             ToState = "Proposed", ActorPersonId = actor, Channel = channel, AtUtc = at
         };
         db.EventAudits.AddRange(
-            Write(events[0], "voice"),
-            Proposed(events[1], margaret.Id, "voice", DemoDay(7, 20)),
-            Step(events[1], ConfirmationState.Proposed, ConfirmationState.Confirmed, margaret.Id, "voice", DemoDay(7, 20)),
-            Step(events[1], ConfirmationState.Confirmed, ConfirmationState.Done, null, "executor", DemoDay(7, 20)),
-            Proposed(events[2], margaret.Id, "voice", DemoDay(7, 50)),
-            Step(events[2], ConfirmationState.Proposed, ConfirmationState.Confirmed, margaret.Id, "voice", DemoDay(7, 50)),
-            Step(events[2], ConfirmationState.Confirmed, ConfirmationState.Done, null, "executor", DemoDay(7, 50)),
-            Write(events[3], "voice"),
-            Write(events[4], "voice"),
-            Write(events[5], "voice"),
-            Write(events[6], "voice"),
-            Proposed(events[7], margaret.Id, "tap", DemoDay(15, 30)),
-            Step(events[7], ConfirmationState.Proposed, ConfirmationState.Confirmed, margaret.Id, "tap", DemoDay(15, 30)),
-            Step(events[7], ConfirmationState.Confirmed, ConfirmationState.Done, null, "executor", DemoDay(15, 30)),
-            Write(events[9], "voice")
+            Write(leaving, "voice"),
+            Write(bins, "voice"),
+            Write(lastCoffee, "voice"),
+            Write(soccerMoved, "tap"),
+            Write(bridge, "voice"),
+            Write(bill, "voice"),
+            Write(pickup, "voice"),
+            Write(home, "voice"),
+            Proposed(homework, margaret.Id, "tap", DemoDay(15, 30)),
+            Step(homework, ConfirmationState.Proposed, ConfirmationState.Confirmed, margaret.Id, "tap", DemoDay(15, 30)),
+            Step(homework, ConfirmationState.Confirmed, ConfirmationState.Done, null, "executor", DemoDay(15, 30)),
+            Write(danielSoccer, "voice"),
+            Write(lisaSoccer, "voice"),
+            Write(goodnight, "voice")
         );
 
         // Dinner provenance, stated in the days before the demo day:
@@ -388,16 +347,16 @@ public static class DbSeeder
             Body = body,
             SensitivityClass = SensitivityClass.Household,
             AudienceRule = "{\"Class\":\"Household\"}",
-            Details = "{\"MedMention\":\"None\",\"MealProvenance\":\"" + kind + "\",\"ItemName\":\"" + itemName + "\"}"
+            Details = "{\"MealProvenance\":\"" + kind + "\",\"ItemName\":\"" + itemName + "\"}"
         };
         var provenanceEvents = new[]
         {
-            ProvenanceTelling(margaret, "Pasta bake is a usual dinner in this house.", "UsualMeal", "Pasta bake", ChicagoToUtc(2026, 10, 23, 18, 20)),
-            ProvenanceTelling(daniel, "Soup and sandwiches is one of our usual dinners.", "UsualMeal", "Soup and sandwiches", ChicagoToUtc(2026, 10, 24, 19, 12)),
-            ProvenanceTelling(lisa, "Tacos are one of our usual dinners.", "UsualMeal", "Tacos", ChicagoToUtc(2026, 10, 25, 18, 5)),
-            ProvenanceTelling(lisa, "There are eggs in the fridge.", "Fridge", "eggs", ChicagoToUtc(2026, 10, 26, 9, 20)),
-            ProvenanceTelling(daniel, "There are greens in the fridge.", "Fridge", "greens", ChicagoToUtc(2026, 10, 26, 17, 40)),
-            ProvenanceTelling(lisa, "There is cheese in the fridge.", "Fridge", "cheese", ChicagoToUtc(2026, 10, 27, 8, 15)),
+            ProvenanceTelling(margaret, "Pasta bake is a usual dinner in this house.", "UsualMeal", "Pasta bake", BeforeStoryDay(4, 18, 20)),
+            ProvenanceTelling(daniel, "Soup and sandwiches is one of our usual dinners.", "UsualMeal", "Soup and sandwiches", BeforeStoryDay(3, 19, 12)),
+            ProvenanceTelling(lisa, "Tacos are one of our usual dinners.", "UsualMeal", "Tacos", BeforeStoryDay(2, 18, 5)),
+            ProvenanceTelling(lisa, "There are eggs in the fridge.", "Fridge", "eggs", BeforeStoryDay(1, 9, 20)),
+            ProvenanceTelling(daniel, "There are greens in the fridge.", "Fridge", "greens", BeforeStoryDay(1, 17, 40)),
+            ProvenanceTelling(lisa, "There is cheese in the fridge.", "Fridge", "cheese", BeforeStoryDay(0, 8, 15)),
         };
         db.Events.AddRange(provenanceEvents);
         db.SaveChanges();
@@ -412,28 +371,35 @@ public static class DbSeeder
         }
         db.SaveChanges();
 
-        // The day's promise, first class:
-        // Daniel's 5:40 line is the source; his 2:55 arrival closes it,
-        // confirmed by Daniel himself, and the closing link names both.
-        var promise = new Promise
+        // The day's claims, first class. Daniel's 5:40 line is the source
+        // of "home by three"; his 2:55 arrival closes it. The two soccer
+        // claims stay open: the double-booked evening is on the record
+        // until one of them closes it in their own words.
+        Promise Claim(Person maker, string text, string dueText, TimeOnly due, Event source) => new()
         {
             HouseholdId = household.Id,
-            PromisorPersonId = daniel.Id,
+            PromisorPersonId = maker.Id,
             PromiseePersonId = null,
-            CommitmentText = "home by three",
-            DueText = "three",
-            DueAtLocal = new DateTime(2026, 10, 27, 15, 0, 0),
-            SourceEventId = events[0].Id,
-            State = PromiseState.Kept,
-            ClosedByEventId = events[6].Id,
-            ClosedByPersonId = daniel.Id,
-            ClosedAtUtc = DemoDay(14, 55)
+            CommitmentText = text,
+            DueText = dueText,
+            DueAtLocal = StoryDay.ToDateTime(due),
+            SourceEventId = source.Id,
+            State = PromiseState.Made
         };
-        db.Promises.Add(promise);
+        var homeByThree = Claim(daniel, "home by three", "three", new TimeOnly(15, 0), leaving);
+        homeByThree.State = PromiseState.Kept;
+        homeByThree.ClosedByEventId = home.Id;
+        homeByThree.ClosedByPersonId = daniel.Id;
+        homeByThree.ClosedAtUtc = DemoDay(14, 55);
+        var danielClaim = Claim(daniel, "take Timmy to soccer at 5:30", "5:30", new TimeOnly(17, 30), danielSoccer);
+        var lisaClaim = Claim(lisa, "take Timmy to soccer at 5:30", "5:30", new TimeOnly(17, 30), lisaSoccer);
+        db.Promises.AddRange(homeByThree, danielClaim, lisaClaim);
         db.SaveChanges();
         db.EventAudits.AddRange(
-            new EventAudit { ObjectKind = "Promise", EventId = events[0].Id, FromState = null, ToState = "Made", ActorPersonId = daniel.Id, Channel = "voice", AtUtc = DemoDay(5, 40) },
-            new EventAudit { ObjectKind = "Promise", EventId = events[6].Id, FromState = null, ToState = "Kept", ActorPersonId = daniel.Id, Channel = "voice", AtUtc = DemoDay(14, 55) }
+            new EventAudit { ObjectKind = "Promise", EventId = leaving.Id, FromState = null, ToState = "Made", ActorPersonId = daniel.Id, Channel = "voice", AtUtc = DemoDay(5, 40) },
+            new EventAudit { ObjectKind = "Promise", EventId = home.Id, FromState = null, ToState = "Kept", ActorPersonId = daniel.Id, Channel = "voice", AtUtc = DemoDay(14, 55) },
+            new EventAudit { ObjectKind = "Promise", EventId = danielSoccer.Id, FromState = null, ToState = "Made", ActorPersonId = daniel.Id, Channel = "voice", AtUtc = DemoDay(16, 50) },
+            new EventAudit { ObjectKind = "Promise", EventId = lisaSoccer.Id, FromState = null, ToState = "Made", ActorPersonId = lisa.Id, Channel = "voice", AtUtc = DemoDay(17, 5) }
         );
         db.SaveChanges();
     }

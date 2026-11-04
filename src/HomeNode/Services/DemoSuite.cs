@@ -2246,12 +2246,12 @@ public static class DemoSuite
         var sharedEntry = new Event { Type = EventType.Request, Body = "Ask Timmy to come down for dinner at 6:30", SensitivityClass = SensitivityClass.Household };
         var healthEntry = new Event { Type = EventType.HealthMention, Body = "Timmy has a fever", SensitivityClass = SensitivityClass.Restricted };
         var namedEntry = new Event { Type = EventType.Request, Body = "Ask Timmy to keep the gift a surprise", SensitivityClass = SensitivityClass.Named };
-        Check("Drawing: a picture card is drawn only for a child, only from what the whole household may see, and never for anything health-shaped",
-            HomeNode.Services.Models.PictureCardService.Eligible(timmyPerson, sharedEntry, sharedEntry.Body)
-            && !HomeNode.Services.Models.PictureCardService.Eligible(margaretPerson, sharedEntry, sharedEntry.Body)
-            && !HomeNode.Services.Models.PictureCardService.Eligible(timmyPerson, healthEntry, healthEntry.Body)
-            && !HomeNode.Services.Models.PictureCardService.Eligible(timmyPerson, namedEntry, namedEntry.Body)
-            && !HomeNode.Services.Models.PictureCardService.Eligible(timmyPerson, sharedEntry, "Ask Timmy to take his medicine at 6:30"));
+        Check("Drawing: a picture card is drawn only for an adult, never for anyone under 18, only from what the whole household may see, and never for anything health-shaped",
+            HomeNode.Services.Models.PictureCardService.Eligible(margaretPerson, sharedEntry, sharedEntry.Body)
+            && !HomeNode.Services.Models.PictureCardService.Eligible(timmyPerson, sharedEntry, sharedEntry.Body)
+            && !HomeNode.Services.Models.PictureCardService.Eligible(margaretPerson, healthEntry, healthEntry.Body)
+            && !HomeNode.Services.Models.PictureCardService.Eligible(margaretPerson, namedEntry, namedEntry.Body)
+            && !HomeNode.Services.Models.PictureCardService.Eligible(margaretPerson, sharedEntry, "Ask Timmy to take his medicine at 6:30"));
         var pictureBrief = HomeNode.Services.Models.PictureCardService.PromptFor(sharedEntry.Body, new[] { "Timmy", "Margaret", "Ellis" });
         Check("Drawing: the picture brief carries no one's name, asks for no faces and no writing, and puts a named time on a clock",
             !pictureBrief.Contains("Timmy") && pictureBrief.Contains("come down for dinner")
