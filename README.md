@@ -6,7 +6,7 @@ Tell the house once, in your own words. It writes it down, asks before it tells 
 
 > Households don't fail on forgotten facts. They fail on forgotten promises: when someone said they'd handle it, and the person waiting quietly stops believing anyone is coming.
 
-In a lot of families, the person who knows first what's needed is the person who needs the help, and most tools give her no way in. Tellhouse gives her the front door. Margaret, 78, says what she needs in her own words, or taps one big button. The house writes it down, asks before it passes anything on, and keeps anything about her health away from every model. Everyone else in the household tells the house what's happening the same way: where they are, what's running low, what they'll pick up. The house remembers it, so the person who is waiting can see that someone is coming.
+In every house, someone keeps all of it in their head: the bins before the truck, the last of the coffee, who's getting the kids, soccer moved to 5:30, the bill that's due on Friday. When something slips, it's on them. Tellhouse is the household's shared memory, so no one person has to be. Everyone tells the house what's happening, once: where they are, what's running low, what they'll take care of. The house writes it down, asks before it passes anything on, and keeps track of who said they'd do what. Even the kids get their own big-button view.
 
 An agent proposes, a person confirms, and there is a written record of both.
 
@@ -16,18 +16,21 @@ An agent proposes, a person confirms, and there is a written record of both.
 
 Open **https://tellhouse.onrender.com** and follow the path on Home, or:
 
-1. **Start as Margaret.** Tap *Ask Daniel to pick up milk*. Muse Spark reads it; the house asks before it tells Daniel. Say yes.
-2. **Be Daniel.** It's in his Inbox, in her words.
-3. **Back to Margaret:** *"My knee hurts when I stand up."* No model reads it. The house writes it down in her words and asks whether to tell Daniel.
-4. **Be Daniel:** *"I'll get Mia at 3."* The house keeps it on Claims, next to Daniel's *home by three* from the demo's starting Tuesday, kept at 2:55 PM.
-5. **As Margaret, ask Timmy to come down for dinner at 6:30**, then open Timmy's Inbox: Muse Image has drawn him a picture card.
-6. **How it works:** five Meta models, one job each, and what none of them ever sees. Under every message, *See every step* shows exactly what each one did.
+1. **Start as Lisa:** *"Ask Daniel to pick up milk on his way home."* Muse Spark reads it, and the house asks before it tells Daniel. Say yes.
+2. **Be Daniel.** It's in his Inbox, in Lisa's words.
+3. **As Daniel:** *"I'll get Mia at 3."* The house keeps it on Claims, next to his *home by three* from the demo's Tuesday, kept at 2:55 PM.
+4. **Keep a surprise.** As Daniel, with Private on: *"Keep this between Margaret and me: surprise party on Saturday."* No model reads it, and only Daniel and Margaret can see it. Be Lisa: it isn't there.
+5. **Call the kids down.** As Margaret: *"Ask Timmy to come down for dinner at 6:30."* Then be Timmy: big buttons, and Muse Image has drawn him a picture card.
+6. **Briefing:** the house has noticed the evening is double-booked (Daniel and Lisa both said they'd take Timmy to soccer) and that the coffee is out. Ask Muse Wonder what else needs attention.
+7. **How it works:** five Meta models, one job each. Under every message, *See every step* shows exactly what each one did.
 
 The demo is shared and open on purpose, because everyone in it is invented. It puts itself back to its starting day after 20 quiet minutes, and *Start over* in the demo bar does the same at once.
 
-![Margaret's front door in Tellhouse: "Good morning, Margaret." Her words, "Ask Daniel to pick up milk on his way home", the house's reply asking whether to tell Daniel, big Yes and No buttons, a folded summary of how the house handled it, and four big choices: Where's Daniel?, Tell Daniel I'm all right, Ask Daniel to pick up milk, Put my program on.](docs/images/tellhouse-margaret.png)
+![Tellhouse Home as Lisa: her words, "Ask Daniel to pick up milk on his way home", the house's reply asking whether to tell Daniel, Yes and No buttons, and a folded summary of how the house handled it.](docs/images/tellhouse-conversation.png)
 
-*Margaret's front door, from the build in this repository, here reading with the local stand-in (no API key). On the live demo the same summary names Muse Spark, the model id, and how long the reading took.*
+![Timmy's big-button view: "Good afternoon, Timmy." with four big choices: I'm home, Ask Mom to pick me up, I'll take the bins out, What's for dinner?](docs/images/tellhouse-kids-view.png)
+
+*From the build in this repository, here reading with the local stand-in (no API key). On the live demo the same summary names Muse Spark, the model id, and how long the reading took.*
 
 ## This demo
 
@@ -43,7 +46,7 @@ The deployed demo uses separate services for the home node, the sealed relay, an
 
 The pages follow one loop, seen through one person's eyes at a time (the person switcher at the top):
 
-- **Home:** tell the house. Margaret gets her own front door: big type, big choices, and the house's reply as the main thing on the page. Everyone else gets the message box. Mark a message Private and no model reads it. After you send, the house answers, asks for the one yes it needs, and folds every step underneath.
+- **Home:** tell the house. The kids get a big-button view: big type, big choices, and the house's reply as the main thing on the page. Everyone else gets the message box. Mark a message Private and no model reads it. After you send, the house answers, asks for the one yes it needs, and folds every step underneath.
 - **Inbox:** what is waiting on this person, and what the house has passed on to them.
 - **Briefing:** the house right now. What needs attention (the house's own rules, and Muse Wonder's review), what is on the shelf (SAM 3.1), who is on what, and what is running low. Plans and Claims open from here.
 - **Timeline:** everything said to the house, newest first, from the words that came in to where they went.
@@ -57,10 +60,10 @@ Each model has one job at one step of the loop, all through the Meta Model API w
 - **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) hears a spoken message on Home, with the household's names and supplies as keywords; the words come back to be checked before sending, and the audio is not kept.
 - **Muse Spark** (`muse-spark-1.3`) reads every message into typed record entries and at most one proposed action, under a strict JSON schema.
 - **Muse Wonder** (`muse-wonder-1.0`) reviews the shared record a person may see, when they ask on Briefing, and reports conflicts, slipping claims and supplies that will run out, citing the entries it relied on; the house drops any finding that cites something it was not shown.
-- **SAM 3.1** (`sam-3.1`) looks at a photo of the supply shelf on Briefing: the house's own supply list becomes its prompts, one noun phrase per request, and it outlines and counts what it finds. Where it sees none, the page offers "We're out of …" for the message box; a photo writes nothing to the record.
+- **SAM 3.1** (`sam-3.1`) looks at a photo of the pantry shelf on Briefing: the house's own supply list becomes its prompts, one noun phrase per request, and it outlines and counts what it finds. Where it sees none, the page offers "We're out of …" for the message box; a photo writes nothing to the record.
 - **Muse Image** (`muse-image-1.0`) draws a picture card when the house passes a message on to a child ("come down for dinner at 6:30" becomes a plate and a big clock), so it can be taken in without reading. The brief it gets carries no one's name.
 
-Private things are kept away from every model: a message about health or medicine, or one marked Private, is written down by the house's own deterministic rules on the server, and if those rules cannot write it down nothing is sent anywhere. Muse Wonder is never shown a private entry, a health entry, or a medicine; SAM 3.1 is never asked to look for a medicine; Muse Image draws only from what the whole household may see, and never anything health-shaped. `tools/model-smoke.py` calls each model once with your key and reports whether it answered in the expected shape.
+Anything marked Private is kept away from every model: it is written down by the house's own deterministic rules on the server, and if those rules cannot write it down nothing is sent anywhere. Muse Wonder is never shown a private entry; SAM 3.1 looks only for the house's own supply list; Muse Image draws only from what the whole household may see. `tools/model-smoke.py` calls each model once with your key and reports whether it answered in the expected shape.
 
 ## Run it locally
 
