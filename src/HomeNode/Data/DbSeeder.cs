@@ -111,24 +111,25 @@ public static class DbSeeder
         household.BackupRoutePersonId = lisa.Id;
         db.SaveChanges();
 
-        // Audience defaults: Lisa set her Private default by telling, with
-        // read-back, and the request row below is that telling and her
-        // disposal. Mia's Ask was set at enrollment by Daniel, the adult
+        // Audience defaults: Lisa set her default to everyone in the
+        // household by telling, with read-back, and the request row below
+        // is that telling and her disposal (so what she passes on is
+        // household-visible, and Muse Image may draw it a picture card). Mia's Ask was set at enrollment by Daniel, the adult
         // who enrolled her (clause 8), and is recorded as an enrollment
         // act. A change from here on goes through the same telling and
         // read-back path.
         var seedNow = DemoDay(6, 0);
         db.PersonAudienceDefaults.AddRange(
-            new PersonAudienceDefault { HouseholdId = household.Id, HolderPersonId = lisa.Id, Value = AudienceDefaultValue.Private, SetAtUtc = seedNow },
+            new PersonAudienceDefault { HouseholdId = household.Id, HolderPersonId = lisa.Id, Value = AudienceDefaultValue.Household, SetAtUtc = seedNow },
             new PersonAudienceDefault { HouseholdId = household.Id, HolderPersonId = mia.Id, Value = AudienceDefaultValue.Ask, SetAtUtc = seedNow }
         );
         db.AudienceDefaultRequests.AddRange(
             new AudienceDefaultRequest
             {
                 HouseholdId = household.Id, HolderPersonId = lisa.Id, RequestedByPersonId = lisa.Id,
-                Value = AudienceDefaultValue.Private, State = AudienceDefaultRequestState.Applied,
-                TellingText = "Set the audience default to Private.",
-                ReadBackText = "From now on, messages where you don't name anyone will be seen by just you and anyone you name.",
+                Value = AudienceDefaultValue.Household, State = AudienceDefaultRequestState.Applied,
+                TellingText = "Set the audience default to Household.",
+                ReadBackText = "From now on, messages where you don't name anyone will be seen by everyone in the household.",
                 Channel = "tap", CreatedAtUtc = seedNow, DisposedByPersonId = lisa.Id, DisposedAtUtc = seedNow
             },
             new AudienceDefaultRequest

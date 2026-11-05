@@ -311,7 +311,7 @@ async function shotShelf(page, rec) {
   const photo = process.env.SHELF_PHOTO;
   if (!photo || !fs.existsSync(photo)) { console.log('   skipped: set SHELF_PHOTO to a photo of a pantry shelf (coffee, paper towels, dishwasher tablets, dish soap)'); return 'skipped'; }
   await as(page, 'Lisa', '/Brief');
-  const shelf = page.locator('#shelf');
+  const shelf = page.locator('#shelf').first();
   if (await shelf.count()) await shelf.scrollIntoViewIfNeeded();
   await rec.start();
   await pause(page, 1200);
