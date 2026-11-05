@@ -2,7 +2,7 @@
 
 Tell the house once, in your own words. It writes it down, asks before it tells anyone, and remembers who said they'd do what.
 
-**[Try the live demo](https://tellhouse.onrender.com)** · built with Meta's Muse Spark, Muse Wonder, Muse Voice Transcribe, SAM 3.1 and Muse Image
+**[Watch the 3-minute film](https://youtu.be/OtcL5ZEhWTs)** · **[Try the live demo](https://tellhouse.onrender.com)** · built with Meta's Muse Spark, Muse Wonder, Muse Voice Transcribe, SAM 3.1 and Muse Image
 
 > Households don't fail on forgotten facts. They fail on forgotten promises: when someone said they'd handle it, and the person waiting quietly stops believing anyone is coming.
 
